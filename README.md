@@ -1,6 +1,10 @@
 # Bench
 
-A tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics. Everything you enter stays in your browser, on your device.
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Open Source](https://img.shields.io/badge/open%20source-%E2%9D%A4-mint.svg)](https://github.com/ArunNGun/Bench)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+An open source tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics. Everything you enter stays in your browser, on your device.
 
 Runs as a web app, installs to a home screen as a PWA, and ships as an Android APK.
 
@@ -124,7 +128,16 @@ Next.js 15 (App Router), React 19, TypeScript, Tailwind v4, Zustand persisted to
 
 ## Contributing
 
-Corrections to the library are especially welcome, **with a citation**. The rule the library holds to is that a number without a source does not go in, and where no source exists the entry says so rather than guessing.
+Bench is open source and contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full guide.
+
+The most useful things to contribute:
+
+- **Library corrections**, with a citation. A number without a source does not go in.
+- **New compounds**, with cited half-lives and dose ranges. Where human PK data does not exist, say so.
+- **Bug reports**, especially for reconstitution arithmetic, unit conversion, PK curves and data migration.
+- **Import compatibility** for trackers Bench does not yet recognise.
+
+Please open an issue before a large PR to check it is in scope.
 
 ## Disclaimer
 
