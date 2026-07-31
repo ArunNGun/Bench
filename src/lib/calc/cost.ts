@@ -1,0 +1,107 @@
+/**
+ * What this costs.
+ *
+ * Cost is recorded per vial, so everything downstream is derived: the price of
+ * a single dose falls out of the vial price and how many doses it yields, and
+ * a weekly rate falls out of that plus the schedule.
+ */
+
+import type { Vial } from "../types";
+import { vialCapacityMcg } from "./inventory";
+
+/** Cost of a milligram, from a vial's price and label strength. */
+export function costPerMg(vial: Pick<Vial, "cost" | "strengthMg">): number | null {
+  if (vial.cost == null || !(vial.cost > 0) || !(vial.strengthMg > 0)) return null;
+  return vial.cost / vial.strengthMg;
+}
+
+/** Cost of one dose drawn from a vial at that price. */
+export function costPerDose(
+  vial: Pick<Vial, "cost" | "strengthMg">,
+  doseMcg: number): number | null {
+  const perMg = costPerMg(vial);
+  if (perMg == null || !(doseMcg > 0)) return null;
+  return perMg * (doseMcg / 1000);
+}
+
+export interface SpendSummary {
+  /** Total spent on vials of this peptide that carry a price. */
+  totalSpend: number;
+  /** How many vials that covers. */
+  pricedVials: number;
+  /** Vials with no price recorded, so the total understates reality. */
+  unpricedVials: number;
+  /** Blended cost per milligram across the priced vials. */
+  costPerMg: number | null;
+  costPerDose: number | null;
+  costPerWeek: number | null;
+  costPerMonth: number | null;
+}
+
+/**
+ * Spend for one peptide.
+ *
+ * Blends the price across every priced vial rather than using the newest, so
+ * a one-off expensive batch does not distort the rate. Vials with no price are
+ * counted separately instead of being treated as free.
+ */
+export function spendFor(
+  vials: Vial[],
+  peptideId: string,
+  doseMcg: number,
+  dosesPerWeek: number): SpendSummary {
+  const mine = vials.filter((v) => v.peptideId === peptideId);
+  const priced = mine.filter((v) => v.cost != null && v.cost > 0 && v.strengthMg > 0);
+
+  const totalSpend = priced.reduce((s, v) => s + v.cost!, 0);
+  const totalMg = priced.reduce((s, v) => s + v.strengthMg, 0);
+  const perMg = totalMg > 0 ? totalSpend / totalMg : null;
+  const perDose = perMg != null && doseMcg > 0 ? perMg * (doseMcg / 1000) : null;
+  const perWeek = perDose != null && dosesPerWeek > 0 ? perDose * dosesPerWeek : null;
+
+  return {
+    totalSpend,
+    pricedVials: priced.length,
+    unpricedVials: mine.length - priced.length,
+    costPerMg: perMg,
+    costPerDose: perDose,
+    costPerWeek: perWeek,
+    // A month is 365/12 weeks, not four, four undercounts by about 8%.
+    costPerMonth: perWeek != null ? (perWeek * 365) / 12 / 7 : null,
+  };
+}
+
+/** Value still sitting unused in a vial, at what it cost. */
+export function remainingValue(vial: Vial): number | null {
+  const perMg = costPerMg(vial);
+  if (perMg == null) return null;
+  const remainingMg = Math.max(0, vialCapacityMcg(vial) - (vial.drawnMcg ?? 0)) / 1000;
+  return perMg * remainingMg;
+}
+
+/** Total spend across every priced vial, whatever the peptide. */
+export function totalSpend(vials: Vial[]) {
+  const priced = vials.filter((v) => v.cost != null && v.cost > 0);
+  return {
+    total: priced.reduce((s, v) => s + v.cost!, 0),
+    pricedVials: priced.length,
+    unpricedVials: vials.length - priced.length,
+  };
+}
+
+export function formatMoney(amount: number | null, currency = "INR") {
+  if (amount == null || !Number.isFinite(amount)) return "n/a";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      // Show a fraction only when there is one. ₹231.25 keeps its paise;
+      // ₹750 and ₹15,000 do not gain a pointless ".00".
+      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      minimumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    // An unrecognised currency code should not take the page down.
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}

@@ -1,0 +1,515 @@
+@import "tailwindcss";
+
+/*
+  A bright, soft, card-based system: light surfaces, generous rounding,
+  layered shadows instead of hairlines, and a friendly geometric typeface.
+  Colour is used to sort things by kind, each compound category and each
+  status owns a hue, so the eye can navigate without reading.
+*/
+
+@theme {
+  --font-display: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-mint: var(--mint);
+  --color-grape: var(--grape);
+  --color-tangerine: var(--tangerine);
+  --color-sky: var(--sky);
+  --color-rose: var(--rose);
+  --color-leaf: var(--leaf);
+}
+
+/*
+  Safe areas.
+
+  The Android build draws edge to edge, so the webview starts at the very top of
+  the screen and anything pinned to an edge lands behind the clock, the signal
+  icons and the camera cutout. These resolve to real pixels there (35px at the
+  top on a Galaxy S25 Ultra) and to zero in a desktop browser, so the same rules
+  work in both places. `viewportFit: "cover"` in the root layout is what makes
+  the values non-zero, without it env() reports 0 and the insets silently do
+  nothing.
+*/
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The header's content row, excluding whatever the status bar takes. */
+  --header-h: 4rem;
+}
+
+:root {
+  color-scheme: light;
+
+  --canvas: #f4f6fa;
+  --card: #ffffff;
+  --sunken: #f7f9fc;
+  --line: #e8edf4;
+  --ink: #16202e;
+  --muted: #667a92;
+  --faint: #98a7ba;
+
+  /*
+    Text and icons sitting on top of a saturated hue.
+
+    It has to flip with the theme. The light palette's hues are mid-tones that
+    white reads cleanly against; the dark palette's are pastels, where white
+    drops to about 1.9:1 and the label effectively disappears. Dark ink on those
+    same pastels clears 9:1.
+  */
+  --on-accent: #ffffff;
+
+  /* Signal hues. Each has a saturated tone and a tinted wash. */
+  --mint: #0fb5a5;
+  --mint-soft: #e2f7f4;
+  --mint-ink: #07786d;
+
+  --grape: #7c5cfc;
+  --grape-soft: #eeeaff;
+  --grape-ink: #4f34c7;
+
+  --tangerine: #f97b3d;
+  --tangerine-soft: #ffeee4;
+  --tangerine-ink: #c1521c;
+
+  --sky: #3b82f6;
+  --sky-soft: #e6efff;
+  --sky-ink: #1d5fd0;
+
+  --rose: #f4436b;
+  --rose-soft: #ffe8ed;
+  --rose-ink: #c81e46;
+
+  --leaf: #22c55e;
+  --leaf-soft: #e4f9ec;
+  --leaf-ink: #14803c;
+
+  /* The syringe keeps its amber liquid. It is the one literal object here. */
+  --fluid-top: #ffb454;
+  --fluid-bottom: #f08a22;
+  --glass: #f1f5fa;
+
+  --r-card: 18px;
+  --r-inner: 12px;
+  --r-btn: 12px;
+  --r-pill: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(21, 33, 51, 0.05);
+  --shadow-sm: 0 2px 8px rgba(21, 33, 51, 0.05);
+  --shadow-md: 0 6px 20px rgba(21, 33, 51, 0.07);
+  --shadow-lg: 0 16px 40px rgba(21, 33, 51, 0.1);
+  --shadow-pop: 0 8px 24px rgba(15, 181, 165, 0.28);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #0d1420;
+  --card: #16202e;
+  --sunken: #111a26;
+  --line: #23304200;
+  --line: #233042;
+  --ink: #eef3f9;
+  --muted: #93a4b9;
+  --faint: #64768d;
+
+  --on-accent: #0d1420;
+
+  --mint: #2dd4bf;
+  --mint-soft: #10312f;
+  --mint-ink: #6ee7d8;
+
+  --grape: #a78bfa;
+  --grape-soft: #221d3c;
+  --grape-ink: #c4b2ff;
+
+  --tangerine: #fb923c;
+  --tangerine-soft: #33210f;
+  --tangerine-ink: #fdba74;
+
+  --sky: #60a5fa;
+  --sky-soft: #12243d;
+  --sky-ink: #93c5fd;
+
+  --rose: #fb7185;
+  --rose-soft: #3a1520;
+  --rose-ink: #fda4b4;
+
+  --leaf: #4ade80;
+  --leaf-soft: #102a1a;
+  --leaf-ink: #86efac;
+
+  --fluid-top: #ffb454;
+  --fluid-bottom: #e07c1c;
+  --glass: #0f1825;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.44);
+  --shadow-pop: 0 8px 24px rgba(45, 212, 191, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+
+    --canvas: #0d1420;
+    --card: #16202e;
+    --sunken: #111a26;
+    --line: #233042;
+    --ink: #eef3f9;
+    --muted: #93a4b9;
+    --faint: #64768d;
+
+    --on-accent: #0d1420;
+
+  --mint: #2dd4bf;
+    --mint-soft: #10312f;
+    --mint-ink: #6ee7d8;
+    --grape: #a78bfa;
+    --grape-soft: #221d3c;
+    --grape-ink: #c4b2ff;
+    --tangerine: #fb923c;
+    --tangerine-soft: #33210f;
+    --tangerine-ink: #fdba74;
+    --sky: #60a5fa;
+    --sky-soft: #12243d;
+    --sky-ink: #93c5fd;
+    --rose: #fb7185;
+    --rose-soft: #3a1520;
+    --rose-ink: #fda4b4;
+    --leaf: #4ade80;
+    --leaf-soft: #102a1a;
+    --leaf-ink: #86efac;
+
+    --fluid-top: #ffb454;
+    --fluid-bottom: #e07c1c;
+    --glass: #0f1825;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.34);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.44);
+    --shadow-pop: 0 8px 24px rgba(45, 212, 191, 0.22);
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers that change in place must not reflow what sits beside them. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Small uppercase label. Softer than the old stencil, tracked, not shouted. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-flat {
+  background: var(--card);
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Keep iOS from zooming the viewport when a field takes focus. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes fluid-settle {
+  from {
+    transform: scaleX(0.55);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes trace-in {
+  from {
+    stroke-dashoffset: var(--trace-length);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: var(--ring-circumference);
+  }
+}
+
+@keyframes pulse-now {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-trace {
+  stroke-dasharray: var(--trace-length);
+  animation: trace-in 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.animate-fluid {
+  transform-origin: left center;
+  animation: fluid-settle 400ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.animate-ring {
+  animation: ring-fill 900ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.animate-now {
+  animation: pulse-now 3s ease-in-out infinite;
+}
+
+.animate-rise {
+  animation: rise-in 340ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.animate-pop {
+  animation: pop-in 240ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.press {
+  transition:
+    transform 120ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.press:active {
+  transform: scale(0.975);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-trace {
+    stroke-dashoffset: 0;
+  }
+  .press:active {
+    transform: none;
+  }
+}
+
+/*
+  Landing page motion.
+
+  Everything here is decoration on top of a page that already reads correctly
+  without it, so all of it collapses under the reduced-motion block above and
+  the explicit overrides at the end of this file. Nothing is revealed by
+  animation alone that a reader would otherwise miss.
+*/
+
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Hero, staggered on load. No observer needed, it is on screen by definition. */
+.enter {
+  animation: enter-up 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Scrolled into view. The class is added by the Reveal component. */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+.drift {
+  animation: drift 7s ease-in-out infinite;
+}
+
+/*
+  Line drawing, held at its start until the section is revealed. Keying off the
+  parent means the stroke draws as you arrive rather than finishing unseen.
+*/
+.trace {
+  stroke-dasharray: 1400;
+  stroke-dashoffset: 1400;
+}
+.reveal-in .trace {
+  animation: trace 1500ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards;
+}
+
+/* A card that lifts slightly under the pointer. Ignored on touch. */
+@media (hover: hover) {
+  .lift {
+    transition:
+      transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .drift {
+    animation: none;
+  }
+  .trace {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}

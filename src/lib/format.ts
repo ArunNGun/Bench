@@ -1,0 +1,112 @@
+/** Display helpers. Everything here is presentation only, no arithmetic that matters. */
+
+/** Trim trailing zeros so 0.10 reads as 0.1 and 2.00 as 2. */
+export function trim(n: number, maxDp = 4) {
+  if (!Number.isFinite(n)) return "n/a";
+  return Number(n.toFixed(maxDp)).toString();
+}
+
+/**
+ * A dose in whichever unit reads best: micrograms below 1 mg, milligrams above.
+ * Doses in this space span 25 mcg to 15 mg, so a single unit would force
+ * either 0.025 mg or 15000 mcg on the reader.
+ */
+export function formatDose(mcg: number, force?: "mcg" | "mg") {
+  if (!Number.isFinite(mcg)) return "n/a";
+  const unit = force ?? (Math.abs(mcg) >= 1000 ? "mg" : "mcg");
+  return unit === "mg" ? `${trim(mcg / 1000, 3)} mg` : `${trim(mcg, 2)} mcg`;
+}
+
+export function formatDoseParts(mcg: number, force?: "mcg" | "mg") {
+  if (!Number.isFinite(mcg)) return { value: "n/a", unit: "" };
+  const unit = force ?? (Math.abs(mcg) >= 1000 ? "mg" : "mcg");
+  return unit === "mg"
+    ? { value: trim(mcg / 1000, 3), unit: "mg" }
+    : { value: trim(mcg, 2), unit: "mcg" };
+}
+
+export function formatMl(ml: number, dp = 3) {
+  if (!Number.isFinite(ml)) return "n/a";
+  return `${trim(ml, dp)} mL`;
+}
+
+export function formatUnits(units: number) {
+  if (!Number.isFinite(units)) return "n/a";
+  return trim(units, 2);
+}
+
+export function formatConcentration(mcgPerMl: number) {
+  if (!Number.isFinite(mcgPerMl)) return "n/a";
+  const mgPerMl = mcgPerMl / 1000;
+  return mgPerMl >= 0.1 ? `${trim(mgPerMl, 3)} mg/mL` : `${trim(mcgPerMl, 1)} mcg/mL`;
+}
+
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+/** "in 3 hours", "2 days ago". Picks the largest sensible unit. */
+export function relativeTime(targetMs: number, nowMs = Date.now()) {
+  const diffMin = Math.round((targetMs - nowMs) / 60000);
+  const abs = Math.abs(diffMin);
+  if (abs < 1) return "just now";
+  if (abs < 60) return rtf.format(diffMin, "minute");
+  const hours = Math.round(diffMin / 60);
+  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+  const days = Math.round(diffMin / 1440);
+  if (Math.abs(days) < 30) return rtf.format(days, "day");
+  return rtf.format(Math.round(days / 30), "month");
+}
+
+/** A duration in hours, phrased for a human: "36 h", "4.5 d", "12 min". */
+export function formatDuration(hours: number) {
+  if (!Number.isFinite(hours)) return "n/a";
+  const abs = Math.abs(hours);
+  if (abs < 1) return `${Math.round(hours * 60)} min`;
+  if (abs < 48) return `${trim(hours, 1)} h`;
+  return `${trim(hours / 24, 1)} d`;
+}
+
+/** Half-lives read better in their natural unit than always in hours. */
+export function formatHalfLife(hours: number | null) {
+  if (hours == null) return "Not established";
+  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
+  if (hours < 48) return `${trim(hours, 1)} hours`;
+  return `${trim(hours / 24, 1)} days`;
+}
+
+const dateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const dateYearFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+
+export const formatDate = (ms: number) => dateFmt.format(ms);
+export const formatTime = (ms: number) => timeFmt.format(ms);
+export const formatWeekday = (ms: number) => weekdayFmt.format(ms);
+
+export function formatDateTime(ms: number, nowMs = Date.now()) {
+  const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
+  return `${(sameYear ? dateFmt : dateYearFmt).format(ms)}, ${timeFmt.format(ms)}`;
+}
+
+/** Value for a datetime-local input, in local time rather than UTC. */
+export function toDateTimeLocal(ms: number) {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes())}`;
+}
+
+export function fromDateTimeLocal(value: string) {
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
+export function toDateInput(ms: number) {
+  return toDateTimeLocal(ms).slice(0, 10);
+}
+
+export const percent = (fraction: number, dp = 0) =>
+  Number.isFinite(fraction) ? `${(fraction * 100).toFixed(dp)}%` : "n/a";
