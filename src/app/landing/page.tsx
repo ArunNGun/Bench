@@ -12,6 +12,7 @@ import {
   Lock,
   Plus,
   ShieldAlert,
+  Smartphone,
   Syringe,
   Users,
   WifiOff,
@@ -132,6 +133,20 @@ function Cta({ children }: { children: React.ReactNode }) {
   );
 }
 
+const APK_URL = "https://github.com/ArunNGun/Bench/releases/latest/download/bench-v1.7.apk";
+
+function ApkButton() {
+  return (
+    <a
+      href={APK_URL}
+      className="press inline-flex items-center gap-2 rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-5 py-3.5 text-[14px] font-bold text-[var(--ink)] shadow-[var(--shadow-xs)] hover:border-[var(--mint)]"
+    >
+      <Smartphone size={16} strokeWidth={2.4} style={{ color: "var(--mint)" }} />
+      Download for Android
+    </a>
+  );
+}
+
 /** The same generated icon the launcher and the home screen use. */
 function Logo({ size = 40 }: { size?: number }) {
   return (
@@ -216,14 +231,13 @@ export default function LandingPage() {
               nowhere.
             </p>
 
-            <div style={{ animationDelay: "340ms" }} className="enter mt-8 flex flex-wrap items-center gap-5">
+            <div style={{ animationDelay: "340ms" }} className="enter mt-8 flex flex-wrap items-center gap-4">
               <Cta>Open the app</Cta>
-              <span className="text-[13px] leading-relaxed text-[var(--faint)]">
-                Free, nothing to sign up for.
-                <br />
-                Works offline once loaded.
-              </span>
+              <ApkButton />
             </div>
+            <p style={{ animationDelay: "400ms" }} className="enter mt-3 text-[13px] leading-relaxed text-[var(--faint)]">
+              Free, nothing to sign up for. Works offline once loaded.
+            </p>
           </div>
 
           <div className="enter drift" style={{ animationDelay: "220ms" }}>
@@ -432,6 +446,12 @@ export default function LandingPage() {
               className="inline-flex items-center gap-1.5 hover:text-[var(--muted)]"
             >
               <Code2 size={13} /> GitHub
+            </a>
+            <a
+              href={APK_URL}
+              className="inline-flex items-center gap-1.5 hover:text-[var(--muted)]"
+            >
+              <Download size={13} /> Android APK
             </a>
             <Link href="/" className="font-bold hover:text-[var(--muted)]">
               Open app
