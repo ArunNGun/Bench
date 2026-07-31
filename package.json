@@ -1,0 +1,48 @@
+{
+  "name": "peptide-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3210",
+    "build": "node scripts/version.mjs && next build",
+    "start": "next start -p 3210",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:static": "node scripts/version.mjs && BUILD_TARGET=static next build",
+    "android:sync": "npm run build:static && npx cap sync android",
+    "android:open": "npx cap open android",
+    "version": "node scripts/version.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capgo/capacitor-health": "^8.10.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "fflate": "^0.8.3",
+    "idb-keyval": "^6.3.0",
+    "lucide-react": "^1.27.0",
+    "nanoid": "^5.1.16",
+    "next": "15.5.22",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.22",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
