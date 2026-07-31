@@ -25,7 +25,6 @@ import { Reveal } from "./Reveal";
 import {
   CurveArt,
   LabsArt,
-  PhoneMock,
   PrivacyArt,
   ReconArt,
   RotationArt,
@@ -241,7 +240,22 @@ export default function LandingPage() {
           </div>
 
           <div className="enter drift" style={{ animationDelay: "220ms" }}>
-            <PhoneMock />
+            <div
+              className="lift overflow-hidden rounded-[var(--r-card)] shadow-[var(--shadow-md)]"
+              style={{ aspectRatio: "798 / 1602", maxHeight: "72vh" }}
+            >
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+                poster="/icon.svg"
+              >
+                <source src="/demo.webm" type="video/webm" />
+                <source src="/demo.mp4" type="video/mp4" />
+              </video>
+            </div>
           </div>
         </div>
       </section>
