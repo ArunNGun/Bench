@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw, CheckCircle2, WifiOff } from "lucide-react";
+import { RefreshCw, CheckCircle2 } from "lucide-react";
 import { Card, SectionLabel, Button } from "./ui";
 import {
   applyUpdate,

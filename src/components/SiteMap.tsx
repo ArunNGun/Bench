@@ -159,7 +159,7 @@ export function SiteMap({
           // Colour logic
           let dotFill: string;
           let dotStroke: string;
-          let dotOpacity = offPlan ? 0.35 : 1;
+          const dotOpacity = offPlan ? 0.35 : 1;
 
           if (isSelected) {
             dotFill   = multi ? "none" : "var(--ink)";
@@ -173,7 +173,6 @@ export function SiteMap({
             dotStroke = fill > 0.05 ? "var(--tangerine)" : "var(--line)";
           }
 
-          const fillOpacity = isSelected && !multi ? 1 : fill * 0.9;
 
           return (
             <g
