@@ -271,10 +271,8 @@ export default async function LandingPage() {
             { n: String(COMPOUND_COUNT), l: "compounds, every figure cited" },
             { n: String(MARKER_COUNT), l: "blood markers you can chart" },
             { n: "962", l: "tests on the arithmetic" },
-            ...(totalUsers != null ? [{ n: totalUsers.toLocaleString(), l: "users", blink: true }] : []),
-            ...(apkDownloads != null && apkDownloads > 0 ? [{ n: apkDownloads.toLocaleString(), l: "APK downloads" }] : []),
             { n: "0", l: "bytes of your data leave the device" },
-          ].map(({ n, l, blink }: { n: string; l: string; blink?: boolean }) => (
+          ].map(({ n, l }) => (
             <div key={l} className="bg-[var(--card)] px-4 py-6 text-center">
               <p
                 className="font-mono text-[30px] font-extrabold leading-none tracking-tight"
@@ -283,16 +281,44 @@ export default async function LandingPage() {
                 {n}
               </p>
               <p className="mx-auto mt-2 flex max-w-[150px] items-center justify-center gap-1.5 text-[12.5px] leading-snug text-[var(--muted)]">
-                {blink && (
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--mint)] opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--mint)]" />
-                  </span>
-                )}
                 {l}
               </p>
             </div>
           ))}
+          {(totalUsers != null || (apkDownloads != null && apkDownloads > 0)) && (
+            <>
+              {totalUsers != null && (
+                <div className="col-span-2 bg-[var(--card)] px-4 py-6 text-center sm:col-span-2">
+                  <p
+                    className="font-mono text-[30px] font-extrabold leading-none tracking-tight"
+                    style={{ color: "var(--mint)" }}
+                  >
+                    {totalUsers.toLocaleString()}
+                  </p>
+                  <p className="mx-auto mt-2 flex max-w-[150px] items-center justify-center gap-1.5 text-[12.5px] leading-snug text-[var(--muted)]">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--mint)] opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--mint)]" />
+                    </span>
+                    users
+                  </p>
+                </div>
+              )}
+              {apkDownloads != null && apkDownloads > 0 && (
+                <div className="col-span-2 bg-[var(--card)] px-4 py-6 text-center sm:col-span-2">
+                  <p
+                    className="font-mono text-[30px] font-extrabold leading-none tracking-tight"
+                    style={{ color: "var(--mint)" }}
+                  >
+                    {apkDownloads.toLocaleString()}
+                  </p>
+                  <p className="mx-auto mt-2 text-[12.5px] leading-snug text-[var(--muted)]">
+                    APK downloads
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
         </Reveal>
       </section>
