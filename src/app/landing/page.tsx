@@ -164,6 +164,7 @@ function Logo({ size = 40 }: { size?: number }) {
 
 export default async function LandingPage() {
   const { apkDownloads, pageViews } = await getLandingStats();
+  const totalUsers = (apkDownloads ?? 0) + (pageViews ?? 0) || null;
   return (
     <main className="min-h-screen bg-[var(--canvas)]">
       {/*
@@ -270,7 +271,7 @@ export default async function LandingPage() {
             { n: String(COMPOUND_COUNT), l: "compounds, every figure cited" },
             { n: String(MARKER_COUNT), l: "blood markers you can chart" },
             { n: "962", l: "tests on the arithmetic" },
-            ...(pageViews != null ? [{ n: pageViews.toLocaleString(), l: "users", blink: true }] : []),
+            ...(totalUsers != null ? [{ n: totalUsers.toLocaleString(), l: "users", blink: true }] : []),
             ...(apkDownloads != null && apkDownloads > 0 ? [{ n: apkDownloads.toLocaleString(), l: "APK downloads" }] : []),
             { n: "0", l: "bytes of your data leave the device" },
           ].map(({ n, l, blink }: { n: string; l: string; blink?: boolean }) => (
