@@ -15,8 +15,10 @@ import { parseDelimited, toTable, type Table } from "./delimited";
 import { readXlsx, XlsxError } from "./xlsx";
 import { detectProfile, type ImportProfile } from "./profiles";
 import { buildImportPlan, type ImportPlan } from "./plan";
+import { readPdfText, PdfError } from "./pdf";
+import { parseLabReport, type LabReport } from "./labreport";
 
-export type SourceFormat = "csv" | "json" | "xlsx";
+export type SourceFormat = "csv" | "json" | "xlsx" | "pdf";
 
 /** What was found in the file, before anything is applied. */
 export type ReadResult =
@@ -31,12 +33,24 @@ export type ReadResult =
       profile: ImportProfile;
       table: Table;
       plan: ImportPlan;
+    }
+  /**
+   * A lab report. Kept apart from the table path deliberately: bloodwork is
+   * matched analyte by analyte against the marker library rather than column by
+   * column, and every row needs confirming against the line it came from.
+   */
+  | {
+      kind: "lab-report";
+      format: "pdf";
+      report: LabReport;
+      /** Lines the extractor found, for showing when nothing matched. */
+      lines: string[];
     };
 
 export class ImportError extends Error {}
 
 /** Extensions the file picker should offer. */
-export const ACCEPTED_EXTENSIONS = ".csv.tsv.txt.json.xlsx.xlsm";
+export const ACCEPTED_EXTENSIONS = ".csv,.tsv,.txt,.json,.xlsx,.xlsm,.pdf";
 
 function extensionOf(name: string): string {
   const i = name.lastIndexOf(".");
@@ -103,6 +117,29 @@ export async function readImportFile(file: File, options: ReadOptions): Promise<
   if (ext === "xls") {
     throw new ImportError(
       "The old .xls format cannot be read. Open it and save as .xlsx or .csv, then try again.");
+  }
+
+  if (ext === "pdf") {
+    let lines: string[];
+    try {
+      lines = readPdfText(new Uint8Array(await file.arrayBuffer())).lines;
+    } catch (e) {
+      throw new ImportError(
+        e instanceof PdfError ? e.message : "That PDF could not be read.");
+    }
+
+    if (!lines.length) {
+      throw new ImportError(
+        "No text found in that PDF. If it is a scan or a photograph, the words are pixels rather than text and cannot be read on the device. Ask the lab for the original file, or enter the results by hand.");
+    }
+
+    const report = parseLabReport(lines);
+    if (!report.candidates.length) {
+      throw new ImportError(
+        `Read ${lines.length} lines from that PDF but recognised no blood markers in them. It may not be a lab report, or it may use names the app does not know yet.`);
+    }
+
+    return { kind: "lab-report", format: "pdf", report, lines };
   }
 
   let rows: string[][];

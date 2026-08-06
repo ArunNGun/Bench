@@ -42,6 +42,8 @@ import {
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
 import { WeightCard } from "@/components/WeightCard";
+import { CheckInCard } from "@/components/CheckInCard";
+import { UserCountBadge } from "@/components/UserCountBadge";
 import { StackWarnings } from "@/components/StackWarnings";
 import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
@@ -220,9 +222,11 @@ export default function NowPage() {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
         <TodayCard protocols={protocols} logs={logs} now={now} />
+        <UserCountBadge />
         <BackupNag />
         <HistoryWithoutPlan nowMs={now} />
         <WeightCard nowMs={now} />
+        <CheckInCard nowMs={now} />
         <LabsCard />
       </div>
     );
@@ -231,6 +235,8 @@ export default function NowPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <TodayCard protocols={protocols} logs={logs} now={now} />
+
+      <UserCountBadge />
 
       <BackupNag />
 
@@ -502,6 +508,8 @@ export default function NowPage() {
       </section>
 
       <WeightCard nowMs={now} />
+
+      <CheckInCard nowMs={now} />
 
       <LabsCard />
 

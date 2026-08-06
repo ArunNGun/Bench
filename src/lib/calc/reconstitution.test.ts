@@ -165,14 +165,14 @@ describe("calculateDraw, verified worked examples", () => {
       expect(u100.concentrationMgPerMl).toBeCloseTo(r.concMgMl, 9);
       expect(u100.volumeMl).toBeCloseTo(r.volumeMl, 9);
       expect(u100.units).toBeCloseTo(r.u100, 8);
-      expect(u100.mcgPerUnit).toBeCloseTo(r.mcgPerMark, 8);
+      expect(u100.mcgPerGraduation).toBeCloseTo(r.mcgPerMark, 8);
       expect(u100.dosesPerVial).toBe(r.dosesPerVial);
       expect(u100.mlPerUnit).toBeCloseTo(0.01, 12);
 
       // Cross-check against the collapsed algebraic form.
       expect(u100.units).toBeCloseTo((r.doseMcg * r.waterMl) / (r.vialMg * 10), 8);
       // Cross-check against the mcg-per-mark reciprocal.
-      expect(u100.units * u100.mcgPerUnit).toBeCloseTo(r.doseMcg, 6);
+      expect(u100.units * u100.mcgPerGraduation).toBeCloseTo(r.doseMcg, 6);
 
       const u40 = calculateDraw({ ...base, syringe: U40_1U });
       expect(u40.units).toBeCloseTo(r.u40, 8);
@@ -307,7 +307,7 @@ describe("diluentForMcgPerUnit", () => {
     const ml = diluentForMcgPerUnit(mgToMcg(5), 25, U100_1U);
     expect(ml).toBeCloseTo(2, 12);
     const r = calculateDraw({ vialMcg: mgToMcg(5), diluentMl: ml, doseMcg: 250, syringe: U100_1U });
-    expect(r.mcgPerUnit).toBeCloseTo(25, 9);
+    expect(r.mcgPerGraduation).toBeCloseTo(25, 9);
   });
 
   it("accounts for the barrel's own mark spacing", () => {

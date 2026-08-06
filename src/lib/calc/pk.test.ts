@@ -250,3 +250,57 @@ describe("snapshot", () => {
     expect(s.percentOfPeak).toBeCloseTo(s.level * 100, 10);
   });
 });
+
+describe("curve constant caching", () => {
+  it("returns bit-identical results on repeat calls", () => {
+    // The cache must be a pure speed-up. If a cached call ever differs from a
+    // cold one, every chart silently changes shape depending on what was drawn
+    // before it.
+    const params = { halfLifeHours: 108, tmaxHours: 48 };
+    const first = Array.from({ length: 50 }, (_, i) => singleDoseLevel(i * 4, params));
+    const second = Array.from({ length: 50 }, (_, i) => singleDoseLevel(i * 4, params));
+    expect(second).toEqual(first);
+  });
+
+  it("keeps different compounds apart", () => {
+    // A cache keyed too loosely would hand one compound another's curve.
+    const fast = singleDoseLevel(6, { halfLifeHours: 6, tmaxHours: 1 });
+    const slow = singleDoseLevel(6, { halfLifeHours: 108, tmaxHours: 48 });
+    expect(fast).not.toBeCloseTo(slow, 3);
+    // And re-reading the first must not have been poisoned by the second.
+    expect(singleDoseLevel(6, { halfLifeHours: 6, tmaxHours: 1 })).toBe(fast);
+  });
+
+  it("distinguishes the same half-life at different times to peak", () => {
+    const a = singleDoseLevel(4, { halfLifeHours: 24, tmaxHours: 2 });
+    const b = singleDoseLevel(4, { halfLifeHours: 24, tmaxHours: 12 });
+    expect(a).not.toBeCloseTo(b, 6);
+  });
+
+  it("distinguishes a compound with no tmax from the same one with a tmax", () => {
+    const withTmax = singleDoseLevel(10, { halfLifeHours: 24, tmaxHours: 4 });
+    const without = singleDoseLevel(10, { halfLifeHours: 24 });
+    expect(withTmax).not.toBeCloseTo(without, 6);
+    expect(without).toBeCloseTo(Math.pow(2, -10 / 24), 12);
+  });
+
+  it("still peaks at tmax after caching", () => {
+    for (const [tmax, hl] of [[2, 12], [48, 108]]) {
+      const params = { halfLifeHours: hl, tmaxHours: tmax };
+      const atPeak = singleDoseLevel(tmax, params);
+      expect(singleDoseLevel(tmax * 0.85, params)).toBeLessThan(atPeak);
+      expect(singleDoseLevel(tmax * 1.15, params)).toBeLessThan(atPeak);
+      // Normalised so the peak is 1.0.
+      expect(atPeak).toBeCloseTo(1, 6);
+    }
+  });
+
+  it("survives more distinct compounds than the cache holds", () => {
+    // Custom compounds mean the key space is user-controlled. Overflowing the
+    // cache must cost time, never correctness.
+    const probe = { halfLifeHours: 108, tmaxHours: 48 };
+    const before = singleDoseLevel(72, probe);
+    for (let i = 0; i < 400; i++) singleDoseLevel(10, { halfLifeHours: 10 + i * 0.5, tmaxHours: 3 });
+    expect(singleDoseLevel(72, probe)).toBe(before);
+  });
+});

@@ -55,6 +55,8 @@ const SHELL = [
   "/labs",
   "/library",
   "/settings",
+  "/about",
+  "/report",
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",

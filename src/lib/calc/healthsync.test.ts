@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as healthsync from "./healthsync";
+import { dailyRestingHr, mergeIntervals, nightlySleep } from "./healthsync";
 import {
   describeSync,
   MATCH_WEIGHT_KG,
@@ -187,5 +188,123 @@ describe("the read-only guarantee", () => {
   it("summarises a sync without any notion of what went out", () => {
     const plan = planPull([], [sample({ externalId: "hc-1" })]);
     expect(Object.keys(summarise(plan)).sort()).toEqual(["added", "linked", "skipped"]);
+  });
+});
+
+describe("mergeIntervals", () => {
+  const span = (a: number, b: number) => ({ startAt: a, endAt: b });
+
+  it("leaves disjoint spans alone", () => {
+    expect(mergeIntervals([span(0, 10), span(20, 30)])).toEqual([span(0, 10), span(20, 30)]);
+  });
+
+  it("merges an overlap into one", () => {
+    expect(mergeIntervals([span(0, 20), span(10, 30)])).toEqual([span(0, 30)]);
+  });
+
+  it("merges a span fully inside another", () => {
+    // A stage record sitting inside its parent session. Summing both would
+    // report roughly twice the sleep actually had.
+    expect(mergeIntervals([span(0, 100), span(20, 40)])).toEqual([span(0, 100)]);
+  });
+
+  it("does not care what order they arrive in", () => {
+    expect(mergeIntervals([span(10, 30), span(0, 20)])).toEqual([span(0, 30)]);
+  });
+
+  it("drops zero and negative length spans", () => {
+    expect(mergeIntervals([span(10, 10), span(30, 20)])).toEqual([]);
+  });
+});
+
+describe("nightlySleep", () => {
+  const startOfDay = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
+  const night = (dayOfMonth: number, fromHour: number, toHour: number, state?: string) => ({
+    externalId: `s${dayOfMonth}-${fromHour}`,
+    startAt: new Date(2026, 5, dayOfMonth, fromHour).getTime(),
+    endAt: new Date(2026, 5, dayOfMonth, toHour).getTime(),
+    state,
+  });
+
+  it("sums a night into hours", () => {
+    const out = nightlySleep([night(14, 1, 8)], startOfDay);
+    expect(out).toHaveLength(1);
+    expect(out[0].hours).toBe(7);
+  });
+
+  it("credits sleep to the morning you woke, not the night you lay down", () => {
+    // The day whose energy the check-in is describing.
+    const seg = {
+      externalId: "overnight",
+      startAt: new Date(2026, 5, 14, 23, 0).getTime(),
+      endAt: new Date(2026, 5, 15, 7, 0).getTime(),
+    };
+    const out = nightlySleep([seg], startOfDay);
+    expect(out[0].day).toBe(new Date(2026, 5, 15).setHours(0, 0, 0, 0));
+    expect(out[0].hours).toBe(8);
+  });
+
+  it("excludes time awake and time merely in bed", () => {
+    const out = nightlySleep(
+      [night(14, 1, 8, "asleep"), night(14, 8, 9, "awake"), night(14, 0, 1, "inBed")],
+      startOfDay);
+    expect(out[0].hours).toBe(7);
+  });
+
+  it("counts a session with no stage label at all", () => {
+    // Not every platform reports stages. Dropping unlabelled sleep would report
+    // zero for anyone whose device does not.
+    expect(nightlySleep([night(14, 1, 8)], startOfDay)[0].hours).toBe(7);
+  });
+
+  it("does not double count a stage that sits inside its session", () => {
+    const session = night(14, 1, 8, "asleep");
+    const stage = { ...night(14, 2, 4, "deep"), externalId: "stage" };
+    expect(nightlySleep([session, stage], startOfDay)[0].hours).toBe(7);
+  });
+
+  it("reports how many separate stretches made up the night", () => {
+    const out = nightlySleep([night(14, 1, 3), night(14, 5, 8)], startOfDay);
+    expect(out[0].segments).toBe(2);
+    expect(out[0].hours).toBe(5);
+  });
+
+  it("returns newest first", () => {
+    const out = nightlySleep([night(14, 1, 8), night(16, 1, 8), night(15, 1, 8)], startOfDay);
+    expect(out.map((n) => new Date(n.day).getDate())).toEqual([16, 15, 14]);
+  });
+
+  it("returns nothing for nothing", () => {
+    expect(nightlySleep([], startOfDay)).toEqual([]);
+  });
+});
+
+describe("dailyRestingHr", () => {
+  const startOfDay = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
+  const reading = (dayOfMonth: number, hour: number, bpm: number) => ({
+    externalId: `r${dayOfMonth}-${hour}`,
+    at: new Date(2026, 5, dayOfMonth, hour).getTime(),
+    bpm,
+  });
+
+  it("keeps the lowest reading of the day", () => {
+    // Several readings a day that disagree by a few beats. The minimum is
+    // consistent across days; an average drifts with sampling frequency.
+    const out = dailyRestingHr([reading(14, 3, 58), reading(14, 9, 64)], startOfDay);
+    expect(out).toEqual([{ day: new Date(2026, 5, 14).setHours(0, 0, 0, 0), bpm: 58 }]);
+  });
+
+  it("keeps days apart", () => {
+    const out = dailyRestingHr([reading(14, 3, 58), reading(15, 3, 61)], startOfDay);
+    expect(out).toHaveLength(2);
+  });
+
+  it("ignores a nonsense reading", () => {
+    expect(dailyRestingHr([reading(14, 3, 0)], startOfDay)).toEqual([]);
+  });
+
+  it("returns newest first", () => {
+    const out = dailyRestingHr([reading(14, 3, 58), reading(16, 3, 60)], startOfDay);
+    expect(new Date(out[0].day).getDate()).toBe(16);
   });
 });

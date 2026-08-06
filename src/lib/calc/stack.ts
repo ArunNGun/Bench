@@ -40,6 +40,9 @@ const CLASS_LABEL: Record<MechanismClass, string> = {
   "amylin-analogue": "amylin analogues",
   "ghrh-analogue": "GHRH analogues",
   "ghrelin-agonist": "ghrelin receptor agonists",
+  "aromatase-inhibitor": "aromatase inhibitors",
+  serm: "oestrogen receptor modulators",
+  gonadotropin: "gonadotropins",
 };
 
 /** Why doubling up on a class matters, and how loudly to say so. */
@@ -59,6 +62,18 @@ const CLASS_RISK: Record<MechanismClass, { severity: StackSeverity; why: string 
   "amylin-analogue": {
     severity: "high",
     why: "Amylin analogues slow gastric emptying and suppress appetite through the same pathway, so the nausea is additive rather than complementary.",
+  },
+  "aromatase-inhibitor": {
+    severity: "high",
+    why: "Both suppress the same enzyme, and oestradiol that is driven too low costs joint comfort, libido, lipids and bone density. Crashed oestrogen usually feels worse than the high oestrogen it was meant to fix, and it is slower to correct.",
+  },
+  serm: {
+    severity: "medium",
+    why: "Two modulators competing at the same receptor gives no more blockade than one, while stacking the side effects. Tamoxifen alongside clomiphene during recovery is the common version of this.",
+  },
+  gonadotropin: {
+    severity: "medium",
+    why: "Sustained gonadotropin above replacement level desensitises the Leydig cells it is meant to be stimulating, and drives aromatisation upward at the same time.",
   },
   "ghrh-analogue": {
     severity: "medium",
@@ -307,6 +322,38 @@ function stackedOrals(compounds: ActiveCompound[]): StackIssue[] {
   ];
 }
 
+/**
+ * An aromatase inhibitor running with nothing that aromatises.
+ *
+ * Worth its own rule because it is a pure loss. There is no oestradiol being
+ * driven up for the inhibitor to control, so the only available outcome is
+ * oestradiol pushed below where a man needs it, taking joints, libido, mood and
+ * lipids with it. It usually happens by habit, an AI carried over from a
+ * testosterone cycle onto one running only non-aromatising compounds.
+ */
+function pointlessAromataseInhibitor(compounds: ActiveCompound[]): StackIssue[] {
+  const inhibitors = compounds.filter((c) =>
+    c.peptide.mechanismClass?.includes("aromatase-inhibitor"));
+  if (!inhibitors.length) return [];
+
+  // Only androgens carry the flag at all, so an absent value is not a "no".
+  const androgens = compounds.filter((c) => c.peptide.aromatises != null);
+  if (!androgens.length || androgens.some((c) => c.peptide.aromatises)) return [];
+
+  return [
+    {
+      kind: "shared-mechanism",
+      severity: "high",
+      title: `${inhibitors.map((c) => c.name).join(" and ")} with nothing that aromatises`,
+      detail: `Nothing currently running converts to oestradiol: ${androgens
+        .map((c) => c.name)
+        .join(", ")} ${androgens.length === 1 ? "does" : "do"} not. An aromatase inhibitor here has no oestrogen to control and can only push yours below where you need it, which costs joint comfort, libido, mood and HDL, and is slower to recover from than high oestradiol would have been.`,
+      protocolIds: [...inhibitors, ...androgens].map((c) => c.protocolId),
+      compounds: [...inhibitors.map((c) => c.name), ...androgens.map((c) => c.name)],
+    },
+  ];
+}
+
 const SEVERITY_ORDER: Record<StackSeverity, number> = { high: 0, medium: 1 };
 
 /**
@@ -318,6 +365,10 @@ export function stackIssues(input: StackInput): StackIssue[] {
   if (compounds.length < 2) return [];
 
   return [
-    ...duplicateCompounds(compounds), ...sharedMechanisms(compounds), ...stackedOrals(compounds), ...componentOverlap(input),
+    ...duplicateCompounds(compounds),
+    ...sharedMechanisms(compounds),
+    ...stackedOrals(compounds),
+    ...pointlessAromataseInhibitor(compounds),
+    ...componentOverlap(input),
   ].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }

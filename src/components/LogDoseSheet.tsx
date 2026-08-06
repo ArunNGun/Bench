@@ -26,6 +26,7 @@ import {
   calculateDraw,
   concentration,
   doseFromUnits,
+  mcgPerUnitOfScale,
   mgToMcg,
   SYRINGES,
   syringeById,
@@ -101,6 +102,8 @@ export function LogDoseSheet({
   const [units, setUnits] = useState(0);
   const [notes, setNotes] = useState("");
   const [skipped, setSkipped] = useState(false);
+  /** Whether the dose field is showing mg or mcg. Internally always mcg. */
+  const [doseUnit, setDoseUnit] = useState<"mcg" | "mg">("mcg");
   // Lets the pinned set be bypassed when the shot actually went elsewhere.
   const [siteOverride, setSiteOverride] = useState(false);
   const [protocolId, setProtocolId] = useState("");
@@ -202,7 +205,7 @@ export function LogDoseSheet({
     vial && vial.diluentMl ? concentration(mgToMcg(vial.strengthMg), vial.diluentMl) : NaN;
   const canConvert = Number.isFinite(concMcgPerMl) && concMcgPerMl > 0;
 
-  /** Dose is the source of truth; marks follow it. */
+  /** Dose is the source of truth; the barrel reading follows it. */
   function setDoseAndUnits(mcg: number) {
     setDoseMcg(mcg);
     setUnits(canConvert ? unitsFromDose(mcg, concMcgPerMl, syringe.scale) : 0);
@@ -215,7 +218,7 @@ export function LogDoseSheet({
     if (canConvert) setDoseMcg(Number(doseFromUnits(u, concMcgPerMl, syringe.scale).toFixed(2)));
   }
 
-  /** Switching barrel keeps the dose fixed and re-reads the marks. */
+  /** Switching barrel keeps the dose fixed and re-reads the units. */
   function setScale(next: SyringeScale) {
     const spec =
       SYRINGES.find((s) => s.scale === next && s.capacityMl === syringe.capacityMl) ??
@@ -224,7 +227,7 @@ export function LogDoseSheet({
     setUnits(canConvert ? unitsFromDose(doseMcg, concMcgPerMl, next) : 0);
   }
 
-  // Recompute marks whenever the vial or barrel changes underneath the dose.
+  // Recompute the reading whenever the vial or barrel changes under the dose.
   useEffect(() => {
     if (!open) return;
     setUnits(canConvert ? unitsFromDose(doseMcg, concMcgPerMl, syringe.scale) : 0);
@@ -353,31 +356,48 @@ export function LogDoseSheet({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Dose"
-              hint={protocol ? `Protocol calls for ${formatDose(scheduledDoseMcg(protocol, at))}.` : undefined}
+              hint={
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {protocol && (
+                    <span>{`Protocol calls for ${formatDose(scheduledDoseMcg(protocol, at))}.`}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDoseUnit((u) => (u === "mcg" ? "mg" : "mcg"))}
+                    className="rounded-full border border-[var(--line)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--muted)] hover:border-[var(--tangerine)] hover:text-[var(--tangerine)] transition-colors"
+                    aria-label={`Switch dose entry to ${doseUnit === "mcg" ? "mg" : "mcg"}`}
+                  >
+                    {doseUnit === "mcg" ? "switch to mg" : "switch to mcg"}
+                  </button>
+                </span>
+              }
             >
               <NumberInput
-                value={doseMcg}
+                value={doseUnit === "mg" ? Number((doseMcg / 1000).toFixed(4)) : doseMcg}
                 min={0}
-                step={25}
-                suffix="mcg"
-                onChange={(e) => setDoseAndUnits(Number(e.target.value))}
+                step={doseUnit === "mg" ? 0.025 : 25}
+                suffix={doseUnit}
+                onChange={(e) => {
+                  const raw = Number(e.target.value);
+                  setDoseAndUnits(doseUnit === "mg" ? raw * 1000 : raw);
+                }}
                 disabled={skipped}
               />
             </Field>
 
             <Field
-              label="Syringe marks"
+              label="Syringe units"
               hint={
                 canConvert
-                  ? `1 mark = ${trim(concMcgPerMl * (syringe.scale === "U100" ? 0.01 : 0.025), 2)} mcg at this vial's strength.`
-                  : "Reconstitute the vial to convert between marks and dose."
+                  ? `1 unit = ${trim(mcgPerUnitOfScale(concMcgPerMl, syringe.scale), 2)} mcg at this vial's strength. One printed mark on this barrel is ${syringe.graduationUnits} unit${syringe.graduationUnits === 1 ? "" : "s"}.`
+                  : "Reconstitute the vial to convert between units and dose."
               }
             >
               <NumberInput
                 value={canConvert ? Number(units.toFixed(2)) : ""}
                 min={0}
                 step={0.5}
-                suffix="marks"
+                suffix="units"
                 placeholder={canConvert ? undefined : "n/a"}
                 disabled={skipped || !canConvert}
                 onChange={(e) => setUnitsAndDose(Number(e.target.value))}
@@ -390,16 +410,16 @@ export function LogDoseSheet({
               label="Barrel"
               hint={
                 syringe.scale === "U40"
-                  ? "Veterinary scale, one mark is 0.025 mL."
-                  : "Standard insulin scale, one mark is 0.01 mL."
+                  ? "Veterinary scale, one unit is 0.025 mL."
+                  : "Standard insulin scale, one unit is 0.01 mL."
               }
             >
               <Segmented
                 ariaLabel="Syringe scale"
                 className="w-full"
                 options={[
-                  { value: "U100", label: "U-100", hint: "100 marks to 1 mL" },
-                  { value: "U40", label: "U-40", hint: "40 marks to 1 mL, 2.5x the volume per mark" },
+                  { value: "U100", label: "U-100", hint: "100 units to 1 mL" },
+                  { value: "U40", label: "U-40", hint: "40 units to 1 mL, 2.5x the volume per unit" },
                 ]}
                 value={syringe.scale}
                 onChange={(v) => setScale(v as SyringeScale)}
@@ -523,7 +543,7 @@ export function LogDoseSheet({
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone="tangerine">
-                  {trim(draw.unitsRounded, 2)} marks · {trim(draw.volumeRoundedMl, 3)} mL
+                  {trim(draw.unitsRounded, 2)} units · {trim(draw.volumeRoundedMl, 3)} mL
                 </Badge>
                 <Badge>{syringe.scale === "U100" ? "U-100" : "U-40"}</Badge>
                 <Select

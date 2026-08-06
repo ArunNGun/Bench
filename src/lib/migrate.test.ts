@@ -260,3 +260,75 @@ describe("the version stamp never lies", () => {
     expect(out.logs.every((l) => l.profileId)).toBe(true);
   });
 });
+
+describe("v6: daily check-ins", () => {
+  it("gives a v5 payload an empty check-in list rather than undefined", () => {
+    // Every screen maps over this. Undefined would throw on the first render
+    // for anyone restoring a backup taken before check-ins existed.
+    const out = migrateAppData({ version: 5, logs: [], protocols: [] } as StoredData);
+    expect(out.checkIns).toEqual([]);
+    expect(out.version).toBe(DATA_VERSION);
+  });
+
+  it("adopts ownerless check-ins into the active profile", () => {
+    // Present but invisible is the failure mode this whole module exists for.
+    const out = migrateAppData({
+      logs: [],
+      protocols: [],
+      checkIns: [{ id: "c1", at: Date.UTC(2026, 5, 1), ratings: { energy: 4 } }],
+    } as unknown as StoredData);
+    expect(out.checkIns[0].profileId).toBe(out.activeProfileId);
+  });
+
+  it("collapses two entries for one day, keeping the newer", () => {
+    const day = new Date(2026, 5, 1, 0, 0).getTime();
+    const out = migrateAppData({
+      logs: [],
+      protocols: [],
+      checkIns: [
+        { id: "morning", profileId: "me", at: day + 3_600_000, ratings: { energy: 2 } },
+        { id: "evening", profileId: "me", at: day + 20 * 3_600_000, ratings: { energy: 5 } },
+      ],
+    } as unknown as StoredData);
+    expect(out.checkIns).toHaveLength(1);
+    expect(out.checkIns[0].ratings.energy).toBe(5);
+  });
+
+  it("normalises the timestamp to the start of the local day", () => {
+    const out = migrateAppData({
+      logs: [],
+      protocols: [],
+      checkIns: [
+        { id: "c", profileId: "me", at: new Date(2026, 5, 1, 22, 45).getTime(), ratings: {} },
+      ],
+    } as unknown as StoredData);
+    expect(out.checkIns[0].at).toBe(new Date(2026, 5, 1).setHours(0, 0, 0, 0));
+  });
+
+  it("keeps two profiles' entries for the same day apart", () => {
+    const day = new Date(2026, 5, 1, 9).getTime();
+    const out = migrateAppData({
+      logs: [],
+      protocols: [],
+      profiles: [
+        { id: "a", name: "A", createdAt: 0 },
+        { id: "b", name: "B", createdAt: 0 },
+      ],
+      activeProfileId: "a",
+      checkIns: [
+        { id: "1", profileId: "a", at: day, ratings: { energy: 1 } },
+        { id: "2", profileId: "b", at: day, ratings: { energy: 5 } },
+      ],
+    } as unknown as StoredData);
+    expect(out.checkIns).toHaveLength(2);
+  });
+
+  it("is idempotent over check-ins", () => {
+    const once = migrateAppData({
+      logs: [],
+      protocols: [],
+      checkIns: [{ id: "c", profileId: "me", at: Date.now(), ratings: { mood: 3 } }],
+    } as unknown as StoredData);
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});

@@ -7,6 +7,7 @@ import {
   Download,
   ExternalLink,
   HardDriveDownload,
+  Printer,
   RefreshCw,
   RotateCcw,
   Sheet,
@@ -15,6 +16,7 @@ import {
 import {
   Badge,
   Button,
+  ButtonLink,
   Callout,
   Field,
   NumberInput,
@@ -42,6 +44,7 @@ import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
+import { UpdateButton } from "@/components/UpdateButton";
 
 export default function SettingsPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -223,6 +226,9 @@ export default function SettingsPage() {
           <Button onClick={downloadCsv} disabled={!logs.length}>
             <Sheet size={15} /> Doses as CSV
           </Button>
+          <ButtonLink href="/report">
+            <Printer size={15} /> Report for a clinician
+          </ButtonLink>
         </div>
         <p className="text-[12.5px] text-[var(--muted)]">
           To bring data back in, your own export, or a file from another app, use{" "}
@@ -264,6 +270,8 @@ export default function SettingsPage() {
           </Button>
         )}
       </Card>
+
+      <UpdateButton />
 
       <Card className="space-y-3 p-4">
         <SectionLabel

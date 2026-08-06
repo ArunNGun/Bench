@@ -16,7 +16,7 @@
  * this data. Reaching it requires the Capacitor build.
  */
 
-import type { HealthSample } from "../calc/healthsync";
+import type { HealthSample, HeartRateSample, SleepSegment } from "../calc/healthsync";
 
 export type HealthAvailability =
   | "available"
@@ -39,6 +39,15 @@ export interface HealthAdapter {
   openSettings(): Promise<void>;
   /** Weight samples recorded at or after `sinceMs`. */
   readWeight(sinceMs: number): Promise<HealthSample[]>;
+  /**
+   * Sleep stretches, and resting heart rate readings, at or after `sinceMs`.
+   *
+   * Both sit beside the daily check-in rather than replacing it: they are the
+   * objective half of "how did you sleep". Either can return an empty array on
+   * a device that records neither, and that is not an error.
+   */
+  readSleep(sinceMs: number): Promise<SleepSegment[]>;
+  readRestingHr(sinceMs: number): Promise<HeartRateSample[]>;
 }
 
 /**
@@ -50,6 +59,8 @@ export const unavailableAdapter: HealthAdapter = {
   requestPermissions: async () => false,
   openSettings: async () => {},
   readWeight: async () => [],
+  readSleep: async () => [],
+  readRestingHr: async () => [],
 };
 
 /**
@@ -82,5 +93,5 @@ export const AVAILABILITY_MESSAGE: Record<HealthAvailability, string> = {
   "not-installed":
     "Health Connect is not set up on this device. Install it from the Play Store, then try again.",
   "permission-denied":
-    "Bench does not have permission to read your weight. Grant it in Health Connect settings.",
+    "Bench does not have permission to read from Health Connect. Grant it in Health Connect settings.",
 };

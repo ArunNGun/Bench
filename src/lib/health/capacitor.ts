@@ -8,17 +8,25 @@
  * file guessed at all of them and got almost every one wrong.
  */
 
-import type { HealthSample } from "../calc/healthsync";
+import type { HealthSample, HeartRateSample, SleepSegment } from "../calc/healthsync";
 import type { HealthAdapter, HealthAvailability } from "./adapter";
 
-/** The plugin's data-type name for body weight. Lower case, and it matters. */
+/**
+ * The plugin's data-type names. Lower case, and it matters.
+ *
+ * Taken from the HealthDataType union in the plugin's own definitions rather
+ * than guessed, because every name guessed for this plugin the first time round
+ * was wrong and failed silently.
+ */
 const WEIGHT = "weight";
+const SLEEP = "sleep";
+const RESTING_HR = "restingHeartRate";
 
 /** Weight always arrives in kilograms, which is what this app stores. */
 const KILOGRAM = "kilogram";
 
 /** Read only. The app never writes to the health store, so it never asks to. */
-const SCOPES = { read: [WEIGHT] };
+const SCOPES = { read: [WEIGHT, SLEEP, RESTING_HR] };
 
 /**
  * Health Connect returns at most this many samples per read. Its own window is
@@ -43,6 +51,10 @@ interface PluginSample {
   /** Health Connect's own record id. Stable across reads. */
   platformId?: string;
   sourceName?: string;
+  /** Sleep only: asleep, awake, rem, deep, light, inBed. */
+  sleepState?: string;
+  /** Sleep only: the stage breakdown, when the platform exposes one. */
+  stages?: { startDate?: string; endDate?: string; stage?: string }[];
 }
 
 /** Only the surface this app touches, so a plugin change fails loudly here. */
@@ -78,8 +90,44 @@ function plugin(): HealthPlugin | null {
   return (cap?.Plugins?.Health as HealthPlugin | undefined) ?? null;
 }
 
-const granted = (status: AuthorizationStatus | undefined, list: keyof AuthorizationStatus) =>
-  !!status?.[list]?.includes(WEIGHT);
+/**
+ * Weight is the one that decides whether the integration is usable at all.
+ *
+ * Sleep and resting heart rate are checked separately and independently: a user
+ * may reasonably grant weight and withhold the rest, and that should leave the
+ * weight sync working rather than reporting the whole thing denied.
+ */
+const granted = (
+  status: AuthorizationStatus | undefined,
+  list: keyof AuthorizationStatus,
+  type: string = WEIGHT,
+) => !!status?.[list]?.includes(type);
+
+/**
+ * One read against the health store.
+ *
+ * Shared so the window rules live in one place. `endDate` is exclusive, so it
+ * reaches slightly past now; a reading taken this second would otherwise fall
+ * outside a window that ended at exactly now.
+ */
+async function read(dataType: string, sinceMs: number): Promise<PluginSample[]> {
+  const h = plugin();
+  if (!h) return [];
+  try {
+    const res = await h.readSamples({
+      dataType,
+      startDate: new Date(sinceMs).toISOString(),
+      endDate: new Date(Date.now() + 60_000).toISOString(),
+      limit: READ_LIMIT,
+      ascending: true,
+    });
+    return res.samples ?? [];
+  } catch {
+    // A type the user withheld permission for throws. That is a normal state,
+    // not a failure, and it must not take the other reads down with it.
+    return [];
+  }
+}
 
 export const capacitorHealthAdapter: HealthAdapter = {
   async availability(): Promise<HealthAvailability> {
@@ -117,6 +165,52 @@ export const capacitorHealthAdapter: HealthAdapter = {
     } catch {
       // Nothing useful to do if the settings screen will not open.
     }
+  },
+
+  async readSleep(sinceMs) {
+    const samples = await read(SLEEP, sinceMs);
+
+    return samples.flatMap((s, i): SleepSegment[] => {
+      // Prefer the stage breakdown where there is one: it excludes the minutes
+      // spent awake mid-night, which the parent session includes.
+      if (s.stages?.length) {
+        return s.stages
+          .map((stage, j) => ({
+            externalId: `${s.platformId ?? `hc-sleep:${i}`}:${j}`,
+            startAt: stage.startDate ? Date.parse(stage.startDate) : NaN,
+            endAt: stage.endDate ? Date.parse(stage.endDate) : NaN,
+            state: stage.stage,
+          }))
+          .filter((x) => Number.isFinite(x.startAt) && Number.isFinite(x.endAt));
+      }
+
+      const startAt = s.startDate ? Date.parse(s.startDate) : NaN;
+      const endAt = s.endDate ? Date.parse(s.endDate) : NaN;
+      if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) return [];
+
+      return [
+        {
+          externalId: s.platformId ?? `hc-sleep:${startAt}:${i}`,
+          startAt,
+          endAt,
+          state: s.sleepState,
+        },
+      ];
+    });
+  },
+
+  async readRestingHr(sinceMs) {
+    const samples = await read(RESTING_HR, sinceMs);
+
+    return samples
+      .map((s, i): HeartRateSample | null => {
+        const at = s.startDate ? Date.parse(s.startDate) : NaN;
+        const bpm = typeof s.value === "number" ? s.value : NaN;
+        // A resting rate outside this is a misread, not a person.
+        if (!Number.isFinite(at) || !(bpm >= 25 && bpm <= 200)) return null;
+        return { externalId: s.platformId ?? `hc-hr:${at}:${bpm}:${i}`, at, bpm };
+      })
+      .filter((s): s is HeartRateSample => s !== null);
   },
 
   async readWeight(sinceMs) {

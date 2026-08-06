@@ -6,7 +6,7 @@ import { Badge, Button, Callout, EmptyState, Card, SectionLabel, Select, Stat } 
 import { LogDoseSheet } from "@/components/LogDoseSheet";
 import { SiteMap } from "@/components/SiteMap";
 import { findPeptide, useStore, useProfileData } from "@/lib/store";
-import { adherence } from "@/lib/calc/schedule";
+import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { overusedSites } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
 import { INJECTION_SITES } from "@/lib/types";
@@ -38,7 +38,7 @@ export default function LogPage() {
       .map((p) =>
         adherence(
           p,
-          logs.filter((l) => l.protocolId === p.id || l.peptideId === p.peptideId),
+          logsForProtocol(p, logs),
           Math.max(p.startedAt, now - 30 * DAY),
           now));
     const expected = rates.reduce((s, r) => s + r.expected, 0);

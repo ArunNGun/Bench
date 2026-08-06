@@ -14,6 +14,7 @@ import {
   type Peptide,
   type Measurement,
   type LabResult,
+  type CheckIn,
   type Protocol,
   type Profile,
   type Settings,
@@ -22,6 +23,7 @@ import {
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate } from "./calc/reconstitution";
+import { startOfLocalDay } from "./calc/schedule";
 import {
   drawFromVial,
   pickVialForDose,
@@ -90,6 +92,25 @@ interface StoreState extends AppData {
   updateLab: (id: string, patch: Partial<LabResult>) => void;
   removeLab: (id: string) => void;
 
+  /**
+   * Record how a day went. Upserts on the local day, so re-rating an evening
+   * after rating the morning corrects the entry rather than adding a second.
+   */
+  saveCheckIn: (at: number, ratings: CheckIn["ratings"], notes?: string) => string;
+  removeCheckIn: (id: string) => void;
+
+  /**
+   * Store what the health store reported for a day: sleep, resting heart rate.
+   *
+   * Upserts on a deterministic id per day, so re-reading the same night after
+   * every app open corrects the row instead of stacking up a duplicate for each
+   * sync. Read-only data from the platform; nothing here is written back.
+   */
+  recordVitals: (
+    dayMs: number,
+    vitals: { sleepHours?: number; restingHrBpm?: number },
+  ) => void;
+
   addVial: (v: Omit<Vial, "id" | "profileId">) => string;
   updateVial: (id: string, patch: Partial<Vial>) => void;
   removeVial: (id: string) => void;
@@ -156,6 +177,7 @@ export const useStore = create<StoreState>()(
             vials: s.vials.filter((x) => x.profileId !== id),
             measurements: s.measurements.filter((x) => x.profileId !== id),
             labs: s.labs.filter((x) => x.profileId !== id),
+            checkIns: s.checkIns.filter((x) => x.profileId !== id),
             activeProfileId: s.activeProfileId === id ? profiles[0].id : s.activeProfileId,
           };
         }),
@@ -265,6 +287,48 @@ export const useStore = create<StoreState>()(
         })),
       removeLab: (id) => set((s) => ({ labs: s.labs.filter((x) => x.id !== id) })),
 
+      saveCheckIn: (at, ratings, notes) => {
+        const day = startOfLocalDay(at);
+        const existing = get().checkIns.find(
+          (c) => c.profileId === get().activeProfileId && c.at === day);
+        const id = existing?.id ?? nanoid();
+        set((s) => {
+          const row: CheckIn = { id, profileId: s.activeProfileId, at: day, ratings, notes };
+          const rest = s.checkIns.filter((c) => c.id !== id);
+          return { checkIns: [...rest, row].sort((a, b) => b.at - a.at) };
+        });
+        return id;
+      },
+      removeCheckIn: (id) => set((s) => ({ checkIns: s.checkIns.filter((x) => x.id !== id) })),
+
+      recordVitals: (dayMs, vitals) => {
+        if (vitals.sleepHours == null && vitals.restingHrBpm == null) return;
+        const day = startOfLocalDay(dayMs);
+        const externalId = `hc-vitals:${day}`;
+
+        set((s) => {
+          const existing = s.measurements.find(
+            (m) => m.profileId === s.activeProfileId && m.externalId === externalId);
+
+          if (existing) {
+            return {
+              measurements: s.measurements.map((m) =>
+                m.id === existing.id ? { ...m, ...vitals } : m),
+            };
+          }
+
+          const row: Measurement = {
+            id: nanoid(),
+            profileId: s.activeProfileId,
+            at: day,
+            source: "health-connect",
+            externalId,
+            ...vitals,
+          };
+          return { measurements: [...s.measurements, row].sort((a, b) => b.at - a.at) };
+        });
+      },
+
       addVial: (v) => {
         const id = nanoid(10);
         set((s) => ({ vials: [...s.vials, { ...v, id, profileId: s.activeProfileId }] }));
@@ -316,6 +380,7 @@ export const useStore = create<StoreState>()(
           vials: migrated.vials,
           settings: migrated.settings,
           customPeptides: migrated.customPeptides,
+          checkIns: migrated.checkIns,
         });
       },
       importHistory: ({ logs, measurements }) => {
@@ -342,6 +407,7 @@ export const useStore = create<StoreState>()(
           vials: s.vials,
           settings: s.settings,
           customPeptides: s.customPeptides,
+          checkIns: s.checkIns,
         };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
@@ -361,6 +427,7 @@ export const useStore = create<StoreState>()(
         vials: s.vials,
         settings: s.settings,
         customPeptides: s.customPeptides,
+        checkIns: s.checkIns,
       }),
       /**
        * Shared with importData, so a backup restored from a file and this
@@ -399,6 +466,7 @@ export function useProfileData() {
   const vials = useStore((s) => s.vials);
   const measurements = useStore((s) => s.measurements);
   const labs = useStore((s) => s.labs);
+  const checkIns = useStore((s) => s.checkIns);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -408,8 +476,9 @@ export function useProfileData() {
       vials: vials.filter((x) => x.profileId === activeId),
       measurements: measurements.filter((x) => x.profileId === activeId),
       labs: labs.filter((x) => x.profileId === activeId),
+      checkIns: checkIns.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, activeId]);
+    [protocols, logs, vials, measurements, labs, checkIns, activeId]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */

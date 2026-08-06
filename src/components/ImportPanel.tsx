@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, FileUp, Upload } from "lucide-react";
+import { AlertTriangle, Droplet, FileUp, Upload } from "lucide-react";
 import { Badge, Button, Callout, Card, SectionLabel, TONE_BG, TONE_FG } from "./ui";
 import { allPeptides, useProfileData, useStore } from "@/lib/store";
 import { ACCEPTED_EXTENSIONS, ImportError, readImportFile, type ReadResult } from "@/lib/import/pipeline";
 import { describePlan, planIsEmpty, planSpan } from "@/lib/import/plan";
 import { formatDate, formatDose } from "@/lib/format";
 import { INJECTION_SITES, type AppData } from "@/lib/types";
+import type { LabCandidate } from "@/lib/import/labreport";
 
 /**
  * Bringing history in from another app.
@@ -24,6 +25,7 @@ export function ImportPanel() {
   const custom = useStore((s) => s.customPeptides);
   const importHistory = useStore((s) => s.importHistory);
   const importData = useStore((s) => s.importData);
+  const addLab = useStore((s) => s.addLab);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<ReadResult | null>(null);
@@ -31,6 +33,8 @@ export function ImportPanel() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Markers the user unticked in the lab preview. */
+  const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [withDoses, setWithDoses] = useState(true);
   const [withWeights, setWithWeights] = useState(true);
 
@@ -38,6 +42,7 @@ export function ImportPanel() {
     setResult(null);
     setError(null);
     setFileName("");
+    setSkipped(new Set());
   }
 
   async function choose(file: File) {
@@ -60,7 +65,7 @@ export function ImportPanel() {
       setError(
         e instanceof ImportError
           ? e.message
-          : "That file could not be read. CSV, TSV, JSON and .xlsx are supported.");
+          : "That file could not be read. CSV, TSV, JSON, .xlsx and a lab report PDF are supported.");
     } finally {
       setBusy(false);
     }
@@ -73,6 +78,31 @@ export function ImportPanel() {
       importData(result.data as AppData);
       setDone(
         `Restored from your own export: ${result.data.logs?.length ?? 0} doses, ${result.data.protocols?.length ?? 0} protocols.`);
+      reset();
+      return;
+    }
+
+    if (result.kind === "lab-report") {
+      const at = result.report.collectedAt ?? Date.now();
+      let written = 0;
+      for (const c of result.report.candidates) {
+        if (skipped.has(c.markerId)) continue;
+        addLab({
+          at,
+          markerId: c.markerId,
+          value: c.value,
+          refLow: c.refLow,
+          refHigh: c.refHigh,
+          lab: result.report.lab,
+        });
+        written++;
+      }
+      setDone(
+        `Saved ${written} result${written === 1 ? "" : "s"} dated ${formatDate(at)}.${
+          result.report.collectedAt == null
+            ? " No collection date was found in the file, so today's date was used. Edit it on the Bloodwork page if that is wrong."
+            : ""
+        }`);
       reset();
       return;
     }
@@ -106,7 +136,9 @@ export function ImportPanel() {
       <SectionLabel>Import from another app</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        Reads a CSV, TSV, JSON or .xlsx export and merges the doses and weights into this profile.
+Reads a CSV, TSV, JSON or .xlsx export from another tracker and merges the doses and
+        weights into this profile. A lab report PDF is read here too, straight on this device:
+        nothing is uploaded anywhere.
         Shotsy is recognised by name; anything else is read from its column headers, so a spreadsheet
         with a date, what you took and a dose will work. Nothing is written until you have seen what it
         found, and re-importing the same file later only adds what is new.
@@ -121,7 +153,7 @@ export function ImportPanel() {
             <FileUp size={15} /> {busy ? "Reading…" : "Choose a file"}
           </Button>
           <span className="text-[12px] text-[var(--faint)]">
-            .csv .tsv .json .xlsx, the old .xls needs re-saving first
+            .csv .tsv .json .xlsx .pdf, the old .xls needs re-saving first
           </span>
         </div>
       )}
@@ -155,6 +187,25 @@ export function ImportPanel() {
             </Button>
           </div>
         </div>
+      )}
+
+      {result?.kind === "lab-report" && (
+        <LabPreview
+          report={result.report}
+          lineCount={result.lines.length}
+          fileName={fileName}
+          skipped={skipped}
+          onToggle={(id) =>
+            setSkipped((s) => {
+              const next = new Set(s);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
+          onCancel={reset}
+          onApply={apply}
+        />
       )}
 
       {result?.kind === "table" && (
@@ -358,5 +409,115 @@ function Toggle({
         </span>
       </span>
     </button>
+  );
+}
+
+
+/**
+ * A lab report, before anything is written.
+ *
+ * Every row shows the line it was read from. That is the whole safeguard: the
+ * user is checking the parse against the report rather than trusting a matcher
+ * they cannot see, and a misread number is obvious next to its source in a way
+ * it never is on a chart six months later.
+ */
+function LabPreview({
+  report,
+  lineCount,
+  fileName,
+  skipped,
+  onToggle,
+  onCancel,
+  onApply,
+}: {
+  report: { candidates: LabCandidate[]; collectedAt: number | null; lab?: string };
+  lineCount: number;
+  fileName: string;
+  skipped: Set<string>;
+  onToggle: (markerId: string) => void;
+  onCancel: () => void;
+  onApply: () => void;
+}) {
+  const keeping = report.candidates.filter((c) => !skipped.has(c.markerId));
+  const suspect = report.candidates.filter((c) => c.confidence === "unit-mismatch");
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold text-[var(--ink)]">
+          <Droplet size={14} strokeWidth={2.6} /> Lab report
+        </span>
+        <span className="text-[12px] text-[var(--faint)]">
+          {fileName} · {lineCount} lines read
+        </span>
+      </div>
+
+      <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
+        {report.candidates.length} marker{report.candidates.length === 1 ? "" : "s"} recognised
+        {report.lab ? ` from ${report.lab}` : ""}, dated{" "}
+        {report.collectedAt != null ? formatDate(report.collectedAt) : "today"}
+        {report.collectedAt == null ? ", since no collection date was found" : ""}. Check each
+        against the line it came from before saving.
+      </p>
+
+      {suspect.length > 0 && (
+        <Callout tone="warn" title="Units that do not match">
+          {suspect.map((c) => c.markerName).join(", ")} came back in a unit the app does not chart
+          in. Nothing is converted on a guess, because charting one unit as another produces a trend
+          that is wrong rather than merely imprecise. Untick these and enter them by hand, or
+          convert them yourself first.
+        </Callout>
+      )}
+
+      <ul className="space-y-1.5">
+        {report.candidates.map((c) => {
+          const on = !skipped.has(c.markerId);
+          const bad = c.confidence === "unit-mismatch";
+          return (
+            <li
+              key={c.markerId}
+              className="rounded-[var(--r-inner)] p-2.5"
+              style={{ background: on ? "var(--sunken)" : "transparent", opacity: on ? 1 : 0.5 }}
+            >
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => onToggle(c.markerId)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--mint)]"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[13px] font-bold text-[var(--ink)]">{c.markerName}</span>
+                    <span className="tnum font-mono text-[13px] text-[var(--mint-ink)]">
+                      {c.value} {c.unit ?? c.expectedUnit}
+                    </span>
+                    {c.refLow != null || c.refHigh != null ? (
+                      <span className="text-[11.5px] text-[var(--faint)]">
+                        ref {c.refLow ?? "n/a"} to {c.refHigh ?? "n/a"}
+                      </span>
+                    ) : null}
+                    {bad && <Badge tone="tangerine">expects {c.expectedUnit}</Badge>}
+                    {c.confidence === "loose" && <Badge>matched loosely</Badge>}
+                  </span>
+                  <span className="mt-0.5 block truncate font-mono text-[11px] text-[var(--faint)]">
+                    {c.source}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex gap-2.5">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="primary" className="flex-1" disabled={!keeping.length} onClick={onApply}>
+          Save {keeping.length} result{keeping.length === 1 ? "" : "s"}
+        </Button>
+      </div>
+    </div>
   );
 }

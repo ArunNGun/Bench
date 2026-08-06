@@ -238,7 +238,7 @@ function VialRow({
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
 
   return (
-    <Card className={`group flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
+    <Card className={`flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
       <div className="h-14 w-8 shrink-0">
         <VialGlyph fraction={st.fractionRemaining} state={vial.state} />
       </div>
@@ -307,17 +307,17 @@ function VialRow({
               Mark empty
             </Button>
           )}
+          <Button
+            onClick={onRemove}
+            variant="ghost"
+            className="px-3 py-1.5 text-[13px] text-[var(--rose)] hover:border-[var(--rose)]/40 hover:text-[var(--rose)]"
+          >
+            <Trash2 size={13} /> Delete
+          </Button>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Delete ${peptideName} vial`}
-        className="shrink-0 p-1 text-[var(--faint)] opacity-0 transition-opacity hover:text-[var(--rose)] focus-visible:opacity-100 group-hover:opacity-100"
-      >
-        <Trash2 size={15} />
-      </button>
+
     </Card>
   );
 }

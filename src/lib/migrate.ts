@@ -25,9 +25,11 @@ import {
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
   type AppData,
+  type CheckIn,
   type Vial,
 } from "./types";
 import { vialCapacityMcg } from "./calc/inventory";
+import { startOfLocalDay } from "./calc/schedule";
 
 // Defined in types.ts so EMPTY_DATA can use it too; re-exported here because
 // this is where callers expect to find it.
@@ -95,9 +97,11 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     protocols: own(data.protocols),
     logs: own(logs).sort((a, b) => b.at - a.at),
     vials: own(vials),
-    // v4 added outcome tracking and v5 bloodwork; older data simply has none.
+    // v4 added outcome tracking, v5 bloodwork and v6 check-ins; older data
+    // simply has none of them.
     measurements: own(data.measurements).sort((a, b) => b.at - a.at),
     labs: own(data.labs).sort((a, b) => b.at - a.at),
+    checkIns: dedupeByDay(own(data.checkIns)),
     // Settings gain fields over time. Filling from defaults rather than leaving
     // them undefined keeps the UI from having to guess at every read site.
     settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
@@ -118,7 +122,25 @@ function emptyLike(): AppData {
     labs: [],
     settings: { ...DEFAULT_SETTINGS },
     customPeptides: [],
+    checkIns: [],
   };
+}
+
+/**
+ * At most one check-in per profile per day, newest kept.
+ *
+ * The store upserts on the day key, so duplicates should not arise, but an
+ * imported file is not under our control and two rows for one day would render
+ * as two points on a chart that is meant to have one per day.
+ */
+function dedupeByDay(rows: CheckIn[]): CheckIn[] {
+  const byDay = new Map<string, CheckIn>();
+  for (const row of rows) {
+    const key = `${row.profileId}:${startOfLocalDay(row.at)}`;
+    const seen = byDay.get(key);
+    if (!seen || row.at >= seen.at) byDay.set(key, { ...row, at: startOfLocalDay(row.at) });
+  }
+  return [...byDay.values()].sort((a, b) => b.at - a.at);
 }
 
 /**

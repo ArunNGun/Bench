@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addLocalDays,
   adherence,
+  logsForProtocol,
   atTimeOfDay,
   daysBetween,
   doseTimesBetween,
@@ -458,5 +459,184 @@ describe("dueStatus", () => {
     const s = dueStatus({ ...p, schedule: { kind: "as-needed" } }, start);
     expect(s.state).toBe("none");
     expect(s.at).toBeNull();
+  });
+});
+
+describe("logsForProtocol", () => {
+  const protocol = { id: "p1", peptideId: "semaglutide" };
+  const rows = [
+    { id: "a", protocolId: "p1", peptideId: "semaglutide", at: 1 },
+    { id: "b", protocolId: undefined, peptideId: "semaglutide", at: 2 },
+    { id: "c", protocolId: "p2", peptideId: "tirzepatide", at: 3 },
+    { id: "d", protocolId: "p1", peptideId: "tirzepatide", at: 4 },
+  ];
+
+  it("keeps doses attributed to the protocol by id", () => {
+    expect(logsForProtocol(protocol, rows).map((r) => r.id)).toContain("a");
+  });
+
+  it("keeps unattributed doses of the same compound, which is what an import produces", () => {
+    expect(logsForProtocol(protocol, rows).map((r) => r.id)).toContain("b");
+  });
+
+  it("excludes another compound's doses", () => {
+    // The bug this exists to prevent: without it, adherence for a protocol
+    // counts every other protocol's doses and reports a figure for a compound
+    // that was never taken.
+    expect(logsForProtocol(protocol, rows).map((r) => r.id)).not.toContain("c");
+  });
+
+  it("keeps a dose explicitly attributed to this protocol even under another compound", () => {
+    expect(logsForProtocol(protocol, rows).map((r) => r.id)).toContain("d");
+  });
+
+  it("reports zero adherence for a protocol with nothing logged against it", () => {
+    const p: Protocol = {
+      id: "ai",
+      profileId: "me",
+      peptideId: "anastrozole",
+      name: "AI",
+      active: true,
+      startedAt: local(2026, 6, 1),
+      doseMcg: 250,
+      route: "oral",
+      schedule: { kind: "interval-days", intervalDays: 3 },
+      titrationAutoAdvance: false,
+    };
+    const otherCompoundLogs = [
+      { at: local(2026, 6, 1), peptideId: "testosterone-enanthate" },
+      { at: local(2026, 6, 8), peptideId: "testosterone-enanthate" },
+      { at: local(2026, 6, 15), peptideId: "testosterone-enanthate" },
+    ];
+    const a = adherence(p, logsForProtocol(p, otherCompoundLogs), local(2026, 6, 1), local(2026, 6, 20));
+    expect(a.expected).toBeGreaterThan(0);
+    expect(a.taken).toBe(0);
+  });
+});
+
+describe("adherence matching, against a brute-force reference", () => {
+  /**
+   * The original quadratic algorithm, kept here verbatim as the definition of
+   * correct. The optimised version must agree with it on every input, not just
+   * on the cases someone thought to write down.
+   */
+  function referenceAdherence(
+    protocol: Protocol,
+    logs: { at: number; skipped?: boolean }[],
+    fromMs: number,
+    toMs: number,
+    toleranceHours = 36,
+  ) {
+    const scheduled = doseTimesBetween(
+      protocol.schedule,
+      protocol.startedAt,
+      fromMs,
+      toMs,
+      protocol.endedAt,
+    );
+    const tolerance = toleranceHours * 3_600_000;
+    const unmatched = logs.filter((l) => l.at >= fromMs - tolerance && l.at <= toMs + tolerance);
+    const used = new Set<number>();
+    let taken = 0;
+    let skipped = 0;
+
+    for (const time of scheduled) {
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < unmatched.length; i++) {
+        if (used.has(i)) continue;
+        const dist = Math.abs(unmatched[i].at - time);
+        if (dist <= tolerance && dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx >= 0) {
+        used.add(bestIdx);
+        if (unmatched[bestIdx].skipped) skipped++;
+        else taken++;
+      }
+    }
+    return { expected: scheduled.length, taken, skipped };
+  }
+
+  // A deterministic generator, so a failure is reproducible.
+  function rng(seed: number) {
+    let s = seed >>> 0;
+    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  }
+
+  const HOUR = 3_600_000;
+
+  it("agrees with the reference across 300 randomised histories", () => {
+    const rand = rng(20260731);
+    const schedules: Schedule[] = [
+      { kind: "daily" },
+      { kind: "interval-days", intervalDays: 2 },
+      { kind: "interval-days", intervalDays: 7 },
+      { kind: "days-of-week", daysOfWeek: [1, 4] },
+      { kind: "interval-days", intervalDays: 3, cycleWeeksOn: 4, cycleWeeksOff: 2 },
+    ];
+
+    for (let n = 0; n < 300; n++) {
+      const start = local(2026, 1, 1);
+      const days = 20 + Math.floor(rand() * 120);
+      const to = start + days * 86_400_000;
+      const protocol: Protocol = {
+        id: "p",
+        profileId: "me",
+        peptideId: "x",
+        name: "x",
+        active: true,
+        startedAt: start,
+        doseMcg: 100,
+        route: "subcutaneous",
+        schedule: schedules[Math.floor(rand() * schedules.length)],
+        titrationAutoAdvance: false,
+      };
+
+      // Logs scattered around the schedule, some on time, some drifting well
+      // past tolerance, some duplicated onto the same instant to force ties.
+      const logs: { at: number; skipped?: boolean }[] = [];
+      const count = Math.floor(rand() * 60);
+      for (let i = 0; i < count; i++) {
+        const at = start + Math.floor(rand() * days) * 86_400_000 + Math.floor((rand() - 0.5) * 90 * HOUR);
+        logs.push({ at, skipped: rand() < 0.15 });
+        if (rand() < 0.1) logs.push({ at, skipped: rand() < 0.5 });
+      }
+      // Deliberately unsorted, which is how the store hands them over.
+      logs.sort(() => (rand() < 0.5 ? 1 : -1));
+
+      const tolerance = [12, 36, 72][Math.floor(rand() * 3)];
+      const got = adherence(protocol, logs, start, to, tolerance);
+      const want = referenceAdherence(protocol, logs, start, to, tolerance);
+
+      expect({ expected: got.expected, taken: got.taken, skipped: got.skipped }, `case ${n}`).toEqual(
+        want,
+      );
+    }
+  });
+
+  it("never counts one log against two scheduled doses", () => {
+    const protocol: Protocol = {
+      id: "p",
+      profileId: "me",
+      peptideId: "x",
+      name: "x",
+      active: true,
+      startedAt: local(2026, 1, 1),
+      doseMcg: 100,
+      route: "subcutaneous",
+      schedule: { kind: "daily" },
+      titrationAutoAdvance: false,
+    };
+    // One dose, five scheduled days, a tolerance wide enough to reach several.
+    const a = adherence(protocol, [{ at: local(2026, 1, 3) }], local(2026, 1, 1), local(2026, 1, 5), 72);
+    // The point is the one dose is consumed once, however many scheduled days
+    // it sits within reach of.
+    expect(a.expected).toBeGreaterThan(1);
+    expect(a.taken).toBe(1);
+    expect(a.skipped).toBe(0);
+    expect(a.missed).toBe(a.expected - 1);
   });
 });

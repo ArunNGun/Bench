@@ -20,6 +20,7 @@ import {
 import { PEPTIDES } from "@/lib/data/peptides";
 import { LAB_MARKERS } from "@/lib/data/labs";
 import { CURRENT_VERSION, GITHUB_URL } from "@/lib/changelog";
+import { getLandingStats } from "@/lib/landingStats";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "./Reveal";
 import {
@@ -161,7 +162,8 @@ function Logo({ size = 40 }: { size?: number }) {
   );
 }
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { users } = await getLandingStats();
   return (
     <main className="min-h-screen bg-[var(--canvas)]">
       {/*
@@ -267,9 +269,10 @@ export default function LandingPage() {
           {[
             { n: String(COMPOUND_COUNT), l: "compounds, every figure cited" },
             { n: String(MARKER_COUNT), l: "blood markers you can chart" },
-            { n: "774", l: "tests on the arithmetic" },
-            { n: "0", l: "bytes that leave your device" },
-          ].map(({ n, l }) => (
+            { n: "962", l: "tests on the arithmetic" },
+            ...(users != null ? [{ n: users.toLocaleString(), l: "users", blink: true }] : []),
+            { n: "0", l: "bytes of your data leave the device" },
+          ].map(({ n, l, blink }: { n: string; l: string; blink?: boolean }) => (
             <div key={l} className="bg-[var(--card)] px-4 py-6 text-center">
               <p
                 className="font-mono text-[30px] font-extrabold leading-none tracking-tight"
@@ -277,7 +280,13 @@ export default function LandingPage() {
               >
                 {n}
               </p>
-              <p className="mx-auto mt-2 max-w-[150px] text-[12.5px] leading-snug text-[var(--muted)]">
+              <p className="mx-auto mt-2 flex max-w-[150px] items-center justify-center gap-1.5 text-[12.5px] leading-snug text-[var(--muted)]">
+                {blink && (
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--mint)] opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--mint)]" />
+                  </span>
+                )}
                 {l}
               </p>
             </div>
