@@ -1,0 +1,150 @@
+name: Release
+
+# Triggers when a tag like v1.8 or v1.8.1 is pushed.
+#
+# SIGNING NOTE
+# ------------
+# Bench is sideloaded, not distributed through Play. The release builds are
+# signed with Android's well-known debug keystore (password "android",
+# alias "androiddebugkey"). This is intentional and documented in
+# android/app/build.gradle. The signature must never change between releases
+# or existing installs cannot upgrade in place — they would have to uninstall
+# first, which wipes all IndexedDB data.
+#
+# The debug.keystore is not on the CI runner, so it is stored as a single
+# base64 secret (ANDROID_DEBUG_KEYSTORE_BASE64) and decoded at build time.
+# The passwords and alias are Android's published constants, not secrets.
+#
+# To generate that secret (one-time, from your Mac):
+#   base64 -i ~/.android/debug.keystore | pbcopy
+# Paste the result into:
+#   GitHub → repo → Settings → Secrets → Actions → ANDROID_DEBUG_KEYSTORE_BASE64
+#
+# To trigger a release:
+#   git tag v1.8 && git push origin v1.8
+
+on:
+  push:
+    tags:
+      - "v*.*"
+      - "v*.*.*"
+
+jobs:
+  # ── 1. Build the Next.js static export ────────────────────────────────────
+  build-web:
+    name: Build web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # The APK job reads the exported web output from here.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: out/
+          retention-days: 1
+
+  # ── 2. Build the APK signed with the debug keystore ───────────────────────
+  build-apk:
+    name: Build APK
+    needs: build-web
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: out/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Restore the debug keystore so build.gradle can find it at
+      # ~/.android/debug.keystore — exactly where it expects it.
+      - name: Restore debug keystore
+        run: |
+          mkdir -p ~/.android
+          echo "${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      # Match the naming convention used in /release (bench-v1.8.apk).
+      - name: Rename APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "bench-${GITHUB_REF_NAME}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: "bench-v*.apk"
+          retention-days: 7
+
+  # ── 3. Create the GitHub Release and attach the APK ───────────────────────
+  release:
+    name: Publish release
+    needs: build-apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      # Changelog from commits since the previous tag.
+      - name: Generate changelog
+        run: |
+          PREV=$(git tag --sort=-version:refname | sed -n '2p')
+          if [ -n "$PREV" ]; then
+            git log "${PREV}..HEAD" --pretty=format:"- %s" --no-merges | head -60 > CHANGELOG.txt
+          else
+            git log --pretty=format:"- %s" --no-merges | head -60 > CHANGELOG.txt
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Bench ${{ github.ref_name }}"
+          body_path: CHANGELOG.txt
+          files: "bench-v*.apk"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

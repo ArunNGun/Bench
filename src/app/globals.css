@@ -513,3 +513,73 @@ input[type="number"] {
     transform: none;
   }
 }
+
+/*
+  Printing.
+
+  The report page is meant to be handed to a clinician, on paper or as a PDF
+  the browser makes. Everything the app wraps around a page is chrome that
+  should not be on that paper: the header, the tab bar, the controls.
+
+  Colours are forced to black on white regardless of the theme. A dark-theme
+  print wastes a cartridge and comes out unreadable, and the app defaults to a
+  palette of soft greys that photocopy into mush.
+*/
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* App chrome, and anything explicitly marked as on-screen only. */
+  header[data-app-header],
+  nav[data-app-tabs],
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* The report card is a sheet of paper, not a card. */
+  .print-plain {
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Readable rather than branded. */
+  .print-plain * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+
+  .print-plain th,
+  .print-plain td,
+  .print-plain header,
+  .print-plain footer,
+  .print-plain section {
+    border-color: #bbb !important;
+  }
+
+  /* Never split a table row or a section heading across a page. */
+  tr,
+  h2,
+  h3 {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+}

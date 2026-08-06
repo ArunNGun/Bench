@@ -218,3 +218,68 @@ describe("ordering", () => {
     expect(severities.indexOf("medium")).toBeGreaterThan(severities.lastIndexOf("high"));
   });
 });
+
+describe("ancillaries", () => {
+  it("flags two aromatase inhibitors at once", () => {
+    const issues = run([
+      protocol({ id: "a", peptideId: "anastrozole" }),
+      protocol({ id: "b", peptideId: "exemestane" }),
+    ]);
+    expect(issues.some((i) => /aromatase inhibitor/i.test(i.title))).toBe(true);
+  });
+
+  it("flags two oestrogen receptor modulators at once", () => {
+    const issues = run([
+      protocol({ id: "a", peptideId: "tamoxifen" }),
+      protocol({ id: "b", peptideId: "clomiphene" }),
+    ]);
+    expect(issues.some((i) => /modulator/i.test(i.title))).toBe(true);
+  });
+
+  it("flags an aromatase inhibitor running with nothing that aromatises", () => {
+    const issues = run([
+      protocol({ id: "a", peptideId: "anastrozole" }),
+      protocol({ id: "b", peptideId: "trenbolone-acetate" }),
+    ]);
+    const issue = issues.find((i) => /nothing that aromatises/i.test(i.title));
+    expect(issue?.severity).toBe("high");
+    expect(issue?.detail).toMatch(/Trenbolone/i);
+  });
+
+  it("stays silent when an aromatising androgen is present", () => {
+    // The whole point of an AI. Firing here would be the warning people learn
+    // to dismiss, which then hides the one that matters.
+    const issues = run([
+      protocol({ id: "a", peptideId: "anastrozole" }),
+      protocol({ id: "b", peptideId: "testosterone-enanthate" }),
+    ]);
+    expect(issues.some((i) => /nothing that aromatises/i.test(i.title))).toBe(false);
+  });
+
+  it("stays silent when one of several androgens aromatises", () => {
+    const issues = run([
+      protocol({ id: "a", peptideId: "anastrozole" }),
+      protocol({ id: "b", peptideId: "trenbolone-acetate" }),
+      protocol({ id: "c", peptideId: "testosterone-propionate" }),
+    ]);
+    expect(issues.some((i) => /nothing that aromatises/i.test(i.title))).toBe(false);
+  });
+
+  it("does not ask the question of a peptide-only stack", () => {
+    // Nothing here is an androgen, so `aromatises` is absent rather than false
+    // and the rule has no basis to fire.
+    const issues = run([
+      protocol({ id: "a", peptideId: "anastrozole" }),
+      protocol({ id: "b", peptideId: "bpc-157" }),
+    ]);
+    expect(issues.some((i) => /nothing that aromatises/i.test(i.title))).toBe(false);
+  });
+
+  it("does not flag hCG alongside testosterone, which is the usual reason to run it", () => {
+    const issues = run([
+      protocol({ id: "a", peptideId: "hcg" }),
+      protocol({ id: "b", peptideId: "testosterone-cypionate" }),
+    ]);
+    expect(issues).toEqual([]);
+  });
+});

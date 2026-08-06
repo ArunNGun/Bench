@@ -55,6 +55,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [200, 250],
     vialSizesMg: [2000, 2500],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 50_000,
@@ -124,6 +125,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [100, 200, 250],
     vialSizesMg: [2000, 2500],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 50_000,
@@ -173,6 +175,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [100],
     vialSizesMg: [1000],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 25_000,
@@ -219,6 +222,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [250],
     vialSizesMg: [1000],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 1_000_000,
@@ -271,6 +275,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [100, 200, 250],
     vialSizesMg: [1000, 2000, 2500],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 50_000,
@@ -333,6 +338,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [100],
     vialSizesMg: [1000],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 100_000,
@@ -385,6 +391,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [75, 100],
     vialSizesMg: [750, 1000],
     suppressesNaturalProduction: true,
+    aromatises: false,
     doseRanges: [
       {
         lowMcg: 50_000,
@@ -438,6 +445,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [200],
     vialSizesMg: [2000],
     suppressesNaturalProduction: true,
+    aromatises: false,
     doseRanges: [
       {
         lowMcg: 150_000,
@@ -485,6 +493,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [200, 250],
     vialSizesMg: [2000, 2500],
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 200_000,
@@ -533,6 +542,7 @@ export const ANABOLIC: Peptide[] = [
     concentrationsMgPerMl: [100],
     vialSizesMg: [1000],
     suppressesNaturalProduction: true,
+    aromatises: false,
     doseRanges: [
       {
         lowMcg: 50_000,
@@ -585,6 +595,7 @@ export const ANABOLIC: Peptide[] = [
     vialSizesMg: [],
     c17AlphaAlkylated: true,
     suppressesNaturalProduction: true,
+    aromatises: false,
     doseRanges: [
       {
         lowMcg: 2_500,
@@ -643,6 +654,7 @@ export const ANABOLIC: Peptide[] = [
     vialSizesMg: [],
     c17AlphaAlkylated: true,
     suppressesNaturalProduction: true,
+    aromatises: false,
     doseRanges: [
       {
         lowMcg: 2_000,
@@ -705,6 +717,7 @@ export const ANABOLIC: Peptide[] = [
     vialSizesMg: [],
     c17AlphaAlkylated: true,
     suppressesNaturalProduction: true,
+    aromatises: true,
     doseRanges: [
       {
         lowMcg: 20_000,

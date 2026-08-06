@@ -22,6 +22,35 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "1.9",
+    date: "2026-08-06",
+    summary: "User count on the landing page, mg dose entry, manual update check, and a cleaner injection site map.",
+    changes: [
+      "Dose entry now has a toggle to switch between mcg and mg, useful for compounds typically dosed in milligrams",
+      "Injection site map redrawn using the same body figure as the landing page, cleaner and consistent",
+      "Delete button on vials is now always visible, not hidden behind a hover",
+      "Manual \"Check for update\" button in Settings, tap to pull the latest version without waiting for the passive check",
+      "Landing page shows a live user count with a pulsing dot, powered by a privacy-safe HyperLogLog counter",
+      "Print CSS added so the lab report looks right on paper",
+      "PK curve constant caching for faster recalculation on large dose histories",
+    ],
+  },
+  {
+    version: "1.8",
+    date: "2026-07-31",
+    summary: "Daily check-ins, lab reports read straight off a PDF, and ancillaries.",
+    changes: [
+      "Rate energy, mood, libido, sleep, recovery and appetite each day. Weight answers whether a GLP-1 is working and very little else, and most of the library is no longer GLP-1",
+      "Import a lab report PDF. It is read on your device, not uploaded, and every value is shown next to the line it came from before anything is saved",
+      "Six ancillaries added: anastrozole, exemestane, tamoxifen, clomiphene, enclomiphene and hCG",
+      "Warns when an aromatase inhibitor is running with nothing that aromatises, which can only push oestradiol too low",
+      "Recovery timing: when suppressive compounds clear, and published protocols with their sources. Where a half-life has never been measured, it says so rather than inventing a date",
+      "See what a protocol will do before you run it: how long levels take to settle, and how much higher steady state is than the first dose",
+      "A printable report for a clinician, covering protocols, adherence, bloodwork and outcomes",
+      "Sleep and resting heart rate read from Health Connect, alongside the daily rating. Still read-only",
+    ],
+  },
+  {
     version: "1.7",
     date: "2026-07-31",
     summary: "A public page for the app, an About tab, and a light theme by default.",

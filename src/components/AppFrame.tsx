@@ -68,6 +68,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         own background rather than on top of the logo.
       */}
       <header
+        data-app-header
         className="sticky top-0 z-30 bg-[var(--canvas)]/85 backdrop-blur-xl"
         style={{ paddingTop: "var(--safe-top)" }}
       >
@@ -105,6 +106,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       <div className="mx-auto flex max-w-6xl gap-6 px-4 md:px-6">
         {/* Desktop rail */}
         <nav
+          data-app-tabs
           className="sticky hidden w-52 shrink-0 py-4 md:block"
           style={{
             top: "calc(var(--header-h) + var(--safe-top))",
@@ -147,6 +149,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
       {/* Mobile tab bar */}
       <nav
+        data-app-tabs
         className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--line)] bg-[var(--card)]/95 backdrop-blur-xl md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >

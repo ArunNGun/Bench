@@ -233,6 +233,28 @@ export interface AdherenceWindow {
  * `toleranceHours`, so taking Monday's dose on Monday evening still counts.
  * Doses explicitly marked skipped are separated from ones simply never logged.
  */
+/**
+ * The doses belonging to a protocol.
+ *
+ * `adherence` cannot do this itself: it only sees timestamps, by design, so it
+ * can be reused for anything with a schedule. That makes forgetting to filter
+ * an easy and silent mistake, and a costly one. Passing every log matches other
+ * compounds' doses against this protocol's schedule and reports adherence for a
+ * compound that was never taken. Use this rather than filtering by hand.
+ */
+export function logsForProtocol<T extends { protocolId?: string; peptideId: string }>(
+  protocol: Pick<Protocol, "id" | "peptideId">,
+  logs: T[],
+): T[] {
+  return logs.filter((l) => l.protocolId === protocol.id || l.peptideId === protocol.peptideId);
+}
+
+/**
+ * Compare scheduled doses against what was logged.
+ *
+ * **`logs` must already be narrowed to this protocol**, via `logsForProtocol`.
+ * Anything else in the array will be matched against the schedule and counted.
+ */
 export function adherence(
   protocol: Protocol,
   logs: { at: number; skipped?: boolean }[],
@@ -247,22 +269,54 @@ export function adherence(
     protocol.endedAt);
   const tolerance = toleranceHours * 3_600_000;
   const unmatched = logs.filter((l) => l.at >= fromMs - tolerance && l.at <= toMs + tolerance);
-  const used = new Set<number>();
 
+  /*
+   * Greedy nearest matching, over a sliding window rather than the whole array.
+   *
+   * The obvious version compares every scheduled time against every log, which
+   * is fine for a month and quadratic for a history: two years of daily dosing
+   * is 730 scheduled times against 730 logs, half a million comparisons, and it
+   * measured at over 5 ms for three protocols.
+   *
+   * Both sides are ordered in time and a log can only match within a fixed
+   * tolerance, so only a handful of logs are ever candidates for a given
+   * scheduled time. Walking a window over the sorted logs finds exactly the
+   * same candidate set the full scan would have accepted.
+   *
+   * The result is identical, including ties. The original scanned in array
+   * order and kept the first strictly-nearest, so equal distances resolved to
+   * the lowest original index; that rule is preserved explicitly below.
+   */
+  const order = unmatched
+    .map((l, i) => ({ at: l.at, skipped: l.skipped, i }))
+    .sort((a, b) => a.at - b.at || a.i - b.i);
+
+  const used = new Set<number>();
   let taken = 0;
   let skipped = 0;
+  let windowStart = 0;
 
   for (const time of scheduled) {
+    // Drop entries that can no longer reach this or any later scheduled time.
+    while (windowStart < order.length && order[windowStart].at < time - tolerance) windowStart++;
+
     let bestIdx = -1;
     let bestDist = Infinity;
-    for (let i = 0; i < unmatched.length; i++) {
-      if (used.has(i)) continue;
-      const dist = Math.abs(unmatched[i].at - time);
-      if (dist <= tolerance && dist < bestDist) {
+
+    for (let w = windowStart; w < order.length; w++) {
+      const entry = order[w];
+      if (entry.at > time + tolerance) break;
+      if (used.has(entry.i)) continue;
+
+      const dist = Math.abs(entry.at - time);
+      // Strictly nearer wins; on a tie the lower original index wins, which is
+      // what scanning the unsorted array in order used to do.
+      if (dist < bestDist || (dist === bestDist && bestIdx >= 0 && entry.i < bestIdx)) {
         bestDist = dist;
-        bestIdx = i;
+        bestIdx = entry.i;
       }
     }
+
     if (bestIdx >= 0) {
       used.add(bestIdx);
       if (unmatched[bestIdx].skipped) skipped++;

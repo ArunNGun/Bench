@@ -1,0 +1,206 @@
+import { describe, expect, it } from "vitest";
+import {
+  averages,
+  checkInFor,
+  inWindow,
+  isTrendworthy,
+  series,
+  shiftAround,
+  streak,
+} from "./checkins";
+import { startOfLocalDay, addLocalDays } from "./schedule";
+import type { CheckIn, SymptomId } from "../types";
+
+const NOW = new Date(2026, 6, 30, 14, 30).getTime();
+const TODAY = startOfLocalDay(NOW);
+
+const at = (daysAgo: number) => addLocalDays(TODAY, -daysAgo);
+
+const checkIn = (daysAgo: number, ratings: Partial<Record<SymptomId, number>>): CheckIn => ({
+  id: `c${daysAgo}`,
+  profileId: "me",
+  at: at(daysAgo),
+  ratings,
+});
+
+describe("averages", () => {
+  it("means each symptom over the days that carried one", () => {
+    const rows = averages([
+      checkIn(0, { energy: 4, mood: 5 }),
+      checkIn(1, { energy: 2, mood: 3 }),
+    ]);
+    const energy = rows.find((r) => r.id === "energy")!;
+    expect(energy.mean).toBe(3);
+    expect(energy.days).toBe(2);
+  });
+
+  it("reports null rather than zero for a symptom never rated", () => {
+    // Zero would chart as the bottom of the scale, which is a claim. Null is
+    // the absence of one.
+    const rows = averages([checkIn(0, { energy: 4 })]);
+    const libido = rows.find((r) => r.id === "libido")!;
+    expect(libido.mean).toBeNull();
+    expect(libido.days).toBe(0);
+  });
+
+  it("counts only the days that rated the symptom, not all check-ins", () => {
+    const rows = averages([
+      checkIn(0, { energy: 4, sleep: 2 }),
+      checkIn(1, { energy: 2 }),
+      checkIn(2, {}),
+    ]);
+    expect(rows.find((r) => r.id === "energy")!.days).toBe(2);
+    expect(rows.find((r) => r.id === "sleep")!.days).toBe(1);
+  });
+
+  it("returns a row per symptom even with no data at all", () => {
+    expect(averages([])).toHaveLength(6);
+    expect(averages([]).every((r) => r.mean === null)).toBe(true);
+  });
+
+  it("carries the direction, and leaves appetite without one", () => {
+    const rows = averages([]);
+    expect(rows.find((r) => r.id === "energy")!.higherIsBetter).toBe(true);
+    // Suppressed appetite is the goal on a GLP-1 and a problem on a bulk, so
+    // the app charts it and declines to say which way is good.
+    expect(rows.find((r) => r.id === "appetite")!.higherIsBetter).toBeUndefined();
+  });
+});
+
+describe("inWindow", () => {
+  it("is half open, including the start and excluding the end", () => {
+    const rows = [checkIn(0, { energy: 1 }), checkIn(1, { energy: 2 }), checkIn(2, { energy: 3 })];
+    const got = inWindow(rows, at(2), at(0));
+    expect(got.map((c) => c.ratings.energy).sort()).toEqual([2, 3]);
+  });
+});
+
+describe("shiftAround", () => {
+  const before = [5, 6, 7, 8, 9].map((d) => checkIn(d, { energy: 2, appetite: 4 }));
+  const after = [0, 1, 2, 3].map((d) => checkIn(d, { energy: 4, appetite: 2 }));
+
+  it("compares the two sides of a pivot", () => {
+    const rows = shiftAround([...before, ...after], at(4), 28, NOW);
+    const energy = rows.find((r) => r.id === "energy")!;
+    expect(energy.before).toBe(2);
+    expect(energy.after).toBe(4);
+    expect(energy.delta).toBe(2);
+  });
+
+  it("reports a fall as a negative delta without judging it", () => {
+    const rows = shiftAround([...before, ...after], at(4), 28, NOW);
+    const appetite = rows.find((r) => r.id === "appetite")!;
+    expect(appetite.delta).toBe(-2);
+    expect(appetite.higherIsBetter).toBeUndefined();
+  });
+
+  it("gives a null delta when one side has nothing", () => {
+    const rows = shiftAround(after, at(4), 28, NOW);
+    const energy = rows.find((r) => r.id === "energy")!;
+    expect(energy.before).toBeNull();
+    expect(energy.delta).toBeNull();
+  });
+
+  it("bounds both sides by the window", () => {
+    const ancient = checkIn(400, { energy: 1 });
+    const rows = shiftAround([ancient, ...before, ...after], at(4), 28, NOW);
+    // The 400-day-old entry is outside a 28 day window and must not drag the mean.
+    expect(rows.find((r) => r.id === "energy")!.before).toBe(2);
+  });
+
+  it("does not reach past today when the pivot is in the future", () => {
+    // A device clock that has jumped forward makes this reachable, and the
+    // forward window would otherwise cover days that have not happened.
+    const rows = shiftAround([...before, ...after], addLocalDays(TODAY, 10), 28, NOW);
+    expect(rows.find((r) => r.id === "energy")!.after).toBeNull();
+  });
+
+  it("reports the day count behind each side", () => {
+    const rows = shiftAround([...before, ...after], at(4), 28, NOW);
+    const energy = rows.find((r) => r.id === "energy")!;
+    expect(energy.daysBefore).toBe(5);
+    expect(energy.daysAfter).toBe(4);
+  });
+});
+
+describe("isTrendworthy", () => {
+  const base = {
+    id: "energy" as SymptomId,
+    label: "Energy",
+    before: 2,
+    after: 4,
+    delta: 2,
+    daysBefore: 5,
+    daysAfter: 5,
+  };
+
+  it("accepts a comparison with enough days on both sides", () => {
+    expect(isTrendworthy(base)).toBe(true);
+  });
+
+  it("rejects one thin side", () => {
+    // One day either side yields a delta of up to 4.0 and means nothing.
+    expect(isTrendworthy({ ...base, daysAfter: 1 })).toBe(false);
+    expect(isTrendworthy({ ...base, daysBefore: 1 })).toBe(false);
+  });
+
+  it("rejects a null delta", () => {
+    expect(isTrendworthy({ ...base, delta: null })).toBe(false);
+  });
+});
+
+describe("streak", () => {
+  it("counts back from today when today is rated", () => {
+    const rows = [0, 1, 2].map((d) => checkIn(d, { energy: 3 }));
+    expect(streak(rows, NOW).current).toBe(3);
+  });
+
+  it("does not break the streak just because today is not rated yet", () => {
+    // The day is not missed until it is over.
+    const rows = [1, 2, 3].map((d) => checkIn(d, { energy: 3 }));
+    expect(streak(rows, NOW).current).toBe(3);
+  });
+
+  it("stops at a gap", () => {
+    const rows = [0, 1, 3, 4].map((d) => checkIn(d, { energy: 3 }));
+    expect(streak(rows, NOW).current).toBe(2);
+  });
+
+  it("is zero when nothing recent was rated", () => {
+    expect(streak([checkIn(10, { energy: 3 })], NOW).current).toBe(0);
+  });
+
+  it("counts coverage over the last thirty days", () => {
+    const rows = [0, 5, 10, 29, 40].map((d) => checkIn(d, { energy: 3 }));
+    expect(streak(rows, NOW).last30).toBe(4);
+  });
+
+  it("handles an empty log", () => {
+    expect(streak([], NOW)).toEqual({ current: 0, last30: 0 });
+  });
+});
+
+describe("checkInFor", () => {
+  it("finds the entry for a day regardless of the time of day asked about", () => {
+    const rows = [checkIn(1, { energy: 3 })];
+    expect(checkInFor(rows, at(1) + 20 * 3_600_000)?.id).toBe("c1");
+  });
+
+  it("returns undefined for an unrated day", () => {
+    expect(checkInFor([checkIn(1, { energy: 3 })], at(2))).toBeUndefined();
+  });
+});
+
+describe("series", () => {
+  it("returns oldest first and skips days that did not rate it", () => {
+    const rows = [
+      checkIn(0, { energy: 5 }),
+      checkIn(1, { sleep: 2 }),
+      checkIn(2, { energy: 1 }),
+    ];
+    expect(series(rows, "energy")).toEqual([
+      { at: at(2), value: 1 },
+      { at: at(0), value: 5 },
+    ]);
+  });
+});

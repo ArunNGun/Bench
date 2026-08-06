@@ -171,9 +171,25 @@ export function convertBetweenScales(units: number, from: SyringeScale, to: Syri
   return unitsToMl(units, from) * UNITS_PER_ML[to];
 }
 
-/** Mass delivered by a single mark on the barrel. */
-export function mcgPerUnit(concentrationMcgPerMl: number, spec: SyringeSpec) {
+/**
+ * Mass delivered by a single printed mark on the barrel.
+ *
+ * Per mark, not per unit, and the two are different on any barrel graduated
+ * more coarsely than 1: a 1 mL U-100 syringe usually steps in 2 units, so one
+ * mark is 0.02 mL and carries twice what one unit does. Named for the
+ * graduation because a function called `mcgPerUnit` that returned this was read
+ * as per-unit and the mistake is a clean factor of two.
+ */
+export function mcgPerGraduation(concentrationMcgPerMl: number, spec: SyringeSpec) {
   return concentrationMcgPerMl * graduationMl(spec);
+}
+
+/**
+ * Mass in one barrel unit, which is what the numbers printed on the barrel
+ * count, independent of how far apart the marks are.
+ */
+export function mcgPerUnitOfScale(concentrationMcgPerMl: number, scale: SyringeScale) {
+  return concentrationMcgPerMl * mlPerUnit(scale);
 }
 
 export type DrawWarning =
@@ -202,8 +218,8 @@ export interface DrawResult {
   roundingErrorPercent: number;
   /** Volume one mark represents on this barrel. */
   mlPerUnit: number;
-  /** Mass one mark represents at this concentration. */
-  mcgPerUnit: number;
+  /** Mass one printed mark represents at this concentration. */
+  mcgPerGraduation: number;
   /** Whole doses obtainable from the vial. */
   dosesPerVial: number;
   warnings: DrawWarning[];
@@ -247,7 +263,7 @@ export function calculateDraw({ vialMcg, diluentMl, doseMcg, syringe }: DrawInpu
     roundingErrorMcg: deliveredMcg - doseMcg,
     roundingErrorPercent: doseMcg > 0 ? ((deliveredMcg - doseMcg) / doseMcg) * 100 : 0,
     mlPerUnit: mlPerUnit(syringe.scale),
-    mcgPerUnit: mcgPerUnit(concentrationMcgPerMl, syringe),
+    mcgPerGraduation: mcgPerGraduation(concentrationMcgPerMl, syringe),
     dosesPerVial: Math.floor(vialMcg / doseMcg),
     warnings,
     measurable:
@@ -306,7 +322,7 @@ export interface DiluentSuggestion {
   units: number;
   volumeMl: number;
   concentrationMgPerMl: number;
-  mcgPerUnit: number;
+  mcgPerGraduation: number;
   /** The draw falls exactly on a printed mark. */
   landsOnMark: boolean;
   score: number;
@@ -348,7 +364,7 @@ export function suggestDiluents(
         units,
         volumeMl,
         concentrationMgPerMl: conc / MCG_PER_MG,
-        mcgPerUnit: mcgPerUnit(conc, syringe),
+        mcgPerGraduation: mcgPerGraduation(conc, syringe),
         landsOnMark,
         score,
       };

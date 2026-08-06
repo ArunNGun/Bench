@@ -15,6 +15,8 @@ import {
   Select,
   TextInput,
 } from "@/components/ui";
+import { PctPanel } from "@/components/PctPanel";
+import { ProjectionPreview } from "@/components/ProjectionPreview";
 import { allPeptides, findPeptide, useStore, useProfileData } from "@/lib/store";
 import {
   dosesPerWeek,
@@ -88,6 +90,9 @@ export default function PlanPage() {
       <StackWarnings nowMs={now} />
 
       {protocols.some((p) => p.active) && <Upcoming />}
+
+      {/* Below the schedule: this is about what happens after, not what runs now. */}
+      <PctPanel nowMs={now} />
 
       <div className="space-y-2.5">
         {protocols.map((p) => {
@@ -223,6 +228,47 @@ function ProtocolForm({
 
   const peptide = peptides.find((p) => p.id === peptideId);
   const titration = peptide?.titrations?.find((t) => t.id === titrationId);
+
+  /**
+   * The protocol as currently described by the form, so the projection below
+   * answers "what would this do" while the dose and interval are still being
+   * chosen. That is when the answer is worth having.
+   */
+  const draft: Protocol = useMemo(
+    () => ({
+      id: "draft",
+      profileId: "draft",
+      peptideId,
+      name: name.trim() || "draft",
+      active: true,
+      startedAt,
+      doseMcg: titration ? titration.steps[0].doseMcg : doseMcg,
+      route: peptide?.routes[0] ?? "subcutaneous",
+      schedule: {
+        kind,
+        intervalDays: kind === "interval-days" ? intervalDays : undefined,
+        daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
+        timeOfDay: kind === "as-needed" ? undefined : timeOfDay,
+        cycleWeeksOn: cycleOn || undefined,
+        cycleWeeksOff: cycleOff || undefined,
+      },
+      titration: titration?.steps,
+      titrationAutoAdvance: !!titration,
+    }),
+    [
+      peptideId,
+      name,
+      startedAt,
+      titration,
+      doseMcg,
+      peptide,
+      kind,
+      intervalDays,
+      daysOfWeek,
+      timeOfDay,
+      cycleOn,
+      cycleOff,
+    ]);
 
   function pick(id: string) {
     setPeptideId(id);
@@ -450,6 +496,8 @@ function ProtocolForm({
           placeholder={peptide ? `${peptide.name} protocol` : "Protocol name"}
         />
       </Field>
+
+      <ProjectionPreview protocol={draft} peptide={peptide} />
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>

@@ -267,7 +267,7 @@ export default function CalculatorPage() {
               label="Concentration"
               value={formatConcentration(draw.concentrationMcgPerMl).split(" ")[0]}
               unit={formatConcentration(draw.concentrationMcgPerMl).split(" ")[1]}
-              hint={`${trim(draw.mcgPerUnit, 2)} mcg per mark.`}
+              hint={`${trim(draw.mcgPerGraduation, 2)} mcg per printed mark.`}
             />
             <Stat
               label="Doses per vial"
@@ -352,7 +352,7 @@ export default function CalculatorPage() {
                       {trim(s.units, 2)} marks
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--faint)]">
-                      {trim(s.concentrationMgPerMl, 3)} mg/mL · {trim(s.mcgPerUnit, 2)} mcg per mark
+                      {trim(s.concentrationMgPerMl, 3)} mg/mL · {trim(s.mcgPerGraduation, 2)} mcg per mark
                     </span>
                     {s.landsOnMark && (
                       <Check size={15} className="shrink-0 text-[var(--leaf)]" aria-label="Lands on a mark" />

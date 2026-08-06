@@ -23,21 +23,30 @@ Most trackers in this space either want an account or get the arithmetic wrong. 
 
 | | |
 |---|---|
-| **Library** | 43 compounds across metabolic, repair, growth hormone, anabolic, cognitive and blends. Cited half-lives, dose ranges, titration ladders, side effects, contraindications, legal status |
+| **Library** | 49 compounds across metabolic, repair, growth hormone, anabolic, ancillary and blends. Cited half-lives, dose ranges, titration ladders, side effects, contraindications, legal status |
 | **Plan** | Protocols with schedules, titration ladders, pinned injection sites, adherence |
 | **Log** | Doses with site, units, syringe scale, how you felt, side effects |
 | **Stock** | Vials sealed → reconstituted → empty, tracked by mass, with beyond-use dates and cost per dose |
 | **Calculator** | Reconstitution and dose ↔ units for U-100 and U-40 |
 | **Bloodwork** | 16 markers charted against dose history, with prompts for what your compounds make worth watching |
-| **Outcomes** | Weight (with Android Health read-in), waist, body fat |
+| **Outcomes** | Weight, waist, body fat, plus sleep and resting heart rate read from Android Health |
+| **Check-ins** | A daily rating for energy, mood, libido, sleep, recovery and appetite, compared either side of a protocol change |
 | **Safety** | Interaction checks across compounds running at the same time |
-| **Import** | CSV, TSV, JSON and XLSX from other trackers. Shotsy recognised by name; anything else read from its column headers |
+| **Projection** | What a protocol will do before you run it: time to steady state, accumulation, peak to trough |
+| **Recovery** | When suppressive compounds clear, from ester half-lives, with cited protocols. No date is given where no human half-life exists |
+| **Report** | A printable summary for a clinician, produced by the browser rather than a PDF library |
+| **Import** | CSV, TSV, JSON and XLSX from other trackers, plus lab report PDFs read on the device. Shotsy recognised by name; anything else read from its column headers |
 
 Compounds the library does not carry can be added yourself, from any compound picker in the app. They work everywhere a built-in does, but are never presented as researched.
 
 ## Privacy
 
-There is no backend. `grep -r "fetch(" src/` returns nothing. The application code makes no network requests at all. No analytics, no telemetry, no error reporting. Fonts are self-hosted at build time, so the browser never contacts a third party.
+There is no backend for your data. Lab report PDFs are parsed on the device, never uploaded. The application makes two network requests in total:
+
+1. A startup check of `/version.json` to notice a new deploy.
+2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)) — the raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
+
+No analytics, no telemetry, no error reporting beyond these two calls. Fonts are self-hosted at build time, so the browser never contacts a third party.
 
 Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
 
@@ -94,7 +103,7 @@ Built APKs are in [`release/`](./release).
 
 ## Testing
 
-774 tests, run across five timezones. The suite is weighted towards what would be dangerous to get wrong: reconstitution arithmetic, unit conversion, PK curves, blend decomposition, inventory reconciliation, import parsing and data migration.
+962 tests, run across five timezones. The suite is weighted towards what would be dangerous to get wrong: reconstitution arithmetic, unit conversion, PK curves, blend decomposition, inventory reconciliation, import parsing and data migration.
 
 ```bash
 npm test

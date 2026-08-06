@@ -135,3 +135,134 @@ export function describeSync(s: SyncSummary): string {
   if (!bits.length) return "Already up to date.";
   return `${bits.join(", ")}.`;
 }
+
+// ---------------------------------------------------------------------------
+// Sleep and resting heart rate
+// ---------------------------------------------------------------------------
+
+/**
+ * These two exist to give the daily check-in something objective beside it.
+ *
+ * A check-in records that sleep felt broken. Sleep duration and resting heart
+ * rate are the two numbers a phone already has that move with that, so a claim
+ * like "sleep is worse on this dose" can be held against something other than
+ * memory. Still read-only: the app takes these and never writes them back.
+ */
+
+/** One stretch of sleep as the platform reports it. */
+export interface SleepSegment {
+  externalId: string;
+  startAt: number;
+  endAt: number;
+  /** Stage label where the platform gave one: asleep, rem, deep, light, awake, inBed. */
+  state?: string;
+}
+
+/** Sleep for one night, attributed to the morning you woke up. */
+export interface NightSleep {
+  /** Local midnight of the day the sleep is credited to. */
+  day: number;
+  hours: number;
+  /** How many segments were summed, for spotting a fragmented night. */
+  segments: number;
+}
+
+/**
+ * States that are time in bed rather than time asleep.
+ *
+ * Counting these would inflate every night by however long someone lay awake,
+ * which is exactly the number a person complaining about their sleep cares
+ * about most.
+ */
+const NOT_ASLEEP = new Set(["awake", "inbed"]);
+
+/**
+ * Merge overlapping intervals.
+ *
+ * Health Connect can return a session and its stage breakdown covering the same
+ * minutes. Summing both would report roughly twice the sleep actually had, and
+ * a doubled figure looks plausible enough that nobody would question it.
+ */
+export function mergeIntervals(
+  spans: { startAt: number; endAt: number }[],
+): { startAt: number; endAt: number }[] {
+  const sorted = [...spans]
+    .filter((s) => s.endAt > s.startAt)
+    .sort((a, b) => a.startAt - b.startAt);
+
+  const out: { startAt: number; endAt: number }[] = [];
+  for (const span of sorted) {
+    const last = out[out.length - 1];
+    if (last && span.startAt <= last.endAt) last.endAt = Math.max(last.endAt, span.endAt);
+    else out.push({ ...span });
+  }
+  return out;
+}
+
+/**
+ * Total sleep per night.
+ *
+ * Credited to the day you woke, not the day you lay down, because that is the
+ * day whose energy and mood a check-in is describing. A nap is folded into
+ * whatever day it happened on, which is the same rule applied consistently
+ * rather than a special case.
+ *
+ * `startOfDay` is injected so this stays testable across timezones without the
+ * module reaching for a date library.
+ */
+export function nightlySleep(
+  segments: SleepSegment[],
+  startOfDay: (ms: number) => number,
+): NightSleep[] {
+  const byDay = new Map<number, { startAt: number; endAt: number }[]>();
+
+  for (const s of segments) {
+    if (!(s.endAt > s.startAt)) continue;
+    if (s.state && NOT_ASLEEP.has(s.state.toLowerCase())) continue;
+    const day = startOfDay(s.endAt);
+    const list = byDay.get(day) ?? [];
+    list.push({ startAt: s.startAt, endAt: s.endAt });
+    byDay.set(day, list);
+  }
+
+  return [...byDay]
+    .map(([day, spans]) => {
+      const merged = mergeIntervals(spans);
+      const ms = merged.reduce((sum, m) => sum + (m.endAt - m.startAt), 0);
+      return { day, hours: ms / 3_600_000, segments: merged.length };
+    })
+    .sort((a, b) => b.day - a.day);
+}
+
+/** A resting heart rate reading. */
+export interface HeartRateSample {
+  externalId: string;
+  at: number;
+  bpm: number;
+}
+
+/**
+ * The lowest reading of each day, which is the one worth keeping.
+ *
+ * Health Connect returns several resting readings a day and they disagree by a
+ * few beats. Taking the minimum gives a consistent figure across days, and
+ * consistency is what a trend needs; an average drifts with how many times the
+ * watch happened to sample.
+ */
+export function dailyRestingHr(
+  samples: HeartRateSample[],
+  startOfDay: (ms: number) => number,
+): { day: number; bpm: number }[] {
+  const byDay = new Map<number, number>();
+
+  for (const s of samples) {
+    if (!(s.bpm > 0)) continue;
+    const day = startOfDay(s.at);
+    const seen = byDay.get(day);
+    if (seen == null || s.bpm < seen) byDay.set(day, s.bpm);
+  }
+
+  return [...byDay]
+    .map(([day, bpm]) => ({ day, bpm }))
+    .sort((a, b) => b.day - a.day);
+}

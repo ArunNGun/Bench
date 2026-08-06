@@ -6,35 +6,55 @@ import type { DoseLog, InjectionSite } from "@/lib/types";
 import { relativeTime } from "@/lib/format";
 
 /**
- * A torso seen from the front, with the ten injection sites as targets.
+ * Injection site rotation map using the same body figure as the landing page.
  *
- * Each target is shaded by how rested it is: filled amber means recently used,
- * hollow means rested. The point is to make "where haven't I been lately"
- * answerable at a glance, because lipohypertrophy makes absorption from an
- * overused site unpredictable.
+ * The SVG body is taken directly from landing/visuals.tsx RotationArt, scaled
+ * to a tighter viewBox so it fills the available space. Injection sites are
+ * plotted as interactive dots shaded by recency: tangerine = recently used,
+ * mint = suggested next, faint outline = rested/available.
  */
 
-interface Target {
+// ---------------------------------------------------------------------------
+// Site coordinates
+// Viewbox: 0 0 200 240  (body centred at x=100)
+// Body path reference points:
+//   head circle  cx=100 cy=22 r=15
+//   shoulders    y≈52, width ≈40 either side
+//   waist        y≈120
+//   hips         y≈148
+//   knee         y≈190
+//   ankle        y≈230
+// ---------------------------------------------------------------------------
+
+interface SiteMeta {
   id: InjectionSite;
   cx: number;
   cy: number;
-  short: string;
+  label: string;
 }
 
-const TARGETS: Target[] = [
-  { id: "arm-l", cx: 26, cy: 62, short: "L arm" },
-  { id: "arm-r", cx: 134, cy: 62, short: "R arm" },
-  { id: "abdomen-ul", cx: 64, cy: 92, short: "Abd UL" },
-  { id: "abdomen-um", cx: 80, cy: 92, short: "Abd UM" },
-  { id: "abdomen-ur", cx: 96, cy: 92, short: "Abd UR" },
-  { id: "abdomen-ll", cx: 64, cy: 118, short: "Abd LL" },
-  { id: "abdomen-lm", cx: 80, cy: 118, short: "Abd LM" },
-  { id: "abdomen-lr", cx: 96, cy: 118, short: "Abd LR" },
-  { id: "glute-l", cx: 62, cy: 146, short: "L glute" },
-  { id: "glute-r", cx: 98, cy: 146, short: "R glute" },
-  { id: "thigh-l", cx: 60, cy: 190, short: "L thigh" },
-  { id: "thigh-r", cx: 100, cy: 190, short: "R thigh" },
+const SITES: SiteMeta[] = [
+  // Abdomen — 2x3 grid around navel (cx=100 cy=108)
+  { id: "abdomen-ul", cx: 84,  cy: 98,  label: "Abdomen upper-left"  },
+  { id: "abdomen-um", cx: 100, cy: 96,  label: "Abdomen upper-mid"   },
+  { id: "abdomen-ur", cx: 116, cy: 98,  label: "Abdomen upper-right" },
+  { id: "abdomen-ll", cx: 84,  cy: 118, label: "Abdomen lower-left"  },
+  { id: "abdomen-lm", cx: 100, cy: 120, label: "Abdomen lower-mid"   },
+  { id: "abdomen-lr", cx: 116, cy: 118, label: "Abdomen lower-right" },
+  // Deltoids — on the shoulder bumps
+  { id: "arm-l",     cx: 68,  cy: 68,  label: "Left deltoid"  },
+  { id: "arm-r",     cx: 132, cy: 68,  label: "Right deltoid" },
+  // Glutes — just below the hip flare
+  { id: "glute-l",   cx: 82,  cy: 156, label: "Left glute"  },
+  { id: "glute-r",   cx: 118, cy: 156, label: "Right glute" },
+  // Thighs — mid-thigh
+  { id: "thigh-l",   cx: 84,  cy: 192, label: "Left thigh"  },
+  { id: "thigh-r",   cx: 116, cy: 192, label: "Right thigh" },
 ];
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function SiteMap({
   logs,
@@ -48,18 +68,12 @@ export function SiteMap({
   legend: showLegend = true,
 }: {
   logs: Pick<DoseLog, "at" | "site" | "skipped">[];
-  /** Single-select value, or the whole pinned set when `multi` is on. */
   selected?: InjectionSite | "" | InjectionSite[];
   onSelect?: (site: InjectionSite) => void;
   restDays?: number;
   nowMs?: number;
   className?: string;
-  /**
-   * Sites this protocol pins. Anything outside the set is dimmed but still
-   * selectable. You can always record where the injection actually went.
-   */
   allowed?: InjectionSite[] | null;
-  /** Toggle sites on and off instead of picking exactly one. */
   multi?: boolean;
   legend?: boolean;
 }) {
@@ -68,147 +82,223 @@ export function SiteMap({
 
   const allowedSet = useMemo(
     () => (allowed?.length ? new Set(allowed) : null),
-    [allowed]);
+    [allowed],
+  );
   const selectedSet = useMemo(
     () => new Set(Array.isArray(selected) ? selected : selected ? [selected] : []),
-    [selected]);
-
-  // Suggest within the pinned set when there is one.
-  const suggestion = useMemo(() => {
-    if (multi) return null;
-    const within = allowedSet ? usage.filter((u) => allowedSet.has(u.site)) : usage;
-    return (within[0] ?? usage[0])?.site ?? null;
-  }, [usage, allowedSet, multi]);
-
-  const legend = !showLegend ? null : (
-    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-[var(--faint)]">
-      {multi ? (
-        <>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border-2 border-[var(--leaf)]" />
-            pinned
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
-            not used
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tangerine)]" />
-            used recently
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
-            rested
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--leaf)]" />
-            suggested next
-          </span>
-          {allowedSet && (
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--line)] opacity-40" />
-              off plan
-            </span>
-          )}
-        </>
-      )}
-    </div>
+    [selected],
   );
 
+  const suggestion = useMemo(() => {
+    if (multi) return null;
+    const pool = allowedSet ? usage.filter((u) => allowedSet.has(u.site)) : usage;
+    return (pool[0] ?? usage[0])?.site ?? null;
+  }, [usage, allowedSet, multi]);
+
   return (
-    <figure className="m-0">
-    <svg
-      viewBox="0 0 160 222"
-      className={className}
-      role="group"
-      aria-label="Injection site rotation map"
-      style={{ width: "100%", height: "auto", maxWidth: 240, display: "block", margin: "0 auto" }}
-    >
-      {/* Body outline: schematic, just enough to orient the targets */}
-      <g fill="none" stroke="var(--line)" strokeWidth={1.5} strokeLinejoin="round">
-        <circle cx={80} cy={22} r={13} />
-        <path d="M 62 40 Q 80 34 98 40 L 106 48 L 112 96 L 100 100 L 102 150 L 96 214 L 84 214 L 80 152 L 76 214 L 64 214 L 58 150 L 60 100 L 48 96 L 54 48 Z" />
-        <path d="M 54 48 L 34 56 L 24 104" />
-        <path d="M 106 48 L 126 56 L 136 104" />
-      </g>
+    <figure className={`m-0 ${className ?? ""}`}>
+      <svg
+        viewBox="0 0 200 240"
+        role="group"
+        aria-label="Injection site rotation map"
+        style={{ width: "100%", height: "auto", maxWidth: 220, display: "block", margin: "0 auto" }}
+      >
+        {/* ── Body figure (same as landing RotationArt, scaled to 200-wide viewBox) ── */}
+        {/* Head */}
+        <circle
+          cx="100" cy="22" r="15"
+          fill="var(--sunken)"
+          stroke="var(--line)"
+          strokeWidth="1.5"
+        />
+        {/* Torso + arms + legs */}
+        <path
+          d="M100 40
+             C 88 40 72 44 68 52
+             L 62 82 L 72 85 L 74 62
+             L 74 118
+             C 74 128 76 136 78 162
+             L 88 162 L 90 118 L 110 118 L 112 162
+             L 122 162
+             C 124 136 126 128 126 118
+             L 126 62 L 128 85 L 138 82
+             L 132 52
+             C 128 44 112 40 100 40 Z"
+          fill="var(--sunken)"
+          stroke="var(--line)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        {/* Left leg */}
+        <path
+          d="M78 162 C 76 178 76 200 78 230 L 88 230 C 90 200 90 178 90 162 Z"
+          fill="var(--sunken)"
+          stroke="var(--line)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        {/* Right leg */}
+        <path
+          d="M110 162 C 110 178 110 200 112 230 L 122 230 C 124 200 124 178 122 162 Z"
+          fill="var(--sunken)"
+          stroke="var(--line)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
 
-      {TARGETS.map((t) => {
-        const u = byId.get(t.id);
-        const rested = u?.rested ?? 1;
-        // Fully rested reads as an empty outline; freshly used fills solid.
-        const fill = 1 - rested;
-        const isSelected = selectedSet.has(t.id);
-        const isSuggested = !isSelected && t.id === suggestion;
-        const interactive = !!onSelect;
-        // Outside the pinned set: visible and still clickable, just quieter.
-        const offPlan = !!allowedSet && !allowedSet.has(t.id);
+        {/* ── Injection site dots ── */}
+        {SITES.map((s) => {
+          const u = byId.get(s.id);
+          const rested = u?.rested ?? 1;
+          const fill = 1 - rested;           // 0 = fully rested, 1 = just used
+          const isSelected = selectedSet.has(s.id);
+          const isSuggested = !isSelected && s.id === suggestion;
+          const offPlan = !!allowedSet && !allowedSet.has(s.id);
+          const interactive = !!onSelect;
 
-        return (
-          <g
-            key={t.id}
-            onClick={interactive ? () => onSelect!(t.id) : undefined}
-            onKeyDown={
-              interactive
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect!(t.id);
+          // Colour logic
+          let dotFill: string;
+          let dotStroke: string;
+          const dotOpacity = offPlan ? 0.35 : 1;
+
+          if (isSelected) {
+            dotFill   = multi ? "none" : "var(--ink)";
+            dotStroke = multi ? "var(--mint)" : "var(--ink)";
+          } else if (isSuggested) {
+            dotFill   = "none";
+            dotStroke = "var(--mint)";
+          } else {
+            // Gradient: no usage → faint outline; heavy usage → tangerine fill
+            dotFill   = fill > 0.05 ? "var(--tangerine)" : "var(--card)";
+            dotStroke = fill > 0.05 ? "var(--tangerine)" : "var(--line)";
+          }
+
+
+          return (
+            <g
+              key={s.id}
+              onClick={interactive ? () => onSelect!(s.id) : undefined}
+              onKeyDown={
+                interactive
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect!(s.id);
+                      }
                     }
-                  }
-                : undefined
-            }
-            tabIndex={interactive ? 0 : undefined}
-            role={interactive ? "button" : undefined}
-            aria-pressed={interactive ? isSelected : undefined}
-            aria-label={`${u?.label ?? t.id}. ${
-              u?.lastUsedAt ? `Last used ${relativeTime(u.lastUsedAt, nowMs)}` : "Never used"
-            }${isSuggested ? ". Suggested next" : ""}${
-              multi ? (isSelected ? ". Pinned" : ". Not pinned") : offPlan ? ". Off plan" : ""
-            }`}
-            style={{ cursor: interactive ? "pointer" : "neutral", opacity: offPlan ? 0.4 : 1 }}
-          >
-            <circle
-              cx={t.cx}
-              cy={t.cy}
-              r={9}
-              fill="var(--tangerine)"
-              fillOpacity={fill * 0.85}
-              stroke={
-                isSelected
-                  ? multi
-                    ? "var(--leaf)"
-                    : "var(--ink)"
-                  : isSuggested
-                    ? "var(--leaf)"
-                    : "var(--line)"
+                  : undefined
               }
-              strokeWidth={isSelected || isSuggested ? 2.2 : 1.2}
-              strokeDasharray={offPlan && !isSelected ? "2 2" : undefined}
-            />
-            {isSuggested && (
-              <circle cx={t.cx} cy={t.cy} r={13} fill="none" stroke="var(--leaf)" strokeWidth={1} strokeDasharray="2 3" />
-            )}
-            {u && u.recentCount > 0 && (
-              <text
-                x={t.cx}
-                y={t.cy + 3.5}
-                textAnchor="middle"
-                fontSize={9}
-                fontFamily="var(--font-mono)"
-                fill={fill > 0.5 ? "var(--canvas)" : "var(--muted)"}
-              >
-                {u.recentCount}
-              </text>
-            )}
-          </g>
-        );
-      })}
+              tabIndex={interactive ? 0 : undefined}
+              role={interactive ? "button" : undefined}
+              aria-pressed={interactive ? isSelected : undefined}
+              aria-label={`${u?.label ?? s.label}. ${
+                u?.lastUsedAt ? `Last used ${relativeTime(u.lastUsedAt, nowMs)}` : "Never used"
+              }${isSuggested ? ". Suggested next" : ""}${
+                multi
+                  ? isSelected
+                    ? ". Pinned"
+                    : ". Not pinned"
+                  : offPlan
+                    ? ". Off plan"
+                    : ""
+              }`}
+              style={{ cursor: interactive ? "pointer" : "default", opacity: dotOpacity }}
+            >
+              {/* Pulse ring for suggested */}
+              {isSuggested && (
+                <circle
+                  cx={s.cx} cy={s.cy} r={13}
+                  fill="none"
+                  stroke="var(--mint)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity={0.6}
+                />
+              )}
 
-    </svg>
-    {legend}
+              {/* Main dot */}
+              <circle
+                cx={s.cx}
+                cy={s.cy}
+                r={8}
+                fill={isSelected && !multi ? dotFill : fill > 0.05 ? "var(--tangerine)" : "var(--card)"}
+                fillOpacity={isSelected && !multi ? 1 : fill * 0.88}
+                stroke={dotStroke}
+                strokeWidth={isSelected || isSuggested ? 2.2 : 1.4}
+              />
+
+              {/* Checkmark on selected (single-select mode) */}
+              {isSelected && !multi && (
+                <path
+                  d={`M${s.cx - 3.5} ${s.cy} l 2.5 3 l 5 -5.5`}
+                  fill="none"
+                  stroke="var(--canvas)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Pinned indicator (multi mode) */}
+              {isSelected && multi && (
+                <circle cx={s.cx} cy={s.cy} r={4} fill="var(--mint)" />
+              )}
+
+              {/* Use count badge */}
+              {!isSelected && u && u.recentCount > 0 && (
+                <text
+                  x={s.cx}
+                  y={s.cy + 3.5}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontFamily="var(--font-mono)"
+                  fill={fill > 0.5 ? "var(--canvas)" : "var(--muted)"}
+                >
+                  {u.recentCount}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {showLegend && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-[var(--faint)]">
+          {multi ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full border-2 border-[var(--mint)]" />
+                pinned
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
+                not pinned
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-[var(--tangerine)]" />
+                used recently
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
+                rested
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--mint)]" />
+                suggested next
+              </span>
+              {allowedSet && (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)] opacity-35" />
+                  off plan
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </figure>
   );
 }

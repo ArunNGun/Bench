@@ -65,7 +65,12 @@ export type MechanismClass =
   | "glucagon-agonist"
   | "amylin-analogue"
   | "ghrh-analogue"
-  | "ghrelin-agonist";
+  | "ghrelin-agonist"
+  | "aromatase-inhibitor"
+  /** Selective oestrogen receptor modulator: tamoxifen, clomiphene, raloxifene. */
+  | "serm"
+  /** Acts at the LH receptor to drive testicular output directly. */
+  | "gonadotropin";
 
 export type PeptideCategory =
   | "metabolic"
@@ -77,6 +82,14 @@ export type PeptideCategory =
   | "sexual"
   | "cosmetic"
   | "anabolic"
+  /**
+   * Not a performance compound. The aromatase inhibitors, SERMs and
+   * gonadotropins people run alongside anabolics, or afterwards to recover.
+   * Carried because a stack the app cannot see is a stack it cannot check: an
+   * androgen protocol with an AI managing oestradiol is a different situation
+   * from the same androgen alone.
+   */
+  | "ancillary"
   | "blend";
 
 export interface Peptide {
@@ -137,6 +150,17 @@ export interface Peptide {
    * androgen; the app uses it to say so plainly rather than leaving it implied.
    */
   suppressesNaturalProduction?: boolean;
+
+  /**
+   * Converts to oestradiol via aromatase to a degree that matters in practice.
+   *
+   * Set on androgens only. Drives the check for an aromatase inhibitor running
+   * with nothing to inhibit, which is a way to crash oestradiol for no benefit
+   * whatsoever and is common enough to be worth catching. False and absent mean
+   * different things here: false is "this was assessed and it does not", absent
+   * is "not an androgen, the question does not apply".
+   */
+  aromatises?: boolean;
 
   /** What a user typically feels or what is happening, over time. */
   timeline?: { fromHours: number; toHours: number; label: string }[];
@@ -274,6 +298,61 @@ export interface DoseLog {
  */
 export type MeasurementSource = "manual" | "health-connect";
 
+/**
+ * The subjective axes a check-in records.
+ *
+ * Weight answers "is this working" for a GLP-1 and almost nothing else. Most of
+ * the library is now androgens and growth hormone, where the effects people are
+ * actually chasing, and the ones that go wrong first, are these. Six is a
+ * deliberate ceiling: a daily form long enough to feel like work stops being
+ * filled in, and a half-filled record is worse than none.
+ */
+export type SymptomId = "energy" | "mood" | "libido" | "sleep" | "recovery" | "appetite";
+
+export interface SymptomDef {
+  id: SymptomId;
+  label: string;
+  /** What a 5 means, and what a 1 means. */
+  high: string;
+  low: string;
+  /**
+   * Whether a higher rating is a better outcome. Absent where the direction
+   * depends on what you are running: suppressed appetite is the point of a
+   * GLP-1 and a problem on a bulk, so the app charts it and declines to judge.
+   */
+  higherIsBetter?: boolean;
+}
+
+export const SYMPTOMS: SymptomDef[] = [
+  { id: "energy", label: "Energy", low: "Flat", high: "Strong", higherIsBetter: true },
+  { id: "mood", label: "Mood", low: "Low", high: "Good", higherIsBetter: true },
+  { id: "libido", label: "Libido", low: "Absent", high: "High", higherIsBetter: true },
+  { id: "sleep", label: "Sleep", low: "Broken", high: "Deep", higherIsBetter: true },
+  { id: "recovery", label: "Recovery", low: "Sore", high: "Fresh", higherIsBetter: true },
+  { id: "appetite", label: "Appetite", low: "None", high: "Ravenous" },
+];
+
+export const SYMPTOM_SCALE_MAX = 5;
+
+/**
+ * One day's subjective reading.
+ *
+ * At most one per profile per local day, keyed on the day rather than the
+ * instant, because "how was today" is not a measurement taken at a moment. A
+ * second entry for the same day replaces the first.
+ *
+ * Ratings are partial on purpose. Rating only what you noticed is honest;
+ * forcing a number onto every axis manufactures data.
+ */
+export interface CheckIn {
+  id: string;
+  profileId: string;
+  /** Local midnight of the day this describes. */
+  at: number;
+  ratings: Partial<Record<SymptomId, number>>;
+  notes?: string;
+}
+
 export interface Measurement {
   id: string;
   profileId: string;
@@ -281,6 +360,15 @@ export interface Measurement {
   weightKg?: number;
   waistCm?: number;
   bodyFatPct?: number;
+  /**
+   * Hours slept, and resting heart rate. Both are read from the platform's
+   * health store rather than typed, and both matter here for the same reason:
+   * they are the two objective numbers that move with the subjective ratings in
+   * a check-in, so a claim like "sleep is worse on this dose" can be checked
+   * against something other than memory.
+   */
+  sleepHours?: number;
+  restingHrBpm?: number;
   notes?: string;
   /** Where the reading came from. Absent means it was typed in. */
   source?: MeasurementSource;
@@ -490,6 +578,8 @@ export interface AppData {
   settings: Settings;
   /** User-authored peptides, merged over the built-in library. */
   customPeptides: Peptide[];
+  /** Daily subjective ratings, at most one per local day. */
+  checkIns: CheckIn[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -522,7 +612,7 @@ export const DEFAULT_PROFILE: Profile = {
  * stamped "version 1" holding version 5 data: EMPTY_DATA hard-coded 1, resetAll
  * restored it, and exportData faithfully wrote the lie into the file.
  */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 export const EMPTY_DATA: AppData = {
   version: DATA_VERSION,
@@ -535,6 +625,7 @@ export const EMPTY_DATA: AppData = {
   vials: [],
   settings: DEFAULT_SETTINGS,
   customPeptides: [],
+  checkIns: [],
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */
@@ -599,5 +690,6 @@ export const CATEGORY_LABEL: Record<PeptideCategory, string> = {
   sexual: "Sexual function",
   cosmetic: "Skin & cosmetic",
   anabolic: "Anabolic steroids",
+  ancillary: "Ancillaries & recovery",
   blend: "Blends",
 };
