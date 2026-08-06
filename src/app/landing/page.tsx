@@ -133,7 +133,7 @@ function Cta({ children }: { children: React.ReactNode }) {
   );
 }
 
-const APK_URL = "https://github.com/ArunNGun/Bench/releases/latest/download/bench-v1.7.apk";
+const APK_URL = "https://github.com/ArunNGun/Bench/releases/latest";
 
 function ApkButton() {
   return (
