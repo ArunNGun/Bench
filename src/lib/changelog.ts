@@ -26,10 +26,10 @@ export const RELEASES: Release[] = [
     date: "2026-08-06",
     summary: "User count on the landing page, mg dose entry, manual update check, and a cleaner injection site map.",
     changes: [
-      "Dose entry now has a toggle to switch between mcg and mg — useful for compounds typically dosed in milligrams",
-      "Injection site map redrawn using the same body figure as the landing page — cleaner and consistent",
+      "Dose entry now has a toggle to switch between mcg and mg, useful for compounds typically dosed in milligrams",
+      "Injection site map redrawn using the same body figure as the landing page, cleaner and consistent",
       "Delete button on vials is now always visible, not hidden behind a hover",
-      "Manual \"Check for update\" button in Settings — tap to pull the latest version without waiting for the passive check",
+      "Manual \"Check for update\" button in Settings, tap to pull the latest version without waiting for the passive check",
       "Landing page shows a live user count with a pulsing dot, powered by a privacy-safe HyperLogLog counter",
       "Print CSS added so the lab report looks right on paper",
       "PK curve constant caching for faster recalculation on large dose histories",
