@@ -163,7 +163,7 @@ function Logo({ size = 40 }: { size?: number }) {
 }
 
 export default async function LandingPage() {
-  const { users } = await getLandingStats();
+  const { apkDownloads, pageViews } = await getLandingStats();
   return (
     <main className="min-h-screen bg-[var(--canvas)]">
       {/*
@@ -270,7 +270,8 @@ export default async function LandingPage() {
             { n: String(COMPOUND_COUNT), l: "compounds, every figure cited" },
             { n: String(MARKER_COUNT), l: "blood markers you can chart" },
             { n: "962", l: "tests on the arithmetic" },
-            ...(users != null ? [{ n: users.toLocaleString(), l: "users", blink: true }] : []),
+            ...(pageViews != null ? [{ n: pageViews.toLocaleString(), l: "users", blink: true }] : []),
+            ...(apkDownloads != null && apkDownloads > 0 ? [{ n: apkDownloads.toLocaleString(), l: "APK downloads" }] : []),
             { n: "0", l: "bytes of your data leave the device" },
           ].map(({ n, l, blink }: { n: string; l: string; blink?: boolean }) => (
             <div key={l} className="bg-[var(--card)] px-4 py-6 text-center">

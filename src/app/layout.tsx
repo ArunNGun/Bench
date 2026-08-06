@@ -5,7 +5,6 @@ import { AppFrame } from "@/components/AppFrame";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
-import { PingOnce } from "@/components/PingOnce";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -88,7 +87,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${jakarta.variable} ${plexMono.variable} antialiased`}
       >
         <ServiceWorker />
-        <PingOnce />
         <AppFrame>{children}</AppFrame>
         <InstallPrompt />
         <UpdatePrompt />

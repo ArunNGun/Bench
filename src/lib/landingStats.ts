@@ -1,83 +1,86 @@
 /**
  * Server-side stats for the landing page stat band.
  *
- * Fetches three numbers at build/request time:
- *  - unique installs from Vercel KV (HyperLogLog count)
- *  - APK download count from the GitHub releases API
- *  - GitHub star count as a fallback if downloads are unavailable
+ * Fetches two numbers:
+ *  - APK download count from GitHub releases API
+ *  - Total page view count from Vercel Web Analytics API
  *
- * All three are best-effort: a failure returns null and the stat band shows
- * a dash rather than crashing the page. Results are cached for 1 hour so
- * the GitHub API rate limit is never a concern.
+ * Both are best-effort: a failure returns null and the tile is hidden rather
+ * than showing a broken placeholder. Results are cached for 1 hour.
+ *
+ * Required env vars (set in Vercel project settings):
+ *  - VERCEL_TOKEN          — a Vercel API token (Account → Tokens)
+ *  - VERCEL_PROJECT_ID     — found in Project → Settings → General
+ *  - GITHUB_TOKEN          — optional, raises GitHub rate limit to 5000/hr
  */
 
-import { kv } from "@vercel/kv";
-
 const GITHUB_REPO = "ArunNGun/Bench";
-const HLL_KEY = "bench:users";
 
-interface LandingStats {
-  users: number | null;
-  ghStars: number | null;
+export interface LandingStats {
   apkDownloads: number | null;
+  pageViews: number | null;
 }
 
-async function fetchGitHubStats(): Promise<{ stars: number | null; downloads: number | null }> {
+async function fetchApkDownloads(): Promise<number | null> {
   try {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     };
-    // GITHUB_TOKEN is optional — without it the rate limit is 60 req/hr,
-    // which is fine given the 1-hour cache below.
-    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-
-    const [repoRes, releasesRes] = await Promise.all([
-      fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
-        headers,
-        next: { revalidate: 3600 },
-      }),
-      fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases`, {
-        headers,
-        next: { revalidate: 3600 },
-      }),
-    ]);
-
-    const stars = repoRes.ok ? (await repoRes.json()).stargazers_count ?? null : null;
-
-    let downloads: number | null = null;
-    if (releasesRes.ok) {
-      const releases: { assets: { download_count: number }[] }[] = await releasesRes.json();
-      downloads = releases.reduce(
-        (sum, r) => sum + r.assets.reduce((s, a) => s + a.download_count, 0),
-        0,
-      );
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
     }
 
-    return { stars, downloads };
-  } catch {
-    return { stars: null, downloads: null };
-  }
-}
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/releases`,
+      { headers, next: { revalidate: 3600 } },
+    );
 
-async function fetchUserCount(): Promise<number | null> {
-  // KV is only available in the Vercel environment. In local dev or the
-  // Android static build there is no KV connection, so we return null.
-  if (!process.env.KV_REST_API_URL) return null;
-  try {
-    return await kv.pfcount(HLL_KEY);
+    if (!res.ok) return null;
+
+    const releases: { assets: { download_count: number }[] }[] = await res.json();
+    return releases.reduce(
+      (sum, r) => sum + r.assets.reduce((s, a) => s + a.download_count, 0),
+      0,
+    );
   } catch {
     return null;
   }
 }
 
+async function fetchPageViews(): Promise<number | null> {
+  const token = process.env.VERCEL_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID;
+  if (!token || !projectId) return null;
+
+  try {
+    const url = new URL("https://vercel.com/v1/query/web-analytics/visits/count");
+    url.searchParams.set("projectId", projectId);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) return null;
+
+    const body = await res.json();
+    // Response shape: { data: [{ count: number }], ... }
+    const count = body?.data?.[0]?.count ?? body?.data?.count ?? null;
+    return typeof count === "number" ? count : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function getLandingStats(): Promise<LandingStats> {
-  const [userCount, github] = await Promise.all([fetchUserCount(), fetchGitHubStats()]);
+  const [apkDownloads, pageViews] = await Promise.all([
+    fetchApkDownloads(),
+    fetchPageViews(),
+  ]);
 
-  return {
-    users: userCount,
-    ghStars: github.stars,
-    apkDownloads: github.downloads,
-  };
+  return { apkDownloads, pageViews };
 }
