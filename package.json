@@ -20,6 +20,7 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
     "@capgo/capacitor-health": "^8.10.0",
+    "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "fflate": "^0.8.3",

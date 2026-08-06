@@ -5,6 +5,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
+import { Analytics } from "@vercel/analytics/next";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${jakarta.variable} ${plexMono.variable} antialiased`}
       >
+        <Analytics />
         <ServiceWorker />
         <AppFrame>{children}</AppFrame>
         <InstallPrompt />
