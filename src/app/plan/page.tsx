@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Pause, Play, Plus, Trash2 } from "lucide-react";
+import { Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -27,7 +27,14 @@ import {
   titrationStepAt,
 } from "@/lib/calc/schedule";
 import { formatDose, formatDate, formatWeekday, formatTime, relativeTime, toDateInput, trim } from "@/lib/format";
-import { INJECTION_SITES, type InjectionSite, type Protocol, type Schedule, type ScheduleKind } from "@/lib/types";
+import {
+  INJECTION_SITES,
+  type InjectionSite,
+  type Protocol,
+  type Schedule,
+  type ScheduleKind,
+  type TitrationStep,
+} from "@/lib/types";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
@@ -43,6 +50,9 @@ export default function PlanPage() {
   const removeProtocol = useStore((s) => s.removeProtocol);
 
   const [adding, setAdding] = useState(false);
+  // Which protocol is open for editing, if any. One at a time, because the
+  // form replaces the card it belongs to and two open forms would be a puzzle.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const now = Date.now();
 
   if (!hydrated) {
@@ -58,7 +68,13 @@ export default function PlanPage() {
             What you are running, at what dose, on what schedule.
           </p>
         </div>
-        <Button variant="primary" onClick={() => setAdding(true)}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditingId(null);
+            setAdding(true);
+          }}
+        >
           <Plus size={16} /> New protocol
         </Button>
       </header>
@@ -96,6 +112,20 @@ export default function PlanPage() {
 
       <div className="space-y-2.5">
         {protocols.map((p) => {
+          if (editingId === p.id) {
+            return (
+              <ProtocolForm
+                key={p.id}
+                initial={p}
+                onCancel={() => setEditingId(null)}
+                onSave={(patch) => {
+                  updateProtocol(p.id, patch);
+                  setEditingId(null);
+                }}
+              />
+            );
+          }
+
           const peptide = findPeptide(custom, p.peptideId);
           const target = scheduledDoseMcg(p, now);
           const next = p.active ? nextDoseTime(p.schedule, p.startedAt, now, p.endedAt) : null;
@@ -137,6 +167,16 @@ export default function PlanPage() {
                 </div>
 
                 <div className="flex gap-1.5">
+                  <Button
+                    onClick={() => {
+                      setAdding(false);
+                      setEditingId(p.id);
+                    }}
+                    className="px-2.5 py-2"
+                    aria-label={`Edit ${p.name}`}
+                  >
+                    <Pencil size={15} />
+                  </Button>
                   <Button
                     onClick={() => updateProtocol(p.id, { active: !p.active })}
                     className="px-2.5 py-2"
@@ -203,31 +243,109 @@ function describeSchedule(s: Schedule) {
   return base + cycle + (s.timeOfDay ? ` at ${s.timeOfDay}` : "");
 }
 
+/**
+ * Marks titration steps that came from somewhere other than the current
+ * peptide's published plans, an import for example. Selecting it means "leave
+ * the steps as they are", which is the only honest option when there is no
+ * plan to name them by.
+ */
+const EXISTING_TITRATION = "__existing__";
+
+function sameSteps(a: TitrationStep[], b: TitrationStep[]) {
+  return (
+    a.length === b.length &&
+    a.every((s, i) => s.step === b[i].step && s.doseMcg === b[i].doseMcg && s.weeks === b[i].weeks));
+}
+
+/**
+ * Compared field by field rather than by JSON, because an absent key and a key
+ * set to undefined are the same schedule but different strings.
+ */
+function sameSchedule(a: Schedule, b: Schedule) {
+  return (
+    a.kind === b.kind &&
+    (a.intervalDays ?? null) === (b.intervalDays ?? null) &&
+    (a.timeOfDay ?? null) === (b.timeOfDay ?? null) &&
+    (a.cycleWeeksOn ?? null) === (b.cycleWeeksOn ?? null) &&
+    (a.cycleWeeksOff ?? null) === (b.cycleWeeksOff ?? null) &&
+    (a.daysOfWeek ?? []).join() === (b.daysOfWeek ?? []).join());
+}
+
+/**
+ * Creates a protocol, or edits one that already exists.
+ *
+ * The two modes are the same form because they ask the same questions. Passing
+ * `initial` seeds every field from the saved protocol and turns the save into a
+ * patch. Fields the form does not ask about, `active` and `endedAt` and
+ * `notes`, are carried through untouched, so editing a paused protocol does not
+ * quietly restart it.
+ */
 function ProtocolForm({
+  initial,
   onCancel,
   onSave,
 }: {
+  initial?: Protocol;
   onCancel: () => void;
   onSave: (p: Omit<Protocol, "id" | "profileId">) => void;
 }) {
   const custom = useStore((s) => s.customPeptides);
   const peptides = useMemo(() => allPeptides(custom), [custom]);
 
-  const [peptideId, setPeptideId] = useState(peptides[0]?.id ?? "");
-  const [name, setName] = useState("");
-  const [doseMcg, setDoseMcg] = useState(500);
-  const [kind, setKind] = useState<ScheduleKind>("interval-days");
-  const [intervalDays, setIntervalDays] = useState(7);
-  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1]);
-  const [timeOfDay, setTimeOfDay] = useState("09:00");
-  const [startedAt, setStartedAt] = useState(() => Date.now());
-  const [cycleOn, setCycleOn] = useState(0);
-  const [cycleOff, setCycleOff] = useState(0);
-  const [titrationId, setTitrationId] = useState("");
-  const [sites, setSites] = useState<InjectionSite[]>([]);
+  const [peptideId, setPeptideId] = useState(initial?.peptideId ?? peptides[0]?.id ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [doseMcg, setDoseMcg] = useState(initial?.doseMcg ?? 500);
+  const [kind, setKind] = useState<ScheduleKind>(initial?.schedule.kind ?? "interval-days");
+  const [intervalDays, setIntervalDays] = useState(initial?.schedule.intervalDays ?? 7);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initial?.schedule.daysOfWeek ?? [1]);
+  const [timeOfDay, setTimeOfDay] = useState(initial?.schedule.timeOfDay ?? "09:00");
+  const [startedAt, setStartedAt] = useState(() => initial?.startedAt ?? Date.now());
+  const [cycleOn, setCycleOn] = useState(initial?.schedule.cycleWeeksOn ?? 0);
+  const [cycleOff, setCycleOff] = useState(initial?.schedule.cycleWeeksOff ?? 0);
+  const [sites, setSites] = useState<InjectionSite[]>(initial?.sites ?? []);
+
+  // A saved protocol stores the titration steps, not the id of the plan they
+  // came from, so the plan has to be recognised by its contents.
+  const [titrationId, setTitrationId] = useState(() => {
+    if (!initial?.titration?.length) return "";
+    const owner = peptides.find((x) => x.id === initial.peptideId);
+    const match = owner?.titrations?.find((t) => sameSteps(t.steps, initial.titration!));
+    return match ? match.id : EXISTING_TITRATION;
+  });
 
   const peptide = peptides.find((p) => p.id === peptideId);
   const titration = peptide?.titrations?.find((t) => t.id === titrationId);
+
+  const keepingExisting = titrationId === EXISTING_TITRATION && !!initial?.titration?.length;
+  const titrationSteps = titration ? titration.steps : keepingExisting ? initial!.titration : undefined;
+  const titrationAutoAdvance = titration ? true : keepingExisting ? initial!.titrationAutoAdvance : false;
+  const lockedDose = titrationSteps?.[0]?.doseMcg;
+
+  // Route is not asked about, so an unchanged peptide keeps whatever the
+  // protocol was saved with and a changed one takes the new default.
+  const route =
+    initial && peptideId === initial.peptideId
+      ? initial.route
+      : (peptide?.routes[0] ?? "subcutaneous");
+
+  const schedule: Schedule = useMemo(
+    () => ({
+      kind,
+      intervalDays: kind === "interval-days" ? intervalDays : undefined,
+      daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
+      timeOfDay: kind === "as-needed" ? undefined : timeOfDay,
+      cycleWeeksOn: cycleOn || undefined,
+      cycleWeeksOff: cycleOff || undefined,
+    }),
+    [kind, intervalDays, daysOfWeek, timeOfDay, cycleOn, cycleOff]);
+
+  /**
+   * True when a saved protocol's timing is being moved. Adherence and progress
+   * count expected doses by replaying the current schedule over past dates, so
+   * this is the one edit that reaches backwards.
+   */
+  const rewritesHistory =
+    !!initial && (!sameSchedule(schedule, initial.schedule) || startedAt !== initial.startedAt);
 
   /**
    * The protocol as currently described by the form, so the projection below
@@ -236,38 +354,29 @@ function ProtocolForm({
    */
   const draft: Protocol = useMemo(
     () => ({
-      id: "draft",
-      profileId: "draft",
+      id: initial?.id ?? "draft",
+      profileId: initial?.profileId ?? "draft",
       peptideId,
       name: name.trim() || "draft",
-      active: true,
+      active: initial?.active ?? true,
       startedAt,
-      doseMcg: titration ? titration.steps[0].doseMcg : doseMcg,
-      route: peptide?.routes[0] ?? "subcutaneous",
-      schedule: {
-        kind,
-        intervalDays: kind === "interval-days" ? intervalDays : undefined,
-        daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
-        timeOfDay: kind === "as-needed" ? undefined : timeOfDay,
-        cycleWeeksOn: cycleOn || undefined,
-        cycleWeeksOff: cycleOff || undefined,
-      },
-      titration: titration?.steps,
-      titrationAutoAdvance: !!titration,
+      doseMcg: lockedDose ?? doseMcg,
+      route,
+      schedule,
+      titration: titrationSteps,
+      titrationAutoAdvance,
     }),
     [
+      initial,
       peptideId,
       name,
       startedAt,
-      titration,
+      lockedDose,
       doseMcg,
-      peptide,
-      kind,
-      intervalDays,
-      daysOfWeek,
-      timeOfDay,
-      cycleOn,
-      cycleOff,
+      route,
+      schedule,
+      titrationSteps,
+      titrationAutoAdvance,
     ]);
 
   function pick(id: string) {
@@ -289,7 +398,7 @@ function ProtocolForm({
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>New protocol</SectionLabel>
+      <SectionLabel>{initial ? "Edit protocol" : "New protocol"}</SectionLabel>
 
       <Field label="Peptide">
         <Select value={peptideId} onChange={(e) => pick(e.target.value)}>
@@ -302,14 +411,19 @@ function ProtocolForm({
         <AddCompoundInline onCreated={(p) => pick(p.id)} />
       </Field>
 
-      {peptide?.titrations && peptide.titrations.length > 0 && (
+      {((peptide?.titrations && peptide.titrations.length > 0) || keepingExisting) && (
         <Field
           label="Titration plan"
           hint={titration?.note ?? "Optional. Steps the dose up over time."}
         >
           <Select value={titrationId} onChange={(e) => setTitrationId(e.target.value)}>
             <option value="">No titration, fixed dose</option>
-            {peptide.titrations.map((t) => (
+            {keepingExisting && (
+              <option value={EXISTING_TITRATION}>
+                Keep the existing steps ({initial!.titration!.length} of them)
+              </option>
+            )}
+            {peptide?.titrations?.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
@@ -320,21 +434,21 @@ function ProtocolForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label={titration ? "Starting dose" : "Dose"}
+          label={lockedDose !== undefined ? "Starting dose" : "Dose"}
           hint={
-            titration
-              ? `Set by the plan: ${formatDose(titration.steps[0].doseMcg)}`
+            lockedDose !== undefined
+              ? `Set by the plan: ${formatDose(lockedDose)}`
               : peptide?.doseRanges[0]
                 ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
                 : undefined
           }
         >
           <NumberInput
-            value={titration ? titration.steps[0].doseMcg : doseMcg}
+            value={lockedDose ?? doseMcg}
             min={0}
             step={25}
             suffix="mcg"
-            disabled={!!titration}
+            disabled={lockedDose !== undefined}
             onChange={(e) => setDoseMcg(Number(e.target.value))}
           />
         </Field>
@@ -499,6 +613,15 @@ function ProtocolForm({
 
       <ProjectionPreview protocol={draft} peptide={peptide} />
 
+      {rewritesHistory && (
+        <p className="rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[12.5px] leading-snug text-[var(--muted)]">
+          <span className="text-[var(--ink)]">This changes the past as well as the future.</span>{" "}
+          Adherence and progress count the doses this schedule expects, replayed over dates that
+          have already been and gone, so moving the timing moves those figures too. Your logged
+          doses are untouched.
+        </p>
+      )}
+
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
@@ -510,25 +633,20 @@ function ProtocolForm({
             onSave({
               peptideId,
               name: name.trim() || `${peptide?.name ?? "New"} protocol`,
-              active: true,
+              active: initial?.active ?? true,
+              endedAt: initial?.endedAt,
               startedAt,
-              doseMcg: titration ? titration.steps[0].doseMcg : doseMcg,
-              route: peptide?.routes[0] ?? "subcutaneous",
-              schedule: {
-                kind,
-                intervalDays: kind === "interval-days" ? intervalDays : undefined,
-                daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
-                timeOfDay: kind === "as-needed" ? undefined : timeOfDay,
-                cycleWeeksOn: cycleOn || undefined,
-                cycleWeeksOff: cycleOff || undefined,
-              },
-              titration: titration?.steps,
-              titrationAutoAdvance: !!titration,
+              doseMcg: lockedDose ?? doseMcg,
+              route,
+              schedule,
+              titration: titrationSteps,
+              titrationAutoAdvance,
               sites: sites.length ? sites : undefined,
+              notes: initial?.notes,
             })
           }
         >
-          Create protocol
+          {initial ? "Save changes" : "Create protocol"}
         </Button>
       </div>
     </Card>
