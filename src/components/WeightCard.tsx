@@ -5,7 +5,12 @@ import Link from "next/link";
 import { Activity, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { Button, Card, Field, NumberInput, SectionLabel, Stat } from "./ui";
 import { useProfileData, useStore } from "@/lib/store";
-import { kgToLb, lbToKg, weightChange, weightSeries } from "@/lib/calc/outcomes";
+import {
+  fromDisplayWeight,
+  toDisplayWeight,
+  weightChange,
+  weightSeries,
+} from "@/lib/calc/outcomes";
 import { formatDate, toDateTimeLocal, fromDateTimeLocal, trim } from "@/lib/format";
 import { getHealthAdapter, type HealthAvailability } from "@/lib/health/adapter";
 import { newestSample } from "@/lib/calc/healthsync";
@@ -32,7 +37,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
   const addMeasurement = useStore((s) => s.addMeasurement);
 
   const unit = settings.weightUnit ?? "kg";
-  const toDisplay = (kg: number) => (unit === "lb" ? kgToLb(kg) : kg);
+  const toDisplay = (kg: number) => toDisplayWeight(kg, unit);
 
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState<number | "">("");
@@ -107,7 +112,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
     } else {
       addMeasurement({
         at,
-        weightKg: unit === "lb" ? lbToKg(Number(value)) : Number(value),
+        weightKg: fromDisplayWeight(Number(value), unit),
       });
     }
 

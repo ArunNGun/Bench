@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   averageFeeling,
+  fromDisplayWeight,
   kgToLb,
   latestWeightKg,
   lbToKg,
   sideEffectTally,
+  toDisplayWeight,
   toleranceByStep,
   weightChange,
   weightSeries,
@@ -209,5 +211,32 @@ describe("toleranceByStep", () => {
     const rows = toleranceByStep(unrated, steps, startedAt);
     expect(rows[0].averageFeeling).toBeNull();
     expect(rows[0].sideEffectRate).toBe(1);
+  });
+});
+
+describe("weight unit display", () => {
+  it("leaves kilograms alone in both directions", () => {
+    expect(toDisplayWeight(82.5, "kg")).toBe(82.5);
+    expect(fromDisplayWeight(82.5, "kg")).toBe(82.5);
+  });
+
+  it("shows kilograms as pounds", () => {
+    expect(toDisplayWeight(100, "lb")).toBeCloseTo(220.462, 3);
+  });
+
+  it("reads pounds back as kilograms", () => {
+    expect(fromDisplayWeight(220.462, "lb")).toBeCloseTo(100, 3);
+  });
+
+  it("round trips, which is what a field displaying one way and saving the other needs", () => {
+    for (const kg of [0, 0.5, 45, 82.3, 150]) {
+      expect(fromDisplayWeight(toDisplayWeight(kg, "lb"), "lb")).toBeCloseTo(kg, 9);
+      expect(fromDisplayWeight(toDisplayWeight(kg, "kg"), "kg")).toBe(kg);
+    }
+  });
+
+  it("agrees with the raw converters it is built on", () => {
+    expect(toDisplayWeight(70, "lb")).toBe(kgToLb(70));
+    expect(fromDisplayWeight(154, "lb")).toBe(lbToKg(154));
   });
 });
