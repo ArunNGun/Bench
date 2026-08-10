@@ -563,25 +563,32 @@ function ProtocolForm({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label={lockedDose !== undefined ? "Starting dose" : "Dose"}
-          hint={
-            lockedDose !== undefined
-              ? `Set by the plan: ${formatDose(lockedDose)}`
-              : peptide?.doseRanges[0]
-                ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
-                : undefined
-          }
-        >
-          <NumberInput
-            value={lockedDose ?? doseMcg}
-            min={0}
-            step={25}
-            suffix="mcg"
-            disabled={lockedDose !== undefined}
-            onChange={(e) => setDoseMcg(Number(e.target.value))}
-          />
-        </Field>
+        {/*
+          With a week by week plan the dose is the first band's, so a second
+          disabled box showing the same figure in a different unit is one place
+          too many to read it from. The bands are directly above.
+        */}
+        {!usingPhases && (
+          <Field
+            label={lockedDose !== undefined ? "Starting dose" : "Dose"}
+            hint={
+              lockedDose !== undefined
+                ? `Set by the plan: ${formatDose(lockedDose)}`
+                : peptide?.doseRanges[0]
+                  ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
+                  : undefined
+            }
+          >
+            <NumberInput
+              value={lockedDose ?? doseMcg}
+              min={0}
+              step={25}
+              suffix="mcg"
+              disabled={lockedDose !== undefined}
+              onChange={(e) => setDoseMcg(Number(e.target.value))}
+            />
+          </Field>
+        )}
 
         <Field label="Start date">
           <input

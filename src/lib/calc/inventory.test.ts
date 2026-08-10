@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
+  daysOfSupplyForProtocol,
   drawFromVial,
   pickVialForDose,
   reconcileVials,
@@ -14,7 +15,7 @@ import {
   vialRemainingMl,
   vialUsable,
 } from "./inventory";
-import type { Vial } from "../types";
+import type { Protocol, ProtocolPhase, Vial } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
 const DAY = 86_400_000;
@@ -400,5 +401,80 @@ describe("reconcileVials, editing a logged dose", () => {
     const before = total(start);
     const out = reconcileVials(start, { vialId: "a", doseMcg: 500 }, { vialId: "b", doseMcg: 500 });
     expect(total(out)).toBe(before);
+  });
+});
+
+describe("daysOfSupplyForProtocol", () => {
+  /** A Monday, so weekly dosing lands on the same weekday throughout. */
+  const start = new Date(2026, 0, 5, 9, 0, 0, 0).getTime();
+
+  const protocol = (over: Partial<Protocol> = {}): Protocol => ({
+    id: "p1",
+    profileId: "me",
+    peptideId: "klow",
+    name: "Test",
+    active: true,
+    startedAt: start,
+    doseMcg: 1000,
+    route: "subcutaneous",
+    schedule: { kind: "interval-days", intervalDays: 7, timeOfDay: "09:00" },
+    titrationAutoAdvance: false, ...over,
+  });
+
+  /** Stock is the only field the calculation reads. */
+  const stockOf = (availableMcg: number) => ({
+    availableMcg,
+    sealedCount: 1,
+    openCount: 0,
+    dosesRemaining: 0,
+    dosesInOpenVials: 0,
+    needsReconstitution: false,
+  });
+
+  it("agrees with the flat calculation when the dose never changes", () => {
+    // 10 weekly doses of 1000 mcg, so the eleventh is the one that cannot be
+    // paid for, 70 days out.
+    //
+    // Rounded, because the answer is a count of elapsed hours and a window that
+    // crosses a daylight-saving change contains one fewer of them. In
+    // America/New_York this lands on 69.96 rather than 70. Doses hold their
+    // wall-clock time, which is the behaviour wanted, and a "days left" figure
+    // shown as "about 70 d" has no use for the hour either way.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start);
+    expect(Math.round(days!)).toBe(70);
+  });
+
+  it("spends the stock faster once the plan steps up", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    // 4 doses at 1 mg is 4000, leaving 6000 for 2 mg doses, which is 3 of them.
+    // The seventh dose falls at day 49 and cannot be paid for.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol({ phases: ladder }), start);
+    expect(Math.round(days!)).toBe(49);
+  });
+
+  it("is shorter than the flat figure for a rising plan, which is the point", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    const flat = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start)!;
+    const stepped = daysOfSupplyForProtocol(stockOf(10_000), protocol({ phases: ladder }), start)!;
+    expect(stepped).toBeLessThan(flat);
+  });
+
+  it("has no answer for an as-needed protocol", () => {
+    const p = protocol({ schedule: { kind: "as-needed" } });
+    expect(daysOfSupplyForProtocol(stockOf(10_000), p, start)).toBeNull();
+  });
+
+  it("runs out immediately when nothing is left", () => {
+    expect(daysOfSupplyForProtocol(stockOf(0), protocol(), start)).toBeCloseTo(0, 5);
+  });
+
+  it("caps rather than walking to the end of time on a deep stock", () => {
+    expect(daysOfSupplyForProtocol(stockOf(10_000_000), protocol(), start, 365)).toBe(365);
   });
 });

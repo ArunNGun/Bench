@@ -136,19 +136,30 @@ export function PhaseEditor({
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-1 block text-[11.5px] text-[var(--muted)]">
-                  {isLast ? "Weeks, before any band you add after this" : "Weeks"}
-                </span>
-                <NumberInput
-                  value={phase.weeks}
-                  min={1}
-                  max={104}
-                  step={1}
-                  suffix="weeks"
-                  onChange={(e) => patch(i, { weeks: Math.max(1, Number(e.target.value)) })}
-                />
-              </label>
+              {/*
+                The last band runs on whatever its weeks say, so asking for a
+                number there invites someone to set one and wonder why nothing
+                happened. The heading above already reads "Week N onwards".
+                The value is kept, and the field returns if a band is added
+                after this one.
+              */}
+              {isLast ? (
+                <div className="self-end pb-2.5 text-[12px] text-[var(--faint)]">
+                  Runs on until you change the plan.
+                </div>
+              ) : (
+                <label className="block">
+                  <span className="mb-1 block text-[11.5px] text-[var(--muted)]">Weeks</span>
+                  <NumberInput
+                    value={phase.weeks}
+                    min={1}
+                    max={104}
+                    step={1}
+                    suffix="weeks"
+                    onChange={(e) => patch(i, { weeks: Math.max(1, Number(e.target.value)) })}
+                  />
+                </label>
+              )}
             </div>
 
             <div className="grid gap-2.5 sm:grid-cols-2">
