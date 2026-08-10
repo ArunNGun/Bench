@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { snapshot, type DoseEvent } from "@/lib/calc/pk";
-import { dosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
+import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { daysOfSupply } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
 import {
@@ -114,7 +114,7 @@ export default function NowPage() {
               peptide,
               targetMcg,
               (id) => findPeptide(custom, id),
-              dosesPerWeek(protocol.schedule))
+              protocolDosesPerWeek(protocol, now))
           : [];
 
       const modellable = peptide?.halfLifeHours != null;
@@ -139,7 +139,7 @@ export default function NowPage() {
         lastLoggedAt,
         // What the compound is doing right now, in words.
         phase: peptide ? timelinePhaseAt(peptide, hoursSince(lastLoggedAt, now) ?? -1) : null,
-        supplyDays: daysOfSupply(stock, dosesPerWeek(protocol.schedule)),
+        supplyDays: daysOfSupply(stock, protocolDosesPerWeek(protocol, now)),
         tone: TRACK_TONES[i % TRACK_TONES.length],
       };
     });
@@ -426,7 +426,7 @@ export default function NowPage() {
                     blend={t.peptide!}
                     doseMcg={t.targetMcg}
                     resolve={(id) => findPeptide(custom, id)}
-                    dosesPerWeek={dosesPerWeek(t.protocol.schedule)}
+                    dosesPerWeek={protocolDosesPerWeek(t.protocol, now)}
                   />
                 </div>
               )}

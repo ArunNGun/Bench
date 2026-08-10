@@ -33,7 +33,7 @@ import {
   unitsFromDose,
   type SyringeScale,
 } from "@/lib/calc/reconstitution";
-import { dosesPerWeek, scheduledDoseMcg } from "@/lib/calc/schedule";
+import { protocolDosesPerWeek, scheduledDoseMcg } from "@/lib/calc/schedule";
 import {
   COMMON_SIDE_EFFECTS,
   FEELING_LABELS,
@@ -570,7 +570,7 @@ export function LogDoseSheet({
                 blend={peptide}
                 doseMcg={doseMcg}
                 resolve={(id) => findPeptide(custom, id)}
-                dosesPerWeek={protocol ? dosesPerWeek(protocol.schedule) : undefined}
+                dosesPerWeek={protocol ? protocolDosesPerWeek(protocol, at) : undefined}
                 compact
               />
             </div>

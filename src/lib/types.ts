@@ -240,6 +240,35 @@ export interface Schedule {
   cycleWeeksOff?: number;
 }
 
+/**
+ * A stretch of weeks with its own dose and, optionally, its own frequency.
+ *
+ * This is the general form of a titration. A titration plan varies the dose and
+ * holds the frequency; a phase list can vary both, which is what "twice a week
+ * for the first month, then weekly" needs and a titration cannot express.
+ *
+ * Phases are the user's own construction and live on the protocol, never in the
+ * compound library. A published `TitrationPlan` carries a source and an evidence
+ * level because it is a claim about what was studied. A phase list is a claim
+ * about nothing except what its author intends to do.
+ */
+export interface ProtocolPhase {
+  /** 1-based, for display and for stable list keys. */
+  step: number;
+  doseMcg: number;
+  /**
+   * Weeks this phase holds. The final phase runs on indefinitely whatever this
+   * says, so its value only affects how the plan is drawn, never what is due.
+   */
+  weeks: number;
+  /**
+   * Frequency for this phase. Absent means the phase keeps the protocol's own
+   * schedule, which is the common case and the reason it is optional.
+   */
+  schedule?: Schedule;
+  note?: string;
+}
+
 export interface Protocol {
   id: string;
   /** Owning profile. Assigned on creation from whichever profile is active. */
@@ -257,6 +286,13 @@ export interface Protocol {
   titration?: TitrationStep[];
   /** Index into titration steps, advanced manually or by date. */
   titrationAutoAdvance: boolean;
+  /**
+   * A hand-built plan by weeks. When present it governs both the dose and, for
+   * phases that carry one, the frequency, and it takes precedence over
+   * `titration`. Absent on every protocol made before this existed, which is
+   * why nothing had to be migrated.
+   */
+  phases?: ProtocolPhase[];
   /**
    * Sites this protocol rotates through. Empty or absent means all of them.
    * Logging suggests only from this set, but never blocks a different choice.
