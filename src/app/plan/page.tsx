@@ -26,7 +26,16 @@ import {
   scheduledDoseMcg,
   titrationStepAt,
 } from "@/lib/calc/schedule";
-import { formatDose, formatDate, formatWeekday, formatTime, relativeTime, toDateInput, trim } from "@/lib/format";
+import {
+  formatDose,
+  formatDate,
+  formatWeekday,
+  formatTime,
+  fromDateInput,
+  relativeTime,
+  toDateInput,
+  trim,
+} from "@/lib/format";
 import {
   INJECTION_SITES,
   type InjectionSite,
@@ -457,7 +466,7 @@ function ProtocolForm({
           <input
             type="date"
             value={toDateInput(startedAt)}
-            onChange={(e) => setStartedAt(new Date(e.target.value).getTime())}
+            onChange={(e) => setStartedAt(fromDateInput(e.target.value))}
             className="w-full rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[15px] text-[var(--ink)] focus:border-[var(--tangerine)] focus:outline-none"
           />
         </Field>
