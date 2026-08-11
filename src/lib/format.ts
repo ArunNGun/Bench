@@ -108,5 +108,27 @@ export function toDateInput(ms: number) {
   return toDateTimeLocal(ms).slice(0, 10);
 }
 
+/**
+ * Read a date input's value as local midnight.
+ *
+ * `new Date("2026-07-05")` is not the same thing as `new Date("2026-07-05T00:00")`.
+ * The language parses a date-only string as UTC and a date-time string without
+ * an offset as local, so the bare form lands on the evening before anywhere
+ * west of Greenwich. In US Central that turned a picked 5 July into a stored
+ * 4 July, which is exactly what a date picker never means.
+ *
+ * Built from parts rather than parsed, which sidesteps the question entirely
+ * and matches how `src/lib/import/values.ts` already reads a date. On a day
+ * where local midnight does not exist, because the clocks jump forward at
+ * midnight, the Date constructor lands on the first instant that does.
+ */
+export function fromDateInput(value: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return Date.now();
+
+  const ms = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
 export const percent = (fraction: number, dp = 0) =>
   Number.isFinite(fraction) ? `${(fraction * 100).toFixed(dp)}%` : "n/a";
