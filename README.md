@@ -3,6 +3,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Open Source](https://img.shields.io/badge/open%20source-%E2%9D%A4-mint.svg)](https://github.com/ArunNGun/Bench)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2.svg)](https://discord.gg/NTfnwSxxr)
 
 An open source tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics. Everything you enter stays in your browser, on your device.
 
@@ -134,6 +135,14 @@ Anything with real consequences lives in `src/lib/calc` as a pure function with 
 ## Stack
 
 Next.js 15 (App Router), React 19, TypeScript, Tailwind v4, Zustand persisted to IndexedDB, Capacitor for Android, Vitest. Plus Jakarta Sans throughout, IBM Plex Mono for precision readouts. Hand-rolled SVG for the syringe, the body map, the rings and the charts, no charting dependency.
+
+## Community
+
+Questions, protocol discussion, bug reports and feature ideas live in the Discord server:
+
+**[discord.gg/NTfnwSxxr](https://discord.gg/NTfnwSxxr)**
+
+Open an issue on GitHub for bugs, or post in `#bug-reports` on Discord. Feature requests are welcome in both places.
 
 ## Contributing
 
