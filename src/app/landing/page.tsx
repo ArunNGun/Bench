@@ -10,6 +10,7 @@ import {
   FlaskConical,
   LineChart,
   Lock,
+  MessageCircle,
   Plus,
   ShieldAlert,
   Smartphone,
@@ -17,6 +18,8 @@ import {
   Users,
   WifiOff,
 } from "lucide-react";
+
+const DISCORD_URL = "https://discord.gg/NTfnwSxxr";
 import { PEPTIDES } from "@/lib/data/peptides";
 import { LAB_MARKERS } from "@/lib/data/labs";
 import { CURRENT_VERSION, GITHUB_URL } from "@/lib/changelog";
@@ -470,8 +473,17 @@ export default async function LandingPage() {
             Already tracking somewhere else? Import your history and the app will build a protocol
             from the pattern of your doses.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Cta>Open the app</Cta>
+            <a
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="press inline-flex items-center gap-2 rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-5 py-3.5 text-[14px] font-bold text-[var(--ink)] shadow-[var(--shadow-xs)] hover:border-[var(--mint)]"
+            >
+              <MessageCircle size={16} strokeWidth={2.4} style={{ color: "var(--mint)" }} />
+              Join the community
+            </a>
           </div>
         </div>
         </Reveal>
@@ -497,6 +509,14 @@ export default async function LandingPage() {
               className="inline-flex items-center gap-1.5 hover:text-[var(--muted)]"
             >
               <Code2 size={13} /> GitHub
+            </a>
+            <a
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-[var(--muted)]"
+            >
+              <MessageCircle size={13} /> Discord
             </a>
             <a
               href={APK_URL}

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Code2, ExternalLink, Lock, ShieldAlert, Sparkles } from "lucide-react";
+import { Code2, ExternalLink, Lock, MessageCircle, ShieldAlert, Sparkles } from "lucide-react";
 import { Badge, Callout, Card, SectionLabel } from "@/components/ui";
 import { PEPTIDES } from "@/lib/data/peptides";
 import { LAB_MARKERS } from "@/lib/data/labs";
 import { CURRENT_VERSION, GITHUB_URL, RELEASES } from "@/lib/changelog";
+
+const DISCORD_URL = "https://discord.gg/NTfnwSxxr";
 
 /** Read from the library itself, so these figures cannot drift out of date. */
 const COMPOUND_COUNT = PEPTIDES.length;
@@ -136,6 +138,15 @@ export default function AboutPage() {
             className="press inline-flex items-center gap-2 rounded-[var(--r-btn)] bg-[var(--sunken)] px-3.5 py-2.5 text-[13.5px] font-semibold text-[var(--ink)]"
           >
             <Code2 size={15} /> github.com/ArunNGun
+            <ExternalLink size={13} className="text-[var(--faint)]" />
+          </a>
+          <a
+            href={DISCORD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="press inline-flex items-center gap-2 rounded-[var(--r-btn)] bg-[var(--sunken)] px-3.5 py-2.5 text-[13.5px] font-semibold text-[var(--ink)]"
+          >
+            <MessageCircle size={15} /> Join the Discord
             <ExternalLink size={13} className="text-[var(--faint)]" />
           </a>
           <p className="text-[12.5px]">
