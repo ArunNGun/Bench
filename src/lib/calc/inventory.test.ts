@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
   drawFromVial,
+  groupSealedVials,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -400,5 +401,116 @@ describe("reconcileVials, editing a logged dose", () => {
     const before = total(start);
     const out = reconcileVials(start, { vialId: "a", doseMcg: 500 }, { vialId: "b", doseMcg: 500 });
     expect(total(out)).toBe(before);
+  });
+});
+
+describe("groupSealedVials", () => {
+  it("puts one compound and strength on one line", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a" }),
+      vial({ id: "b" }),
+      vial({ id: "c" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(3);
+    expect(groups[0].remainingMcg).toBe(240_000);
+  });
+
+  it("keeps different strengths of the same compound apart", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", strengthMg: 80 }),
+      vial({ id: "b", strengthMg: 40 }),
+    ]);
+    expect(groups.map((g) => g.strengthMg)).toEqual([80, 40]);
+  });
+
+  it("keeps different compounds apart", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", peptideId: "klow" }),
+      vial({ id: "b", peptideId: "retatrutide" }),
+    ]);
+    expect(groups).toHaveLength(2);
+  });
+
+  it("ignores anything that is not sealed, because only sealed vials are interchangeable", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a" }),
+      vial({ id: "b", state: "reconstituted", diluentMl: 2 }),
+      vial({ id: "c", state: "finished" }),
+      vial({ id: "d", state: "discarded" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(1);
+  });
+
+  it("orders a group oldest first, so acting on one takes the one that waited longest", () => {
+    const groups = groupSealedVials([
+      vial({ id: "new", acquiredAt: NOW }),
+      vial({ id: "old", acquiredAt: NOW - 30 * DAY }),
+      vial({ id: "mid", acquiredAt: NOW - 10 * DAY }),
+    ]);
+    expect(groups[0].vials.map((v) => v.id)).toEqual(["old", "mid", "new"]);
+  });
+
+  it("is stable when two vials were acquired at the same moment", () => {
+    const groups = groupSealedVials([
+      vial({ id: "b", acquiredAt: NOW }),
+      vial({ id: "a", acquiredAt: NOW }),
+    ]);
+    expect(groups[0].vials.map((v) => v.id)).toEqual(["a", "b"]);
+  });
+
+  it("keeps the order the ungrouped list had", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", peptideId: "retatrutide" }),
+      vial({ id: "b", peptideId: "klow" }),
+      vial({ id: "c", peptideId: "retatrutide" }),
+    ]);
+    expect(groups.map((g) => g.peptideId)).toEqual(["retatrutide", "klow"]);
+  });
+
+  it("reports the soonest expiry, not the first one it happened to see", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", expiresAt: NOW + 200 * DAY }),
+      vial({ id: "b", expiresAt: NOW + 40 * DAY }),
+      vial({ id: "c" }),
+    ]);
+    expect(groups[0].expiresAt).toBe(NOW + 40 * DAY);
+  });
+
+  it("has no expiry when nothing in the group carries one", () => {
+    expect(groupSealedVials([vial({ id: "a" })])[0].expiresAt).toBeNull();
+  });
+
+  it("adds up cost and counts what was never priced", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", cost: 3000, currency: "INR" }),
+      vial({ id: "b", cost: 2500, currency: "INR" }),
+      vial({ id: "c" }),
+    ]);
+    expect(groups[0].cost).toBe(5500);
+    expect(groups[0].currency).toBe("INR");
+    expect(groups[0].unpricedCount).toBe(1);
+  });
+
+  it("refuses to add two currencies together", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a", cost: 3000, currency: "INR" }),
+      vial({ id: "b", cost: 40, currency: "USD" }),
+    ]);
+    expect(groups[0].cost).toBeNull();
+    expect(groups[0].currency).toBeNull();
+  });
+
+  it("subtracts what has already been drawn", () => {
+    const groups = groupSealedVials([
+      vial({ id: "a" }),
+      vial({ id: "b", drawnMcg: 20_000 }),
+    ]);
+    expect(groups[0].remainingMcg).toBe(140_000);
+  });
+
+  it("has nothing to say about an empty list", () => {
+    expect(groupSealedVials([])).toEqual([]);
   });
 });

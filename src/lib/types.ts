@@ -489,6 +489,16 @@ export interface Settings {
   weightUnit: WeightUnit;
 
   /**
+   * Collapse sealed vials of the same compound and strength into one row on the
+   * Stock page, with their doses and value added up.
+   *
+   * Off by default. Someone with three vials may well want to see three vials,
+   * and the grouped view is only an improvement once the list is long enough to
+   * be tedious, which is a judgement only the owner of the fridge can make.
+   */
+  groupIdenticalVials?: boolean;
+
+  /**
    * Automatic backups to the device's Documents folder. Android only, a web
    * page cannot write to a folder unattended, so the manual export is the answer
    * there.

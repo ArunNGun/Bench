@@ -19,7 +19,7 @@ import { VialGlyph } from "@/components/Syringe";
 import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "@/lib/store";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 import { MULTI_DOSE_VIAL_BUD_DAYS } from "@/lib/calc/reconstitution";
-import { vialRemainingMcg } from "@/lib/calc/inventory";
+import { groupSealedVials, vialRemainingMcg, type VialGroup } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import { formatMoney, remainingValue, totalSpend } from "@/lib/calc/cost";
@@ -42,6 +42,9 @@ export default function StockPage() {
 
   const now = Date.now();
   const sealed = vials.filter((v) => v.state === "sealed");
+  // Off unless asked for, so nobody's Stock page rearranges itself after an update.
+  const grouping = settings.groupIdenticalVials === true;
+  const sealedGroups = useMemo(() => groupSealedVials(sealed), [sealed]);
   const open = vials.filter((v) => v.state === "reconstituted");
   const done = vials.filter((v) => v.state === "finished" || v.state === "discarded");
 
@@ -152,10 +155,14 @@ export default function StockPage() {
         <section>
           <SectionLabel>Sealed</SectionLabel>
           <div className="space-y-2.5">
-            {sealed.map((v) => (
-              <div key={v.id}>
+            {(grouping
+              ? sealedGroups.map((g) => ({ vial: g.vials[0], group: g }))
+              : sealed.map((v) => ({ vial: v, group: undefined as VialGroup | undefined }))
+            ).map(({ vial: v, group }) => (
+              <div key={group ? group.key : v.id}>
                 <VialRow
                   vial={v}
+                  group={group}
                   now={now}
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
@@ -215,6 +222,7 @@ export default function StockPage() {
 
 function VialRow({
   vial,
+  group,
   now,
   peptideName,
   budWarningDays,
@@ -225,6 +233,12 @@ function VialRow({
   onFinish,
 }: {
   vial: Vial;
+  /**
+   * Present when this row stands for several identical sealed vials. `vial` is
+   * then the oldest of them, which is what the buttons act on, while the
+   * figures below are the group's.
+   */
+  group?: VialGroup;
   now: number;
   peptideName: string;
   budWarningDays: number;
@@ -237,6 +251,13 @@ function VialRow({
   const st = vialStatus(vial, now);
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
 
+  const many = (group?.count ?? 1) > 1;
+  // One row, one set of numbers: either this vial's or the whole group's.
+  const remainingMcg = group ? group.remainingMcg : st.remainingMcg;
+  const rowCost = group ? group.cost : vial.cost;
+  const rowCurrency = (group ? group.currency : vial.currency) ?? currency;
+  const strengthMgTotal = group ? group.strengthMg * group.count : vial.strengthMg;
+
   return (
     <Card className={`flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
       <div className="h-14 w-8 shrink-0">
@@ -247,6 +268,7 @@ function VialRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[14.5px] text-[var(--ink)]">{peptideName}</span>
           <span className="tnum font-mono text-[13px] text-[var(--muted)]">{vial.strengthMg} mg</span>
+          {many && <Badge tone="sky">{group!.count} vials</Badge>}
           {st.expired && <Badge tone="rose">past date</Badge>}
           {!st.expired && budSoon && <Badge tone="tangerine">use soon</Badge>}
         </div>
@@ -266,29 +288,48 @@ function VialRow({
         ) : (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
             <span>Lyophilised, unopened</span>
-            {vial.expiresAt && <span>expires {formatDate(vial.expiresAt)}</span>}
+            {many && <span className="tnum font-mono">{trim(strengthMgTotal, 2)} mg in total</span>}
+            {/* The soonest date in the group, because that is the one that bites first. */}
+            {(group ? group.expiresAt : vial.expiresAt) != null && (
+              <span>
+                {many ? "first expires" : "expires"}{" "}
+                {formatDate((group ? group.expiresAt : vial.expiresAt)!)}
+              </span>
+            )}
           </div>
         )}
 
         {doseMcg > 0 && (
           <p className="mt-1 text-[12.5px]">
             <span className="tnum font-mono text-[var(--tangerine)]">
-              {Math.floor(st.remainingMcg / doseMcg)}
+              {Math.floor(remainingMcg / doseMcg)}
             </span>{" "}
             <span className="text-[var(--muted)]">
               more {formatDose(doseMcg)} dose
-              {Math.floor(st.remainingMcg / doseMcg) === 1 ? "" : "s"} in this vial ·{" "}
-              {formatDose(st.remainingMcg)} left
+              {Math.floor(remainingMcg / doseMcg) === 1 ? "" : "s"}{" "}
+              {many ? "across these vials" : "in this vial"} · {formatDose(remainingMcg)} left
             </span>
           </p>
         )}
 
-        {(vial.supplier || vial.cost != null) && (
+        {((!many && (vial.supplier || vial.cost != null)) || (many && rowCost != null)) && (
           <p className="mt-1 text-[12px] text-[var(--faint)]">
             {[
-              vial.supplier,
-              vial.cost != null
-                ? `${formatMoney(vial.cost, vial.currency ?? currency)}${doseMcg > 0 ? ` · ${formatMoney((vial.cost / vial.strengthMg) * (doseMcg / 1000), vial.currency ?? currency)} a dose` : ""}`
+              // Suppliers can differ across a group, so only a single vial claims one.
+              many ? null : vial.supplier,
+              rowCost != null
+                ? `${formatMoney(rowCost, rowCurrency)}${
+                    many ? " in total" : ""
+                  }${
+                    doseMcg > 0
+                      ? ` · ${formatMoney((rowCost / strengthMgTotal) * (doseMcg / 1000), rowCurrency)} a dose`
+                      : ""
+                  }`
+                : null,
+              // Named rather than folded in, so a total is never read as covering
+              // vials that were never priced.
+              many && group!.unpricedCount > 0
+                ? `${group!.unpricedCount} without a price`
                 : null,
             ]
               .filter(Boolean)
@@ -299,7 +340,7 @@ function VialRow({
         <div className="mt-2.5 flex flex-wrap gap-2">
           {onReconstitute && (
             <Button onClick={onReconstitute} className="px-3 py-1.5 text-[13px]">
-              Reconstitute
+              Reconstitute{many ? " one" : ""}
             </Button>
           )}
           {onFinish && (
@@ -312,7 +353,8 @@ function VialRow({
             variant="ghost"
             className="px-3 py-1.5 text-[13px] text-[var(--rose)] hover:border-[var(--rose)]/40 hover:text-[var(--rose)]"
           >
-            <Trash2 size={13} /> Delete
+            {/* Never the whole group. One click, one vial, the oldest of them. */}
+            <Trash2 size={13} /> Delete{many ? " one" : ""}
           </Button>
         </div>
       </div>
