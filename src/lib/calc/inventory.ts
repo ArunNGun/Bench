@@ -7,7 +7,8 @@
  * derived from it for display.
  */
 
-import type { Vial, VialState } from "../types";
+import type { Protocol, Vial, VialState } from "../types";
+import { protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
 
 export const MCG_PER_MG = 1000;
 
@@ -291,4 +292,41 @@ export function stockFor(
 export function daysOfSupply(stock: Stock, dosesPerWeek: number) {
   if (dosesPerWeek <= 0) return null;
   return (stock.dosesRemaining / dosesPerWeek) * 7;
+}
+
+/**
+ * Days of supply left, by spending the stock against the actual plan.
+ *
+ * `daysOfSupply` multiplies today's dose and today's frequency out to the
+ * horizon, which is right for a protocol that never changes and wrong for one
+ * that does. On a plan that steps from 1 mg to 2 mg, holding today's figures
+ * constant overstates the runway by the better part of a factor of two, and
+ * "126 days left" on a stock that covers seventy is the kind of wrong that gets
+ * noticed at the wrong moment.
+ *
+ * So this walks the scheduled doses forward, subtracting each one at the dose
+ * that will actually be drawn, and reports when the stock runs out.
+ *
+ * Returns null when nothing is scheduled, matching `daysOfSupply` for an
+ * as-needed protocol, and caps at `horizonDays` rather than looping to the end
+ * of time on a stock that outlives the question.
+ */
+export function daysOfSupplyForProtocol(
+  stock: Stock,
+  protocol: Protocol,
+  nowMs: number,
+  horizonDays = 730): number | null {
+  const horizonMs = nowMs + horizonDays * 86_400_000;
+  const times = protocolDoseTimesBetween(protocol, nowMs, horizonMs);
+  if (!times.length) return null;
+
+  let left = stock.availableMcg;
+  for (const at of times) {
+    const dose = scheduledDoseMcg(protocol, at);
+    if (dose <= 0) continue;
+    if (left < dose) return (at - nowMs) / 86_400_000;
+    left -= dose;
+  }
+
+  return horizonDays;
 }

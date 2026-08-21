@@ -5,7 +5,7 @@ import { Printer } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { allPeptides, findPeptide, useProfileData, useStore } from "@/lib/store";
 import { findMarker } from "@/lib/data/labs";
-import { adherence, dosesPerWeek, logsForProtocol, scheduledDoseMcg } from "@/lib/calc/schedule";
+import { adherence, protocolDosesPerWeek, logsForProtocol, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { stackIssues } from "@/lib/calc/stack";
 import { toDisplayWeight, weightChange } from "@/lib/calc/outcomes";
 import { averages } from "@/lib/calc/checkins";
@@ -129,7 +129,7 @@ export default function ReportPage() {
                   peptide?.name ?? p.peptideId,
                   peptide ? CATEGORY_LABEL[peptide.category] : "unknown",
                   formatDose(scheduledDoseMcg(p, now)),
-                  `${trim(dosesPerWeek(p.schedule), 2)} per week`,
+                  `${trim(protocolDosesPerWeek(p, now), 2)} per week`,
                   formatDate(p.startedAt),
                   a.expected > 0 ? `${a.taken} of ${a.expected}` : "n/a",
                 ];

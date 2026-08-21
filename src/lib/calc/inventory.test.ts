@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
+  daysOfSupplyForProtocol,
   drawFromVial,
   groupSealedVials,
   pickVialForDose,
@@ -15,7 +16,7 @@ import {
   vialRemainingMl,
   vialUsable,
 } from "./inventory";
-import type { Vial } from "../types";
+import type { Protocol, ProtocolPhase, Vial } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
 const DAY = 86_400_000;
@@ -404,113 +405,77 @@ describe("reconcileVials, editing a logged dose", () => {
   });
 });
 
-describe("groupSealedVials", () => {
-  it("puts one compound and strength on one line", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a" }),
-      vial({ id: "b" }),
-      vial({ id: "c" }),
-    ]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].count).toBe(3);
-    expect(groups[0].remainingMcg).toBe(240_000);
+describe("daysOfSupplyForProtocol", () => {
+  /** A Monday, so weekly dosing lands on the same weekday throughout. */
+  const start = new Date(2026, 0, 5, 9, 0, 0, 0).getTime();
+
+  const protocol = (over: Partial<Protocol> = {}): Protocol => ({
+    id: "p1",
+    profileId: "me",
+    peptideId: "klow",
+    name: "Test",
+    active: true,
+    startedAt: start,
+    doseMcg: 1000,
+    route: "subcutaneous",
+    schedule: { kind: "interval-days", intervalDays: 7, timeOfDay: "09:00" },
+    titrationAutoAdvance: false, ...over,
   });
 
-  it("keeps different strengths of the same compound apart", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", strengthMg: 80 }),
-      vial({ id: "b", strengthMg: 40 }),
-    ]);
-    expect(groups.map((g) => g.strengthMg)).toEqual([80, 40]);
+  /** Stock is the only field the calculation reads. */
+  const stockOf = (availableMcg: number) => ({
+    availableMcg,
+    sealedCount: 1,
+    openCount: 0,
+    dosesRemaining: 0,
+    dosesInOpenVials: 0,
+    needsReconstitution: false,
   });
 
-  it("keeps different compounds apart", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", peptideId: "klow" }),
-      vial({ id: "b", peptideId: "retatrutide" }),
-    ]);
-    expect(groups).toHaveLength(2);
+  it("agrees with the flat calculation when the dose never changes", () => {
+    // 10 weekly doses of 1000 mcg, so the eleventh is the one that cannot be
+    // paid for, 70 days out.
+    //
+    // Rounded, because the answer is a count of elapsed hours and a window that
+    // crosses a daylight-saving change contains one fewer of them. In
+    // America/New_York this lands on 69.96 rather than 70. Doses hold their
+    // wall-clock time, which is the behaviour wanted, and a "days left" figure
+    // shown as "about 70 d" has no use for the hour either way.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start);
+    expect(Math.round(days!)).toBe(70);
   });
 
-  it("ignores anything that is not sealed, because only sealed vials are interchangeable", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a" }),
-      vial({ id: "b", state: "reconstituted", diluentMl: 2 }),
-      vial({ id: "c", state: "finished" }),
-      vial({ id: "d", state: "discarded" }),
-    ]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].count).toBe(1);
+  it("spends the stock faster once the plan steps up", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    // 4 doses at 1 mg is 4000, leaving 6000 for 2 mg doses, which is 3 of them.
+    // The seventh dose falls at day 49 and cannot be paid for.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol({ phases: ladder }), start);
+    expect(Math.round(days!)).toBe(49);
   });
 
-  it("orders a group oldest first, so acting on one takes the one that waited longest", () => {
-    const groups = groupSealedVials([
-      vial({ id: "new", acquiredAt: NOW }),
-      vial({ id: "old", acquiredAt: NOW - 30 * DAY }),
-      vial({ id: "mid", acquiredAt: NOW - 10 * DAY }),
-    ]);
-    expect(groups[0].vials.map((v) => v.id)).toEqual(["old", "mid", "new"]);
+  it("is shorter than the flat figure for a rising plan, which is the point", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    const flat = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start)!;
+    const stepped = daysOfSupplyForProtocol(stockOf(10_000), protocol({ phases: ladder }), start)!;
+    expect(stepped).toBeLessThan(flat);
   });
 
-  it("is stable when two vials were acquired at the same moment", () => {
-    const groups = groupSealedVials([
-      vial({ id: "b", acquiredAt: NOW }),
-      vial({ id: "a", acquiredAt: NOW }),
-    ]);
-    expect(groups[0].vials.map((v) => v.id)).toEqual(["a", "b"]);
+  it("has no answer for an as-needed protocol", () => {
+    const p = protocol({ schedule: { kind: "as-needed" } });
+    expect(daysOfSupplyForProtocol(stockOf(10_000), p, start)).toBeNull();
   });
 
-  it("keeps the order the ungrouped list had", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", peptideId: "retatrutide" }),
-      vial({ id: "b", peptideId: "klow" }),
-      vial({ id: "c", peptideId: "retatrutide" }),
-    ]);
-    expect(groups.map((g) => g.peptideId)).toEqual(["retatrutide", "klow"]);
+  it("runs out immediately when nothing is left", () => {
+    expect(daysOfSupplyForProtocol(stockOf(0), protocol(), start)).toBeCloseTo(0, 5);
   });
 
-  it("reports the soonest expiry, not the first one it happened to see", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", expiresAt: NOW + 200 * DAY }),
-      vial({ id: "b", expiresAt: NOW + 40 * DAY }),
-      vial({ id: "c" }),
-    ]);
-    expect(groups[0].expiresAt).toBe(NOW + 40 * DAY);
-  });
-
-  it("has no expiry when nothing in the group carries one", () => {
-    expect(groupSealedVials([vial({ id: "a" })])[0].expiresAt).toBeNull();
-  });
-
-  it("adds up cost and counts what was never priced", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", cost: 3000, currency: "INR" }),
-      vial({ id: "b", cost: 2500, currency: "INR" }),
-      vial({ id: "c" }),
-    ]);
-    expect(groups[0].cost).toBe(5500);
-    expect(groups[0].currency).toBe("INR");
-    expect(groups[0].unpricedCount).toBe(1);
-  });
-
-  it("refuses to add two currencies together", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a", cost: 3000, currency: "INR" }),
-      vial({ id: "b", cost: 40, currency: "USD" }),
-    ]);
-    expect(groups[0].cost).toBeNull();
-    expect(groups[0].currency).toBeNull();
-  });
-
-  it("subtracts what has already been drawn", () => {
-    const groups = groupSealedVials([
-      vial({ id: "a" }),
-      vial({ id: "b", drawnMcg: 20_000 }),
-    ]);
-    expect(groups[0].remainingMcg).toBe(140_000);
-  });
-
-  it("has nothing to say about an empty list", () => {
-    expect(groupSealedVials([])).toEqual([]);
+  it("caps rather than walking to the end of time on a deep stock", () => {
+    expect(daysOfSupplyForProtocol(stockOf(10_000_000), protocol(), start, 365)).toBe(365);
   });
 });

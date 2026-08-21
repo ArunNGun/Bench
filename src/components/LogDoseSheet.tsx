@@ -33,13 +33,14 @@ import {
   unitsFromDose,
   type SyringeScale,
 } from "@/lib/calc/reconstitution";
-import { dosesPerWeek, scheduledDoseMcg } from "@/lib/calc/schedule";
+import { protocolDosesPerWeek, scheduledDoseMcg } from "@/lib/calc/schedule";
 import {
   COMMON_SIDE_EFFECTS,
   FEELING_LABELS,
   INJECTION_SITES,
   ROUTE_LABEL,
   type InjectionSite,
+  type Protocol,
   type Route,
 } from "@/lib/types";
 
@@ -57,6 +58,13 @@ import { formatDose, fromDateTimeLocal, toDateTimeLocal, trim } from "@/lib/form
  * Logging a dose. Opens as a bottom sheet on mobile and a centred panel on
  * desktop, because on a phone this gets used one-handed right after injecting.
  */
+/**
+ * An explicit "this dose belongs to no plan", as distinct from "nothing picked
+ * yet". Without the distinction there is no way to record a one-off dose of a
+ * compound you also have a protocol for.
+ */
+const NO_PROTOCOL = "none";
+
 export function LogDoseSheet({
   open,
   onClose,
@@ -82,14 +90,45 @@ export function LogDoseSheet({
 
   const peptides = useMemo(() => allPeptides(custom), [custom]);
 
+  /**
+   * Fill the form from a protocol: its dose, its route, a vial that can supply
+   * it and the site it is due to rotate to.
+   *
+   * Shared by both directions of the pair of dropdowns, so picking a protocol
+   * and picking a peptide that happens to have one cannot drift apart.
+   */
+  function applyProtocol(proto: Protocol | undefined, forPeptideId: string, atMs: number) {
+    const dose = proto ? scheduledDoseMcg(proto, atMs) : 0;
+    setDoseMcg(dose);
+    setRoute(proto?.route ?? "subcutaneous");
+    setVialId(pickVialForDose(vials, forPeptideId, dose, atMs)?.id ?? "");
+    setSiteOverride(false);
+    setSite(suggestSite(logs.filter((l) => l.peptideId === forPeptideId), atMs, 14, proto?.sites));
+  }
+
   /** Selecting a compound, from the dropdown or straight after creating one. */
   function choosePeptide(id: string) {
     setPeptideId(id);
+    // A protocol for a different compound cannot survive the change, so the
+    // pick falls back to this peptide's own protocol or to none at all.
     const proto = protocols.find((p) => p.active && p.peptideId === id);
-    setProtocolId(proto?.id ?? "");
-    const dose = proto ? scheduledDoseMcg(proto, at) : 0;
-    setDoseMcg(dose);
-    setVialId(pickVialForDose(vials, id, dose, at)?.id ?? "");
+    setProtocolId(proto?.id ?? NO_PROTOCOL);
+    applyProtocol(proto, id, at);
+  }
+
+  /**
+   * Selecting a protocol, which is the short way in: the compound and the dose
+   * both follow from it, so the peptide dropdown never has to be visited.
+   */
+  function chooseProtocol(id: string) {
+    setProtocolId(id);
+    if (id === NO_PROTOCOL) return;
+
+    const proto = protocols.find((p) => p.id === id);
+    if (!proto) return;
+
+    setPeptideId(proto.peptideId);
+    applyProtocol(proto, proto.peptideId, at);
   }
 
   const [peptideId, setPeptideId] = useState(defaultPeptideId ?? peptides[0]?.id ?? "");
@@ -106,16 +145,28 @@ export function LogDoseSheet({
   const [doseUnit, setDoseUnit] = useState<"mcg" | "mg">("mcg");
   // Lets the pinned set be bypassed when the shot actually went elsewhere.
   const [siteOverride, setSiteOverride] = useState(false);
-  const [protocolId, setProtocolId] = useState("");
+  const [protocolId, setProtocolId] = useState(NO_PROTOCOL);
 
   const peptide = findPeptide(custom, peptideId);
-  // More than one protocol can run the same peptide on different schedules,
-  // so which one this dose belongs to has to be answerable rather than guessed.
-  const candidates = useMemo(
-    () => protocols.filter((p) => p.active && p.peptideId === peptideId),
-    [protocols, peptideId]);
-  const protocol =
-    candidates.find((p) => p.id === protocolId) ?? candidates[0];
+
+  /**
+   * Every running protocol, across all compounds, because the point of this
+   * dropdown is to reach a dose without deciding on the peptide first. More
+   * than one protocol can run the same peptide on different schedules, and
+   * they appear separately for exactly that reason.
+   */
+  const activeProtocols = useMemo(
+    () => protocols.filter((p) => p.active),
+    [protocols]);
+
+  /**
+   * Explicit rather than inferred. An empty pick used to fall through to the
+   * first protocol for the peptide, which left no way to record a dose taken
+   * outside any plan.
+   */
+  const protocol = protocolId === NO_PROTOCOL
+    ? undefined
+    : protocols.find((p) => p.id === protocolId);
   const syringe = syringeById(syringeId) ?? SYRINGES[2];
 
   // Sites pinned to this protocol, if any were chosen when it was set up.
@@ -146,7 +197,7 @@ export function LogDoseSheet({
     // Editing loads the recorded values verbatim rather than the protocol's.
     if (editing) {
       setPeptideId(editing.peptideId);
-      setProtocolId(editing.protocolId ?? "");
+      setProtocolId(editing.protocolId ?? NO_PROTOCOL);
       setDoseMcg(editing.doseMcg);
       setAt(editing.at);
       setRoute(editing.route);
@@ -172,12 +223,9 @@ export function LogDoseSheet({
     setSite("");
     setSiteOverride(false);
     const proto = protocols.find((p) => p.active && p.peptideId === id);
-    setProtocolId(proto?.id ?? "");
-    setDoseMcg(proto ? scheduledDoseMcg(proto, Date.now()) : 0);
-    setRoute(proto?.route ?? "subcutaneous");
-    setVialId(pickVialForDose(vials, id, proto ? scheduledDoseMcg(proto, Date.now()) : 0, Date.now())?.id ?? "");
-    // Suggest the site used least recently, so rotation happens by default.
-    setSite(suggestSite(logs.filter((l) => l.peptideId === id), Date.now(), 14, proto?.sites));
+    setProtocolId(proto?.id ?? NO_PROTOCOL);
+    // Suggests the site used least recently, so rotation happens by default.
+    applyProtocol(proto, id, Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultPeptideId, editId]);
 
@@ -318,6 +366,44 @@ export function LogDoseSheet({
         </div>
 
         <div className="space-y-4 p-4">
+          {/*
+            The protocol comes first because it answers the compound and the
+            dose together, which is what someone recording a planned dose
+            already knows. The peptide dropdown stays below it, still free, for
+            the dose that belongs to no plan.
+          */}
+          {(activeProtocols.length > 0 || protocol) && (
+            <Field
+              label="Protocol"
+              hint={
+                protocol
+                  ? "Sets the compound, the dose and the site to rotate to."
+                  : "Recording this dose outside any plan."
+              }
+            >
+              <Select value={protocolId} onChange={(e) => chooseProtocol(e.target.value)}>
+                <option value={NO_PROTOCOL}>No protocol, a one-off dose</option>
+                {activeProtocols.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {findPeptide(custom, p.peptideId)?.name ?? p.peptideId}, {p.name},{" "}
+                    {formatDose(scheduledDoseMcg(p, at))}
+                  </option>
+                ))}
+                {/*
+                  Editing an old dose can point at a protocol that has since
+                  been paused or deleted. Listing it keeps the dropdown honest
+                  about what the log actually says.
+                */}
+                {protocol && !protocol.active && (
+                  <option value={protocol.id}>
+                    {findPeptide(custom, protocol.peptideId)?.name ?? protocol.peptideId},{" "}
+                    {protocol.name}, no longer running
+                  </option>
+                )}
+              </Select>
+            </Field>
+          )}
+
           <Field label="Peptide">
             <Select value={peptideId} onChange={(e) => choosePeptide(e.target.value)}>
               {peptides.map((p) => (
@@ -328,30 +414,6 @@ export function LogDoseSheet({
             </Select>
             <AddCompoundInline onCreated={(p) => choosePeptide(p.id)} />
           </Field>
-
-          {candidates.length > 1 && (
-            <Field label="Protocol" hint="You have more than one running for this peptide.">
-              <Select
-                value={protocol?.id ?? ""}
-                onChange={(e) => {
-                  const next = candidates.find((p) => p.id === e.target.value);
-                  setProtocolId(e.target.value);
-                  if (next) {
-                    setDoseMcg(scheduledDoseMcg(next, at));
-                    setRoute(next.route);
-                    setSiteOverride(false);
-                    setSite(suggestSite(peptideLogs, at, 14, next.sites));
-                  }
-                }}
-              >
-                {candidates.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}, {formatDose(scheduledDoseMcg(p, at))}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
@@ -570,7 +632,7 @@ export function LogDoseSheet({
                 blend={peptide}
                 doseMcg={doseMcg}
                 resolve={(id) => findPeptide(custom, id)}
-                dosesPerWeek={protocol ? dosesPerWeek(protocol.schedule) : undefined}
+                dosesPerWeek={protocol ? protocolDosesPerWeek(protocol, at) : undefined}
                 compact
               />
             </div>

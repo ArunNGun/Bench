@@ -19,8 +19,8 @@ import {
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { snapshot, type DoseEvent } from "@/lib/calc/pk";
-import { dosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { daysOfSupply } from "@/lib/calc/inventory";
+import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
+import { daysOfSupplyForProtocol } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
@@ -106,6 +106,19 @@ export default function NowPage() {
       const due = dueStatus(protocol, now, { lastLoggedAt });
       const stock = stockFor(vials, protocol.peptideId, targetMcg, now);
 
+      /**
+       * What "100% of a single-dose peak" is measured against.
+       *
+       * The curve is built from doses that were actually logged, so the
+       * yardstick has to come from the same place. Using the scheduled dose
+       * mixed the plan with reality: editing a running protocol from 2 mg down
+       * to 1 mg doubled the reading overnight, because every logged 2 mg dose
+       * was suddenly being compared against a 1 mg reference, and nothing in
+       * the body had changed at all. Falls back to the plan only when there is
+       * nothing logged to measure against.
+       */
+      const referenceMcg = lastLog?.doseMcg || targetMcg || 1;
+
       // A blend is not one compound, split it so each component can be
       // modelled on its own half-life instead of the whole thing going dark.
       const blendParts =
@@ -114,7 +127,7 @@ export default function NowPage() {
               peptide,
               targetMcg,
               (id) => findPeptide(custom, id),
-              dosesPerWeek(protocol.schedule))
+              protocolDosesPerWeek(protocol, now))
           : [];
 
       const modellable = peptide?.halfLifeHours != null;
@@ -123,7 +136,7 @@ export default function NowPage() {
             now,
             doses,
             { halfLifeHours: peptide!.halfLifeHours!, tmaxHours: peptide!.tmaxHours },
-            targetMcg || 1)
+            referenceMcg)
         : null;
 
       return {
@@ -131,6 +144,7 @@ export default function NowPage() {
         peptide,
         doses,
         targetMcg,
+        referenceMcg,
         due,
         stock,
         snap,
@@ -139,7 +153,7 @@ export default function NowPage() {
         lastLoggedAt,
         // What the compound is doing right now, in words.
         phase: peptide ? timelinePhaseAt(peptide, hoursSince(lastLoggedAt, now) ?? -1) : null,
-        supplyDays: daysOfSupply(stock, dosesPerWeek(protocol.schedule)),
+        supplyDays: daysOfSupplyForProtocol(stock, protocol, now),
         tone: TRACK_TONES[i % TRACK_TONES.length],
       };
     });
@@ -176,7 +190,7 @@ export default function NowPage() {
           label: t.peptide.name,
           doses: t.doses,
           params: { halfLifeHours: t.peptide.halfLifeHours, tmaxHours: t.peptide.tmaxHours },
-          referenceMcg: t.targetMcg || 1,
+          referenceMcg: t.referenceMcg,
         });
       }
     }
@@ -426,7 +440,7 @@ export default function NowPage() {
                     blend={t.peptide!}
                     doseMcg={t.targetMcg}
                     resolve={(id) => findPeptide(custom, id)}
-                    dosesPerWeek={dosesPerWeek(t.protocol.schedule)}
+                    dosesPerWeek={protocolDosesPerWeek(t.protocol, now)}
                   />
                 </div>
               )}

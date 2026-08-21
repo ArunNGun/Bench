@@ -8,7 +8,7 @@
  */
 
 import type { DoseLog, Protocol } from "../types";
-import { doseTimesBetween, endOfLocalDay, startOfLocalDay, addLocalDays } from "./schedule";
+import { protocolDoseTimesBetween, endOfLocalDay, startOfLocalDay, addLocalDays } from "./schedule";
 
 export interface DayProgress {
   /** Midnight local time for the day. */
@@ -43,7 +43,7 @@ export function dayProgress(
   const active = protocols.filter((p) => p.active);
   let expected = 0;
   for (const p of active) {
-    expected += doseTimesBetween(p.schedule, p.startedAt, day, end, p.endedAt).length;
+    expected += protocolDoseTimesBetween(p, day, end).length;
   }
 
   const onDay = logs.filter((l) => l.at >= day && l.at <= end);
