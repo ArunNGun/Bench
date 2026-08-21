@@ -19,12 +19,13 @@ import { PctPanel } from "@/components/PctPanel";
 import { ProjectionPreview } from "@/components/ProjectionPreview";
 import { allPeptides, findPeptide, useStore, useProfileData } from "@/lib/store";
 import {
-  dosesPerWeek,
-  doseTimesBetween,
   endOfLocalDay,
-  nextDoseTime,
+  phaseSpanAt,
+  protocolDoseTimesBetween,
+  protocolDosesPerWeek,
+  protocolNextDoseTime,
+  protocolPhases,
   scheduledDoseMcg,
-  titrationStepAt,
 } from "@/lib/calc/schedule";
 import {
   formatDose,
@@ -40,10 +41,12 @@ import {
   INJECTION_SITES,
   type InjectionSite,
   type Protocol,
+  type ProtocolPhase,
   type Schedule,
   type ScheduleKind,
   type TitrationStep,
 } from "@/lib/types";
+import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
@@ -137,8 +140,15 @@ export default function PlanPage() {
 
           const peptide = findPeptide(custom, p.peptideId);
           const target = scheduledDoseMcg(p, now);
-          const next = p.active ? nextDoseTime(p.schedule, p.startedAt, now, p.endedAt) : null;
-          const step = p.titration?.length ? titrationStepAt(p.titration, p.startedAt, now) : null;
+          const next = p.active ? protocolNextDoseTime(p, now) : null;
+
+          // One bar serves a published titration and a hand-built plan, because
+          // by this point they are the same shape.
+          const bands = protocolPhases(p);
+          const current = bands ? phaseSpanAt(p, now) : null;
+          // The frequency on show is the one in force now, which is not the
+          // protocol's own once a phase overrides it.
+          const showSchedule = current?.schedule ?? p.schedule;
 
           return (
             <Card key={p.id} className={`group p-4 ${p.active ? "" : "opacity-60"}`}>
@@ -152,18 +162,19 @@ export default function PlanPage() {
                       {peptide?.name ?? p.peptideId}
                     </Link>
                     {!p.active && <Badge>paused</Badge>}
-                    {step && (
+                    {bands && current && (
                       <Badge tone="sky">
-                        step {step.index + 1} of {p.titration!.length}
+                        {p.phases?.length ? "week band" : "step"} {current.index + 1} of{" "}
+                        {bands.length}
                       </Badge>
                     )}
                   </div>
                   <p className="mt-1 text-[13px] text-[var(--muted)]">{p.name}</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
                     <span className="tnum font-mono text-[var(--tangerine)]">{formatDose(target)}</span>
-                    <span className="text-[var(--muted)]">{describeSchedule(p.schedule)}</span>
+                    <span className="text-[var(--muted)]">{describeSchedule(showSchedule)}</span>
                     <span className="text-[var(--faint)]">
-                      {trim(dosesPerWeek(p.schedule), 2)} per week
+                      {trim(protocolDosesPerWeek(p, now), 2)} per week
                     </span>
                     {next && (
                       <span className="text-[var(--muted)]">next {relativeTime(next, now)}</span>
@@ -204,23 +215,33 @@ export default function PlanPage() {
                 </div>
               </div>
 
-              {p.titration && p.titration.length > 0 && (
+              {bands && bands.length > 0 && (
                 <div className="mt-3.5 border-t border-[var(--line)] pt-3">
                   <div className="flex gap-1">
-                    {p.titration.map((s, i) => (
+                    {bands.map((s, i) => (
                       <div
                         key={s.step}
-                        title={`${formatDose(s.doseMcg)} for ${s.weeks} week${s.weeks === 1 ? "" : "s"}`}
+                        title={describeBand(s, i === bands.length - 1)}
                         className={`h-1.5 flex-1 rounded-full ${
-                          step && i <= step.index ? "bg-[var(--tangerine)]" : "bg-[var(--line)]"
+                          current && i <= current.index ? "bg-[var(--tangerine)]" : "bg-[var(--line)]"
                         }`}
                       />
                     ))}
                   </div>
                   <p className="mt-2 text-[12px] text-[var(--faint)]">
-                    {p.titrationAutoAdvance
-                      ? "Dose advances automatically with the plan."
-                      : "Fixed dose, the plan is shown for reference only."}
+                    {p.phases?.length
+                      ? `Your own plan, ${bands.length} bands by week.`
+                      : "Dose advances automatically with the plan."}
+                  </p>
+                </div>
+              )}
+
+              {/* A titration held at a fixed dose is a reference, not a plan,
+                  so it is drawn only when nothing else is governing. */}
+              {!bands && p.titration && p.titration.length > 0 && (
+                <div className="mt-3.5 border-t border-[var(--line)] pt-3">
+                  <p className="text-[12px] text-[var(--faint)]">
+                    Fixed dose, the plan is shown for reference only.
                   </p>
                 </div>
               )}
@@ -230,6 +251,16 @@ export default function PlanPage() {
       </div>
     </div>
   );
+}
+
+/** Tooltip for one band of the plan bar. */
+function describeBand(phase: ProtocolPhase, isLast: boolean) {
+  const dose = formatDose(phase.doseMcg);
+  const span = isLast
+    ? "onwards"
+    : `for ${phase.weeks} week${phase.weeks === 1 ? "" : "s"}`;
+  const freq = phase.schedule ? `, ${describeSchedule(phase.schedule).toLowerCase()}` : "";
+  return `${dose} ${span}${freq}`;
 }
 
 function describeSchedule(s: Schedule) {
@@ -260,6 +291,9 @@ function describeSchedule(s: Schedule) {
  */
 const EXISTING_TITRATION = "__existing__";
 
+/** How a protocol decides its dose over time. */
+type PlanMode = "fixed" | "titration" | "phases";
+
 function sameSteps(a: TitrationStep[], b: TitrationStep[]) {
   return (
     a.length === b.length &&
@@ -278,6 +312,30 @@ function sameSchedule(a: Schedule, b: Schedule) {
     (a.cycleWeeksOn ?? null) === (b.cycleWeeksOn ?? null) &&
     (a.cycleWeeksOff ?? null) === (b.cycleWeeksOff ?? null) &&
     (a.daysOfWeek ?? []).join() === (b.daysOfWeek ?? []).join());
+}
+
+/** Steps are 1, 2, 3 on the way out, whatever adding and removing left behind. */
+function renumberPhases(phases: ProtocolPhase[]) {
+  return phases.map((p, i) => ({ ...p, step: i + 1 }));
+}
+
+/**
+ * Phase lists are equal when their bands are. A band that only differs by an
+ * absent versus an equivalent schedule counts as unchanged, so simply opening
+ * the form and saving does not claim to have moved anything.
+ */
+function samePhases(a?: ProtocolPhase[], b?: ProtocolPhase[]) {
+  if (!a?.length && !b?.length) return true;
+  if (!a?.length || !b?.length) return false;
+  if (a.length !== b.length) return false;
+
+  return a.every((phase, i) => {
+    const other = b[i];
+    if (phase.doseMcg !== other.doseMcg || phase.weeks !== other.weeks) return false;
+    if (!phase.schedule && !other.schedule) return true;
+    if (!phase.schedule || !other.schedule) return false;
+    return sameSchedule(phase.schedule, other.schedule);
+  });
 }
 
 /**
@@ -313,6 +371,18 @@ function ProtocolForm({
   const [cycleOff, setCycleOff] = useState(initial?.schedule.cycleWeeksOff ?? 0);
   const [sites, setSites] = useState<InjectionSite[]>(initial?.sites ?? []);
 
+  // How the dose is decided. Three mutually exclusive answers, so one control
+  // rather than a set of switches that could contradict each other.
+  const [planMode, setPlanMode] = useState<PlanMode>(() => {
+    if (initial?.phases?.length) return "phases";
+    if (initial?.titration?.length) return "titration";
+    return "fixed";
+  });
+  const [phases, setPhases] = useState<ProtocolPhase[]>(
+    () => initial?.phases ?? [{ step: 1, doseMcg: initial?.doseMcg ?? 500, weeks: 4 }]);
+  const [doseUnit, setDoseUnit] = useState<DoseUnit>(() =>
+    (initial?.phases ?? []).some((p) => p.doseMcg >= 1000) ? "mg" : "mcg");
+
   // A saved protocol stores the titration steps, not the id of the plan they
   // came from, so the plan has to be recognised by its contents.
   const [titrationId, setTitrationId] = useState(() => {
@@ -325,10 +395,23 @@ function ProtocolForm({
   const peptide = peptides.find((p) => p.id === peptideId);
   const titration = peptide?.titrations?.find((t) => t.id === titrationId);
 
-  const keepingExisting = titrationId === EXISTING_TITRATION && !!initial?.titration?.length;
-  const titrationSteps = titration ? titration.steps : keepingExisting ? initial!.titration : undefined;
+  const usingPhases = planMode === "phases";
+  const keepingExisting =
+    planMode === "titration" && titrationId === EXISTING_TITRATION && !!initial?.titration?.length;
+
+  const titrationSteps =
+    planMode !== "titration"
+      ? undefined
+      : titration
+        ? titration.steps
+        : keepingExisting
+          ? initial!.titration
+          : undefined;
   const titrationAutoAdvance = titration ? true : keepingExisting ? initial!.titrationAutoAdvance : false;
-  const lockedDose = titrationSteps?.[0]?.doseMcg;
+
+  // Phases and titrations both fix the starting dose, so the plain dose field
+  // has nothing left to decide and says so rather than accepting a contradiction.
+  const lockedDose = usingPhases ? phases[0]?.doseMcg : titrationSteps?.[0]?.doseMcg;
 
   // Route is not asked about, so an unchanged peptide keeps whatever the
   // protocol was saved with and a changed one takes the new default.
@@ -354,7 +437,10 @@ function ProtocolForm({
    * this is the one edit that reaches backwards.
    */
   const rewritesHistory =
-    !!initial && (!sameSchedule(schedule, initial.schedule) || startedAt !== initial.startedAt);
+    !!initial &&
+    (!sameSchedule(schedule, initial.schedule) ||
+      startedAt !== initial.startedAt ||
+      !samePhases(usingPhases ? phases : undefined, initial.phases));
 
   /**
    * The protocol as currently described by the form, so the projection below
@@ -374,6 +460,7 @@ function ProtocolForm({
       schedule,
       titration: titrationSteps,
       titrationAutoAdvance,
+      phases: usingPhases ? phases : undefined,
     }),
     [
       initial,
@@ -384,6 +471,8 @@ function ProtocolForm({
       doseMcg,
       route,
       schedule,
+      usingPhases,
+      phases,
       titrationSteps,
       titrationAutoAdvance,
     ]);
@@ -420,47 +509,95 @@ function ProtocolForm({
         <AddCompoundInline onCreated={(p) => pick(p.id)} />
       </Field>
 
-      {((peptide?.titrations && peptide.titrations.length > 0) || keepingExisting) && (
-        <Field
-          label="Titration plan"
-          hint={titration?.note ?? "Optional. Steps the dose up over time."}
-        >
-          <Select value={titrationId} onChange={(e) => setTitrationId(e.target.value)}>
-            <option value="">No titration, fixed dose</option>
-            {keepingExisting && (
-              <option value={EXISTING_TITRATION}>
-                Keep the existing steps ({initial!.titration!.length} of them)
-              </option>
-            )}
-            {peptide?.titrations?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
+      <Field
+        label="How the dose is decided"
+        hint={
+          planMode === "phases"
+            ? "Your own bands of weeks. Each one can carry its own frequency as well as its own dose."
+            : planMode === "titration"
+              ? "A published escalation for this compound."
+              : "One dose, held for as long as the protocol runs."
+        }
+      >
+        <Segmented
+          ariaLabel="Dose plan"
+          options={[
+            { value: "fixed", label: "Fixed" },
+            { value: "titration", label: "Titration" },
+            { value: "phases", label: "By weeks" },
+          ]}
+          value={planMode}
+          onChange={setPlanMode}
+          className="w-full"
+        />
+      </Field>
+
+      {planMode === "titration" &&
+        ((peptide?.titrations && peptide.titrations.length > 0) || keepingExisting ? (
+          <Field
+            label="Titration plan"
+            hint={titration?.note ?? "Steps the dose up over time."}
+          >
+            <Select value={titrationId} onChange={(e) => setTitrationId(e.target.value)}>
+              <option value="">No titration, fixed dose</option>
+              {keepingExisting && (
+                <option value={EXISTING_TITRATION}>
+                  Keep the existing steps ({initial!.titration!.length} of them)
+                </option>
+              )}
+              {peptide?.titrations?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <p className="text-[12.5px] text-[var(--muted)]">
+            No published titration exists for {peptide?.name ?? "this compound"}. Build your own
+            with By weeks, or keep a fixed dose.
+          </p>
+        ))}
+
+      {usingPhases && (
+        <Field label="The plan, week by week">
+          <PhaseEditor
+            phases={phases}
+            onChange={setPhases}
+            unit={doseUnit}
+            onUnitChange={setDoseUnit}
+            protocolSchedule={schedule}
+          />
         </Field>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label={lockedDose !== undefined ? "Starting dose" : "Dose"}
-          hint={
-            lockedDose !== undefined
-              ? `Set by the plan: ${formatDose(lockedDose)}`
-              : peptide?.doseRanges[0]
-                ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
-                : undefined
-          }
-        >
-          <NumberInput
-            value={lockedDose ?? doseMcg}
-            min={0}
-            step={25}
-            suffix="mcg"
-            disabled={lockedDose !== undefined}
-            onChange={(e) => setDoseMcg(Number(e.target.value))}
-          />
-        </Field>
+        {/*
+          With a week by week plan the dose is the first band's, so a second
+          disabled box showing the same figure in a different unit is one place
+          too many to read it from. The bands are directly above.
+        */}
+        {!usingPhases && (
+          <Field
+            label={lockedDose !== undefined ? "Starting dose" : "Dose"}
+            hint={
+              lockedDose !== undefined
+                ? `Set by the plan: ${formatDose(lockedDose)}`
+                : peptide?.doseRanges[0]
+                  ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
+                  : undefined
+            }
+          >
+            <NumberInput
+              value={lockedDose ?? doseMcg}
+              min={0}
+              step={25}
+              suffix="mcg"
+              disabled={lockedDose !== undefined}
+              onChange={(e) => setDoseMcg(Number(e.target.value))}
+            />
+          </Field>
+        )}
 
         <Field label="Start date">
           <input
@@ -472,7 +609,14 @@ function ProtocolForm({
         </Field>
       </div>
 
-      <Field label="How often">
+      <Field
+        label="How often"
+        hint={
+          usingPhases
+            ? "The default for bands that do not set their own."
+            : undefined
+        }
+      >
         <Segmented
           ariaLabel="Schedule type"
           options={[
@@ -650,6 +794,7 @@ function ProtocolForm({
               schedule,
               titration: titrationSteps,
               titrationAutoAdvance,
+              phases: usingPhases ? renumberPhases(phases) : undefined,
               sites: sites.length ? sites : undefined,
               notes: initial?.notes,
             })
@@ -677,7 +822,7 @@ function Upcoming() {
     const rows = protocols
       .filter((p) => p.active)
       .flatMap((p) =>
-        doseTimesBetween(p.schedule, p.startedAt, now, to, p.endedAt).map((at) => ({
+        protocolDoseTimesBetween(p, now, to).map((at) => ({
           at,
           name: findPeptide(custom, p.peptideId)?.name ?? p.peptideId,
           doseMcg: scheduledDoseMcg(p, at),

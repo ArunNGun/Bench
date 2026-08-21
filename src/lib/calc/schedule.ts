@@ -7,7 +7,7 @@
  * keep a dose at the same wall-clock time.
  */
 
-import type { Protocol, Schedule, TitrationStep } from "../types";
+import type { Protocol, ProtocolPhase, Schedule, TitrationStep } from "../types";
 
 export const DAY_MS = 86_400_000;
 
@@ -204,8 +204,196 @@ export function titrationStepAt(steps: TitrationStep[], startedAt: number, atMs:
   return { index: steps.length - 1, step: steps[steps.length - 1] };
 }
 
+// ---------------------------------------------------------------------------
+// Phases
+//
+// A phase list is the general form of a titration: weeks that each carry a dose
+// and may carry their own frequency. Everything below resolves that list onto
+// the calendar and then defers to the schedule primitives above, so a protocol
+// with no phases takes exactly the same path it always did.
+// ---------------------------------------------------------------------------
+
+/** A phase placed on the calendar, ready to be asked for dose times. */
+export interface PhaseSpan {
+  index: number;
+  phase: ProtocolPhase;
+  /** The frequency in force, the phase's own or the protocol's. */
+  schedule: Schedule;
+  /**
+   * What interval and cycle maths count from. Each phase counts from its own
+   * beginning, so "from week 4, every 3 days" means every third day starting at
+   * week 4 rather than a rhythm inherited from a start date months earlier.
+   */
+  anchor: number;
+  /** First instant covered. */
+  from: number;
+  /** Last instant covered. Infinity for the final phase, which runs on. */
+  to: number;
+}
+
+/**
+ * The phase list governing a protocol, or null when none does.
+ *
+ * An auto-advancing titration is read as a phase list with no frequency of its
+ * own, which is exactly what it is. That way one set of functions serves both
+ * and there is no second code path to keep in step.
+ */
+export function protocolPhases(protocol: Protocol): ProtocolPhase[] | null {
+  if (protocol.phases?.length) return protocol.phases;
+  if (protocol.titration?.length && protocol.titrationAutoAdvance) {
+    return protocol.titration.map((s) => ({
+      step: s.step,
+      doseMcg: s.doseMcg,
+      weeks: s.weeks,
+      note: s.note,
+    }));
+  }
+  return null;
+}
+
+/**
+ * Phases resolved onto the calendar.
+ *
+ * A protocol without phases yields a single span covering all of time, carrying
+ * the protocol's own schedule and start. That is what keeps the phase-aware
+ * functions bit for bit identical to the plain ones for existing data.
+ */
+export function phaseSpans(protocol: Protocol): PhaseSpan[] {
+  const phases = protocolPhases(protocol);
+
+  if (!phases) {
+    return [
+      {
+        index: 0,
+        phase: { step: 1, doseMcg: protocol.doseMcg, weeks: 0 },
+        schedule: protocol.schedule,
+        anchor: protocol.startedAt,
+        from: protocol.startedAt,
+        to: Infinity,
+      },
+    ];
+  }
+
+  const dayZero = startOfLocalDay(protocol.startedAt);
+  const spans: PhaseSpan[] = [];
+  let weeksSoFar = 0;
+
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    const last = i === phases.length - 1;
+
+    // The first phase begins when the protocol does, so that a protocol started
+    // at midday does not appear to have begun at that morning's midnight.
+    const anchor = i === 0 ? protocol.startedAt : addLocalDays(dayZero, weeksSoFar * 7);
+    weeksSoFar += Math.max(0, phase.weeks);
+    const to = last ? Infinity : addLocalDays(dayZero, weeksSoFar * 7) - 1;
+
+    spans.push({
+      index: i,
+      phase,
+      schedule: phase.schedule ?? protocol.schedule,
+      anchor,
+      from: anchor,
+      to,
+    });
+  }
+
+  return spans;
+}
+
+/** The phase in force at a moment, or null before the protocol starts. */
+export function phaseSpanAt(protocol: Protocol, atMs: number): PhaseSpan | null {
+  if (atMs < startOfLocalDay(protocol.startedAt)) return null;
+  const spans = phaseSpans(protocol);
+  for (const span of spans) {
+    if (atMs <= span.to) return span;
+  }
+  return spans[spans.length - 1] ?? null;
+}
+
+/**
+ * Scheduled dose times for a protocol, phase by phase.
+ *
+ * Spans are consecutive and ordered, so concatenating their results keeps the
+ * output sorted without a second pass.
+ */
+export function protocolDoseTimesBetween(
+  protocol: Protocol,
+  fromMs: number,
+  toMs: number): number[] {
+  const out: number[] = [];
+
+  for (const span of phaseSpans(protocol)) {
+    const lo = Math.max(fromMs, span.from);
+    const hi = Math.min(toMs, span.to);
+    if (lo > hi) continue;
+
+    const limit = Math.min(protocol.endedAt ?? Infinity, span.to);
+    out.push(
+      ...doseTimesBetween(
+        span.schedule,
+        span.anchor,
+        lo,
+        hi,
+        Number.isFinite(limit) ? limit : undefined));
+  }
+
+  return out;
+}
+
+/** The next scheduled dose for a protocol at or after `fromMs`. */
+export function protocolNextDoseTime(protocol: Protocol, fromMs: number): number | null {
+  for (const span of phaseSpans(protocol)) {
+    if (span.to < fromMs) continue;
+
+    const limit = Math.min(protocol.endedAt ?? Infinity, span.to);
+    if (limit < fromMs) continue;
+
+    const t = nextDoseTime(
+      span.schedule,
+      span.anchor,
+      Math.max(fromMs, span.from),
+      Number.isFinite(limit) ? limit : undefined);
+    if (t != null) return t;
+  }
+  return null;
+}
+
+/** The most recent scheduled dose for a protocol at or before `fromMs`. */
+export function protocolPreviousDoseTime(protocol: Protocol, fromMs: number): number | null {
+  const spans = phaseSpans(protocol);
+
+  for (let i = spans.length - 1; i >= 0; i--) {
+    const span = spans[i];
+    if (span.from > fromMs) continue;
+
+    // Floored to the day rather than the instant, matching previousDoseTime's
+    // own floor. A protocol started at three in the afternoon still counts that
+    // morning's nine o'clock slot as its first scheduled dose.
+    const t = previousDoseTime(span.schedule, span.anchor, Math.min(fromMs, span.to));
+    if (t != null && t >= startOfLocalDay(span.from)) return t;
+  }
+  return null;
+}
+
+/**
+ * Doses per week for a protocol as it stands at a moment.
+ *
+ * Deliberately the current phase's rate rather than an average over the plan.
+ * This feeds burn rate and days of supply, and the question those answer is how
+ * fast the vial is emptying now, not how fast it will empty on average.
+ */
+export function protocolDosesPerWeek(protocol: Protocol, atMs: number) {
+  const span = phaseSpanAt(protocol, atMs);
+  return dosesPerWeek(span?.schedule ?? protocol.schedule);
+}
+
 /** The dose a protocol calls for at a given moment. */
 export function scheduledDoseMcg(protocol: Protocol, atMs: number) {
+  if (protocol.phases?.length) {
+    const span = phaseSpanAt(protocol, atMs);
+    if (span) return span.phase.doseMcg;
+  }
   if (protocol.titration?.length && protocol.titrationAutoAdvance) {
     const current = titrationStepAt(protocol.titration, protocol.startedAt, atMs);
     if (current) return current.step.doseMcg;
@@ -261,12 +449,7 @@ export function adherence(
   fromMs: number,
   toMs: number,
   toleranceHours = 36): AdherenceWindow {
-  const scheduled = doseTimesBetween(
-    protocol.schedule,
-    protocol.startedAt,
-    fromMs,
-    toMs,
-    protocol.endedAt);
+  const scheduled = protocolDoseTimesBetween(protocol, fromMs, toMs);
   const tolerance = toleranceHours * 3_600_000;
   const unmatched = logs.filter((l) => l.at >= fromMs - tolerance && l.at <= toMs + tolerance);
 
@@ -369,7 +552,7 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
 
   const grace = graceHours * 3_600_000;
   const tolerance = toleranceHours * 3_600_000;
-  const prev = previousDoseTime(protocol.schedule, protocol.startedAt, nowMs);
+  const prev = protocolPreviousDoseTime(protocol, nowMs);
   const prevCovered = prev != null && lastLoggedAt != null && lastLoggedAt >= prev - tolerance;
 
   if (prev != null && !prevCovered && (protocol.endedAt == null || prev <= protocol.endedAt)) {
@@ -380,7 +563,7 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
     return { state: "overdue", at: prev, hoursAway, label: "Overdue" };
   }
 
-  const next = nextDoseTime(protocol.schedule, protocol.startedAt, nowMs, protocol.endedAt);
+  const next = protocolNextDoseTime(protocol, nowMs);
   if (next == null) return { state: "none", at: null, hoursAway: 0, label: "No dose scheduled" };
 
   const hours = (next - nowMs) / 3_600_000;

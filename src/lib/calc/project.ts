@@ -20,7 +20,7 @@
 
 import type { Protocol } from "../types";
 import { accumulationRatio, levelSeries, timeToSteadyState, type SeriesPoint } from "./pk";
-import { doseTimesBetween, scheduledDoseMcg, dosesPerWeek } from "./schedule";
+import { protocolDoseTimesBetween, scheduledDoseMcg, protocolDosesPerWeek } from "./schedule";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -73,14 +73,14 @@ export function project(input: ProjectionInput): Projection {
   const steps = input.steps ?? 240;
   const to = from + days * DAY;
 
-  const doseTimes = doseTimesBetween(protocol.schedule, protocol.startedAt, from, to, protocol.endedAt);
+  const doseTimes = protocolDoseTimesBetween(protocol, from, to);
 
   const doses = doseTimes.map((at) => ({ at, amountMcg: scheduledDoseMcg(protocol, at) }));
   const reference = doses[0]?.amountMcg || protocol.doseMcg || 1;
 
   const series = levelSeries(from, to, steps, doses, { halfLifeHours, tmaxHours }, reference);
 
-  const perWeek = dosesPerWeek(protocol.schedule);
+  const perWeek = protocolDosesPerWeek(protocol, from);
   const intervalHours = perWeek > 0 ? (7 * 24) / perWeek : 0;
   const accumulation = intervalHours > 0 ? accumulationRatio(intervalHours, halfLifeHours) : null;
   const hoursToSteady = timeToSteadyState(halfLifeHours);
@@ -114,7 +114,7 @@ export function project(input: ProjectionInput): Projection {
  * year and a 2-hour one would project nothing readable.
  */
 export function defaultWindowDays(halfLifeHours: number, protocol: Protocol): number {
-  const perWeek = dosesPerWeek(protocol.schedule);
+  const perWeek = protocolDosesPerWeek(protocol, protocol.startedAt);
   const intervalDays = perWeek > 0 ? 7 / perWeek : 7;
   const toSteadyDays = timeToSteadyState(halfLifeHours) / 24;
   return Math.min(180, Math.max(14, Math.ceil(toSteadyDays + intervalDays * 2)));

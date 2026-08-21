@@ -16,7 +16,7 @@
 
 import type { MechanismClass, Peptide, Protocol } from "../types";
 import { decomposeDose } from "./blend";
-import { dosesPerWeek, scheduledDoseMcg } from "./schedule";
+import { protocolDosesPerWeek, scheduledDoseMcg } from "./schedule";
 
 export type StackIssueKind = "duplicate-compound" | "shared-mechanism" | "component-overlap";
 
@@ -245,7 +245,7 @@ function componentOverlap({ protocols, resolve, nowMs }: StackInput): StackIssue
     const peptide = resolve(p.peptideId);
     if (!peptide) continue;
 
-    const perWeek = dosesPerWeek(p.schedule);
+    const perWeek = protocolDosesPerWeek(p, nowMs);
     const parts = contributions(peptide, scheduledDoseMcg(p, nowMs), perWeek);
 
     for (const part of parts) {
