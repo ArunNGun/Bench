@@ -155,6 +155,87 @@ export function reconcileVials(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Grouping identical vials
+// ---------------------------------------------------------------------------
+
+/** Sealed vials of one compound and strength, treated as a single line. */
+export interface VialGroup {
+  /** Stable across renders, and unique within a list. */
+  key: string;
+  peptideId: string;
+  strengthMg: number;
+  /**
+   * Oldest first, so anything acting on "one of these" takes the vial that has
+   * been waiting longest. That is the order a person reaches into a fridge in.
+   */
+  vials: Vial[];
+  count: number;
+  /** Mass left across the group. Sealed vials are whole, but drawnMcg is honoured. */
+  remainingMcg: number;
+  /** The soonest manufacturer expiry in the group, which is the one that bites. */
+  expiresAt: number | null;
+  /**
+   * Summed cost of the vials that carry one, or null when they were bought in
+   * more than one currency. Adding 40 dollars to 3000 rupees would be a number
+   * with no meaning, and this app would rather say nothing than say that.
+   */
+  cost: number | null;
+  currency: string | null;
+  /** Vials in the group with no price recorded, so a total can be read honestly. */
+  unpricedCount: number;
+}
+
+/**
+ * Collapse interchangeable vials into one line each.
+ *
+ * Only sealed vials are interchangeable. Two reconstituted vials of the same
+ * compound differ in the things that decide what you do next, their
+ * concentration and their beyond-use date, so folding them together would hide
+ * exactly the figures the page exists to show.
+ *
+ * Groups come back in the order their first vial appeared, so turning the
+ * setting on rearranges the list as little as possible.
+ */
+export function groupSealedVials(vials: Vial[]): VialGroup[] {
+  const order: string[] = [];
+  const bucket = new Map<string, Vial[]>();
+
+  for (const v of vials) {
+    if (v.state !== "sealed") continue;
+    const key = `${v.peptideId}:${v.strengthMg}`;
+    if (!bucket.has(key)) {
+      bucket.set(key, []);
+      order.push(key);
+    }
+    bucket.get(key)!.push(v);
+  }
+
+  return order.map((key) => {
+    const group = [...bucket.get(key)!].sort(
+      (a, b) => (a.acquiredAt ?? 0) - (b.acquiredAt ?? 0) || a.id.localeCompare(b.id));
+
+    const priced = group.filter((v) => v.cost != null);
+    const currencies = new Set(priced.map((v) => v.currency ?? ""));
+    const oneCurrency = currencies.size <= 1;
+
+    const expiries = group.map((v) => v.expiresAt).filter((e): e is number => e != null);
+
+    return {
+      key,
+      peptideId: group[0].peptideId,
+      strengthMg: group[0].strengthMg,
+      vials: group,
+      count: group.length,
+      remainingMcg: group.reduce((sum, v) => sum + vialRemainingMcg(v), 0),
+      expiresAt: expiries.length ? Math.min(...expiries) : null,
+      cost: priced.length && oneCurrency ? priced.reduce((sum, v) => sum + v.cost!, 0) : null,
+      currency: priced.length && oneCurrency ? (priced[0].currency ?? null) : null,
+      unpricedCount: group.length - priced.length,
+    };
+  });
+}
+
 export interface Stock {
   /** Mass available across every usable vial. */
   availableMcg: number;

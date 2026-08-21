@@ -210,6 +210,19 @@ export default function SettingsPage() {
             />
           </Field>
         </div>
+
+        <Field
+          label="Group identical vials on Stock"
+          hint="Sealed vials of the same compound and strength share one row, with their doses and value added up. Open vials stay separate, because each has its own concentration and use-by date."
+        >
+          <Select
+            value={settings.groupIdenticalVials ? "on" : "off"}
+            onChange={(e) => updateSettings({ groupIdenticalVials: e.target.value === "on" })}
+          >
+            <option value="off">One row per vial</option>
+            <option value="on">One row per compound and strength</option>
+          </Select>
+        </Field>
       </Card>
 
       <Card className="space-y-4 p-4">
