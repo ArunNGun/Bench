@@ -7,12 +7,27 @@
  * going up", which is the actual decision during an escalation.
  */
 
-import type { DoseLog, Measurement, TitrationStep } from "../types";
+import type { DoseLog, Measurement, TitrationStep, WeightUnit } from "../types";
 import { titrationStepAt } from "./schedule";
 
 export const KG_PER_LB = 0.45359237;
 export const lbToKg = (lb: number) => lb * KG_PER_LB;
 export const kgToLb = (kg: number) => kg / KG_PER_LB;
+
+/**
+ * The two halves of showing a stored weight in the unit someone asked for.
+ *
+ * Weight is stored in kilograms everywhere, so every screen that shows or
+ * accepts one has to convert at its edges. Doing that by hand is how a screen
+ * ends up with a "lb" label over a kilogram figure, which is the bug these
+ * exist to make hard to write. Use both or neither: a field that displays
+ * through one and saves through the other is the only correct arrangement.
+ */
+export const toDisplayWeight = (kg: number, unit: WeightUnit) =>
+  unit === "lb" ? kgToLb(kg) : kg;
+
+export const fromDisplayWeight = (value: number, unit: WeightUnit) =>
+  unit === "lb" ? lbToKg(value) : value;
 
 export interface WeightPoint {
   at: number;

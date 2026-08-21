@@ -7,7 +7,7 @@ import { allPeptides, findPeptide, useProfileData, useStore } from "@/lib/store"
 import { findMarker } from "@/lib/data/labs";
 import { adherence, dosesPerWeek, logsForProtocol, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { stackIssues } from "@/lib/calc/stack";
-import { weightChange } from "@/lib/calc/outcomes";
+import { toDisplayWeight, weightChange } from "@/lib/calc/outcomes";
 import { averages } from "@/lib/calc/checkins";
 import { pctPlan } from "@/lib/calc/pct";
 import { formatDate, formatDose, trim } from "@/lib/format";
@@ -36,6 +36,7 @@ export default function ReportPage() {
   const profiles = useStore((s) => s.profiles);
   const activeId = useStore((s) => s.activeProfileId);
   const custom = useStore((s) => s.customPeptides);
+  const weightUnit = useStore((s) => s.settings.weightUnit) ?? "kg";
 
   const [windowDays, setWindowDays] = useState(90);
   const now = Date.now();
@@ -178,7 +179,7 @@ export default function ReportPage() {
               label="Weight change"
               value={
                 weight
-                  ? `${weight.deltaKg > 0 ? "+" : ""}${trim(weight.deltaKg, 1)} kg over ${windowDays} days`
+                  ? `${weight.deltaKg > 0 ? "+" : ""}${trim(toDisplayWeight(weight.deltaKg, weightUnit), 1)} ${weightUnit} over ${windowDays} days`
                   : "not recorded"
               }
             />

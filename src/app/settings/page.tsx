@@ -38,8 +38,10 @@ import { runBackup } from "@/lib/backup/run";
 import { downloadJson, exportFileName } from "@/lib/backup/download";
 import type { BackupFile } from "@/lib/backup/plan";
 import { formatMoney } from "@/lib/calc/cost";
-import { formatDate, relativeTime } from "@/lib/format";
+import { fromDisplayWeight, toDisplayWeight } from "@/lib/calc/outcomes";
+import { formatDate, relativeTime, trim } from "@/lib/format";
 import { CURRENCIES, DEFAULT_SETTINGS, INJECTION_SITES, PROFILE_TONES } from "@/lib/types";
+import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
 import { TONE_SOLID } from "@/components/ui";
@@ -180,7 +182,7 @@ export default function SettingsPage() {
           <Field label="Weight in" hint="Stored in kilograms either way, so switching is safe.">
             <Select
               value={settings.weightUnit ?? DEFAULT_SETTINGS.weightUnit}
-              onChange={(e) => updateSettings({ weightUnit: e.target.value as "kg" | "lb" })}
+              onChange={(e) => updateSettings({ weightUnit: e.target.value as WeightUnit })}
             >
               <option value="kg">Kilograms</option>
               <option value="lb">Pounds</option>
@@ -323,6 +325,10 @@ function Profiles() {
   const logs = useStore((s) => s.logs);
   const [confirming, setConfirming] = useState<string | null>(null);
 
+  // The field above this panel decides the unit. Reading it here is what was
+  // missing: the input was hard-wired to kilograms and ignored the setting.
+  const unit = useStore((s) => s.settings.weightUnit) ?? DEFAULT_SETTINGS.weightUnit;
+
   return (
     <Card className="space-y-4 p-4">
       <SectionLabel>Profiles</SectionLabel>
@@ -381,14 +387,20 @@ function Profiles() {
               <div className="mt-3 flex flex-wrap items-end gap-3">
                 <Field label="Body weight" className="w-36">
                   <NumberInput
-                    value={p.weightKg ?? ""}
+                    // Rounded on the way out so that converting back and forth
+                    // between the two units cannot leave 79.99999999 in the box
+                    // while someone is still typing.
+                    value={p.weightKg == null ? "" : trim(toDisplayWeight(p.weightKg, unit), 1)}
                     min={0}
-                    step={0.5}
-                    suffix="kg"
+                    step={unit === "lb" ? 1 : 0.5}
+                    suffix={unit}
                     placeholder=", "
                     onChange={(e) =>
                       updateProfile(p.id, {
-                        weightKg: e.target.value === "" ? undefined : Number(e.target.value),
+                        weightKg:
+                          e.target.value === ""
+                            ? undefined
+                            : fromDisplayWeight(Number(e.target.value), unit),
                       })
                     }
                   />

@@ -225,6 +225,12 @@ export interface Profile {
   notes?: string;
 }
 
+/**
+ * How weight is entered and shown. Storage is always kilograms, so this is a
+ * presentation choice and switching it never touches a stored figure.
+ */
+export type WeightUnit = "kg" | "lb";
+
 export type ScheduleKind = "daily" | "interval-days" | "days-of-week" | "as-needed";
 
 export interface Schedule {
@@ -480,7 +486,7 @@ export interface Settings {
   /** Currency vial costs are entered in. */
   currency: string;
   /** Kilograms or pounds for weight entry. Stored always in kg. */
-  weightUnit: "kg" | "lb";
+  weightUnit: WeightUnit;
 
   /**
    * Automatic backups to the device's Documents folder. Android only, a web
