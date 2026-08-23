@@ -22,6 +22,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.0",
+    date: "2026-08-24",
+    summary: "Protocol editing, week-band dosing plans, dose logging by protocol, grouped vials, and a fix for the body-weight unit bug.",
+    changes: [
+      "Edit an existing protocol in place instead of deleting it and starting over",
+      "Plan a protocol by week bands, each with its own dose and frequency, so taper and loading phases are first-class",
+      "Log a dose by picking the protocol first, so the compound, vial, and dose are pre-filled from your plan",
+      "Identical sealed vials on the Stock screen can now be grouped into a single row to reduce clutter",
+      "Body weight now respects your kg/lbs setting correctly. Previously it always saved as if you had entered kg",
+      "Protocol start date no longer lands a day early for users west of Greenwich",
+      "Discord community link added to the landing page, About tab, and README",
+    ],
+  },
+  {
     version: "1.9",
     date: "2026-08-06",
     summary: "User count on the landing page, mg dose entry, manual update check, and a cleaner injection site map.",
