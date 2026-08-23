@@ -151,7 +151,7 @@ export default function PlanPage() {
           const showSchedule = current?.schedule ?? p.schedule;
 
           return (
-            <Card key={p.id} className={`group p-4 ${p.active ? "" : "opacity-60"}`}>
+            <Card key={p.id} className={`p-4 ${p.active ? "" : "opacity-60"}`}>
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -208,7 +208,7 @@ export default function PlanPage() {
                     type="button"
                     onClick={() => removeProtocol(p.id)}
                     aria-label={`Delete ${p.name}`}
-                    className="p-2 text-[var(--faint)] opacity-0 transition-opacity hover:text-[var(--rose)] focus-visible:opacity-100 group-hover:opacity-100"
+                    className="p-2 text-[var(--faint)] transition-colors hover:text-[var(--rose)] focus-visible:text-[var(--rose)]"
                   >
                     <Trash2 size={15} />
                   </button>
