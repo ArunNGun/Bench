@@ -90,6 +90,13 @@ A standard Next.js app, Vercel, Netlify and Cloudflare Pages all work with no co
 - `/landing` is the public page describing it
 - `/about` is the in-app about page
 
+| Branch | URL | Purpose |
+|--------|-----|---------|
+| `main` | [benchpep.vercel.app](https://benchpep.vercel.app) | Production |
+| `beta` | [benchpep-beta.vercel.app](https://benchpep-beta.vercel.app) | Staging - new features land here first |
+
+New features are developed on feature branches, merged into `beta` via PR, then promoted to `main` for a tagged release.
+
 ### Android
 
 ```bash

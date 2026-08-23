@@ -71,6 +71,17 @@ against.
 
 Deploy is Vercel, done by Arun. Do not attempt it.
 
+| Branch | URL | Purpose |
+|--------|-----|---------|
+| `main` | [benchpep.vercel.app](https://benchpep.vercel.app) | Production - tagged releases only |
+| `beta` | [benchpep-beta.vercel.app](https://benchpep-beta.vercel.app) | Staging - new features land here first |
+
+### Branch workflow
+
+New features go on a feature branch, get merged into `beta` via PR (direct push
+allowed only for Arun), and are tested at the beta URL before being promoted to
+`main`. Releases are triggered by pushing a version tag to `main`.
+
 ## Android
 
 Needs JDK 21:
