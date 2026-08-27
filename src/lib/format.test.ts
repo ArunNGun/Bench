@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fromDateInput, toDateInput, toDateTimeLocal, fromDateTimeLocal } from "./format";
+import {
+  formatDate,
+  formatDateTime,
+  fromDateInput,
+  toDateInput,
+  toDateTimeLocal,
+  fromDateTimeLocal,
+} from "./format";
 
 describe("fromDateInput", () => {
   it("reads a picked date as that date, not the evening before", () => {
@@ -64,5 +71,42 @@ describe("toDateInput", () => {
   it("is the date half of the datetime-local value", () => {
     const ms = new Date(2026, 6, 5, 14, 30).getTime();
     expect(toDateInput(ms)).toBe(toDateTimeLocal(ms).slice(0, 10));
+  });
+});
+
+describe("formatDate", () => {
+  const aug = new Date(2026, 7, 27, 12, 0).getTime();
+
+  it("leaves the year off for a date in the current year", () => {
+    // The economy that made dropping the year worth it in the first place.
+    expect(formatDate(new Date(2026, 8, 13).getTime(), aug)).not.toContain("2026");
+  });
+
+  it("carries the year for a date in the next one", () => {
+    // The reported bug: "Mar 13" read in August is a guess, not a date, and on
+    // the Stock page a guess in either direction costs money.
+    expect(formatDate(new Date(2027, 2, 13).getTime(), aug)).toContain("2027");
+  });
+
+  it("carries the year backwards too", () => {
+    // Log and lab entries are read the same way and were equally ambiguous.
+    expect(formatDate(new Date(2025, 2, 13).getTime(), aug)).toContain("2025");
+  });
+
+  it("switches on the calendar year, not on a distance in days", () => {
+    // Two days apart, either side of new year. The nearer one carries a year
+    // and the further one does not, which is correct: the question is whether
+    // the reader can tell which year is meant.
+    const dec = new Date(2026, 11, 31, 12, 0).getTime();
+    expect(formatDate(new Date(2027, 0, 2).getTime(), dec)).toContain("2027");
+    expect(formatDate(new Date(2026, 0, 2).getTime(), dec)).not.toContain("2027");
+  });
+
+  it("is the date half of formatDateTime, whichever form it takes", () => {
+    // They used to decide this separately. A drift between them would show up
+    // as the same instant printed two ways on two screens.
+    for (const at of [new Date(2026, 8, 13, 9, 30).getTime(), new Date(2027, 2, 13, 9, 30).getTime()]) {
+      expect(formatDateTime(at, aug).startsWith(`${formatDate(at, aug)}, `)).toBe(true);
+    }
   });
 });
