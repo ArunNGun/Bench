@@ -22,7 +22,7 @@ import { MULTI_DOSE_VIAL_BUD_DAYS } from "@/lib/calc/reconstitution";
 import { groupSealedVials, vialRemainingMcg, type VialGroup } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
-import { formatMoney, remainingValue, totalSpend } from "@/lib/calc/cost";
+import { costPerVialInKit, formatMoney, remainingValue, totalSpend } from "@/lib/calc/cost";
 import { DEFAULT_SETTINGS, type Vial } from "@/lib/types";
 
 export default function StockPage() {
@@ -380,9 +380,27 @@ function AddVialForm({
   const [count, setCount] = useState(1);
   const [supplier, setSupplier] = useState("");
   const [cost, setCost] = useState<number | "">("");
+  /**
+   * Whether the price typed in is for one vial or for the box.
+   *
+   * Kits are sold as a box, ten vials for two hundred rather than twenty each,
+   * and doing that division by hand before typing it in is the sort of small
+   * friction that ends with the price left blank. A vial with no price is
+   * treated as free by every figure downstream, which is worse than wrong.
+   */
+  const [pricedAs, setPricedAs] = useState<"vial" | "kit">("vial");
 
   const peptide = peptides.find((p) => p.id === peptideId);
   const addVial = useStore((s) => s.addVial);
+
+  // Storage is always per vial, whichever way it was entered, so nothing
+  // downstream has to know a kit was involved.
+  const perVial =
+    cost === ""
+      ? undefined
+      : pricedAs === "kit"
+        ? (costPerVialInKit(Number(cost), count) ?? undefined)
+        : Number(cost);
 
   return (
     <Card className="space-y-4 p-4">
@@ -442,23 +460,38 @@ function AddVialForm({
         </Field>
       </div>
 
-      <Field
-        label="Cost per vial"
-        hint={
-          cost !== "" && strengthMg > 0
-            ? `${formatMoney(Number(cost) / strengthMg, currency)} per mg. ${count > 1 ? `${formatMoney(Number(cost) * count, currency)} for ${count} vials.` : ""}`
-            : "Optional. Lets the app work out what a dose costs you."
-        }
-      >
-        <NumberInput
-          value={cost}
-          min={0}
-          step={5}
-          suffix={currency}
-          placeholder=", "
-          onChange={(e) => setCost(e.target.value === "" ? "" : Number(e.target.value))}
-        />
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+        <Field
+          label={pricedAs === "kit" ? "Cost for the whole kit" : "Cost per vial"}
+          hint={
+            perVial != null && strengthMg > 0
+              ? // Always says both numbers, so the split is visible before it is
+                // saved rather than discovered later on a vial row.
+                `${formatMoney(perVial, currency)} a vial, ${formatMoney(perVial / strengthMg, currency)} per mg.` +
+                (count > 1 ? ` ${formatMoney(perVial * count, currency)} for all ${count}.` : "")
+              : "Optional. Lets the app work out what a dose costs you."
+          }
+        >
+          <NumberInput
+            value={cost}
+            min={0}
+            step={5}
+            suffix={currency}
+            placeholder=", "
+            onChange={(e) => setCost(e.target.value === "" ? "" : Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Priced as">
+          <Select
+            value={pricedAs}
+            onChange={(e) => setPricedAs(e.target.value as "vial" | "kit")}
+          >
+            <option value="vial">Per vial</option>
+            <option value="kit">{count > 1 ? `Kit of ${count}` : "Whole kit"}</option>
+          </Select>
+        </Field>
+      </div>
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
@@ -472,8 +505,8 @@ function AddVialForm({
               strengthMg,
               state: "sealed",
               supplier: supplier.trim() || undefined,
-              cost: cost === "" ? undefined : Number(cost),
-              currency: cost === "" ? undefined : currency,
+              cost: perVial,
+              currency: perVial == null ? undefined : currency,
               acquiredAt: Date.now(),
             };
             // The first one goes through the parent so the form can close;
