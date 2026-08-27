@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PackageCheck, Plus, Trash2 } from "lucide-react";
+import { Droplet, PackageCheck, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -20,10 +20,13 @@ import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 import { MULTI_DOSE_VIAL_BUD_DAYS } from "@/lib/calc/reconstitution";
 import {
+  diluentAfterTopUp,
   groupSealedVials,
   stockFor,
   supplyOutlook,
+  vialConcentration,
   vialRemainingMcg,
+  vialRemainingMl,
   type SupplyOutlook,
   type VialGroup,
 } from "@/lib/calc/inventory";
@@ -40,12 +43,14 @@ export default function StockPage() {
   const updateVial = useStore((s) => s.updateVial);
   const removeVial = useStore((s) => s.removeVial);
   const reconstituteVial = useStore((s) => s.reconstituteVial);
+  const topUpVial = useStore((s) => s.topUpVial);
   const settings = useStore((s) => s.settings);
   const currency = settings.currency ?? DEFAULT_SETTINGS.currency;
 
   const peptides = useMemo(() => allPeptides(custom), [custom]);
   const [adding, setAdding] = useState(false);
   const [reconstituting, setReconstituting] = useState<string | null>(null);
+  const [toppingUp, setToppingUp] = useState<string | null>(null);
 
   const now = Date.now();
   /*
@@ -201,18 +206,30 @@ export default function StockPage() {
           <SectionLabel>Open</SectionLabel>
           <div className="space-y-2.5">
             {open.map((v) => (
-              <VialRow
-                key={v.id}
-                vial={v}
-                now={now}
-                budWarningDays={settings.budWarningDays}
-                doseMcg={doseFor(v.peptideId)}
-                outlook={outlookFor(v.peptideId)}
-                currency={currency}
-                peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
-                onRemove={() => removeVial(v.id)}
-                onFinish={() => updateVial(v.id, { state: "finished" })}
-              />
+              <div key={v.id}>
+                <VialRow
+                  vial={v}
+                  now={now}
+                  budWarningDays={settings.budWarningDays}
+                  doseMcg={doseFor(v.peptideId)}
+                  outlook={outlookFor(v.peptideId)}
+                  currency={currency}
+                  peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
+                  onRemove={() => removeVial(v.id)}
+                  onTopUp={() => setToppingUp(v.id)}
+                  onFinish={() => updateVial(v.id, { state: "finished" })}
+                />
+                {toppingUp === v.id && (
+                  <TopUpForm
+                    vial={v}
+                    onCancel={() => setToppingUp(null)}
+                    onSave={(addedMl) => {
+                      topUpVial(v.id, addedMl);
+                      setToppingUp(null);
+                    }}
+                  />
+                )}
+              </div>
             ))}
           </div>
         </section>
@@ -300,6 +317,7 @@ function VialRow({
   onRemove,
   onReconstitute,
   onArrived,
+  onTopUp,
   onFinish,
 }: {
   vial: Vial;
@@ -323,6 +341,8 @@ function VialRow({
   onReconstitute?: () => void;
   /** Only for a vial on order. Turns it into an ordinary sealed one. */
   onArrived?: () => void;
+  /** Only ever passed for an open vial, since there is nothing to dilute before that. */
+  onTopUp?: () => void;
   onFinish?: () => void;
 }) {
   const st = vialStatus(vial, now);
@@ -450,6 +470,11 @@ function VialRow({
           {onReconstitute && (
             <Button onClick={onReconstitute} className="px-3 py-1.5 text-[13px]">
               Reconstitute{many ? " one" : ""}
+            </Button>
+          )}
+          {onTopUp && (
+            <Button onClick={onTopUp} className="px-3 py-1.5 text-[13px]">
+              <Droplet size={13} /> Add diluent
             </Button>
           )}
           {onFinish && (
@@ -712,6 +737,76 @@ function ReconstituteForm({
         </Button>
         <Button variant="primary" onClick={() => onSave(ml, diluent)} disabled={!(ml > 0)}>
           Reconstitute
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Adding more solvent to a vial that is already open.
+ *
+ * Reconstituting too concentrated is a mistake you discover at the injection
+ * site, and the fix is to add more water. Until now the app had no way to
+ * record that, so from the moment it happened every figure it showed was wrong.
+ *
+ * Shows the before and after concentration rather than only the result, because
+ * the reason someone is here is that the first number was too high and the
+ * question they are answering is how far it has come down.
+ */
+function TopUpForm({
+  vial,
+  onCancel,
+  onSave,
+}: {
+  vial: Vial;
+  onCancel: () => void;
+  onSave: (addedMl: number) => void;
+}) {
+  const [ml, setMl] = useState(0.5);
+
+  const before = vialConcentration(vial);
+  const nextDiluentMl = diluentAfterTopUp(vial, ml);
+  const after =
+    nextDiluentMl == null
+      ? null
+      : vialConcentration({ strengthMg: vial.strengthMg, diluentMl: nextDiluentMl });
+
+  return (
+    <Card className="mt-1.5 space-y-4 border-[var(--sky)]/35 p-4">
+      <SectionLabel>Add diluent</SectionLabel>
+
+      <Field
+        label="Water added"
+        hint={
+          after != null
+            ? `${formatConcentration(before)} becomes ${formatConcentration(after)}, with ${trim(
+                vialRemainingMl({ ...vial, diluentMl: nextDiluentMl! }),
+                2)} mL in the vial.`
+            : "How much you are adding now, not the total."
+        }
+      >
+        <NumberInput
+          value={ml}
+          min={0.05}
+          step={0.25}
+          suffix="mL"
+          onChange={(e) => setMl(Number(e.target.value))}
+        />
+      </Field>
+
+      <p className="text-[12.5px] leading-relaxed text-[var(--faint)]">
+        Worked out from what is still in the vial rather than from the label, so a part-used vial
+        comes out right. The mass does not change and neither does the use-by date, which runs from
+        the first puncture rather than from this.
+      </p>
+
+      <div className="flex gap-2.5">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="primary" onClick={() => onSave(ml)} disabled={after == null}>
+          Add {trim(ml, 2)} mL
         </Button>
       </div>
     </Card>

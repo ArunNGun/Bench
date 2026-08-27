@@ -385,3 +385,48 @@ export function supplyOutlook(
   // dividing that same difference.
   return { kind: "runs-out", at: nowMs + days * DAY_MS };
 }
+
+/**
+ * The diluent basis after adding more solvent to a vial that is already open.
+ *
+ * People reconstitute too concentrated and find out at the injection site. The
+ * fix in the room is to draw up more bacteriostatic water and add it, and the
+ * app has to be able to record that or every figure it shows afterwards is
+ * wrong: concentration, syringe units, millilitres left.
+ *
+ * The arithmetic is not "add it to the original diluent". Concentration here is
+ * derived as label strength over total diluent, which is only true for an
+ * untouched vial. On a part-used one the honest figure is the mass still in the
+ * vial over the volume still in the vial:
+ *
+ *     new concentration = remaining mcg / (remaining mL + added mL)
+ *
+ * For a 50 mg vial at 20 mg/mL with 46 mg left, adding 0.5 mL gives 16.43
+ * mg/mL, not the 16.67 that dividing the label by the new total would suggest.
+ * The gap widens as the vial empties: with 10 mg left the naive figure is out
+ * by two thirds, and the app would be telling someone to draw the wrong number
+ * of units.
+ *
+ * Rather than add a field and teach every reader about it, this returns the
+ * `diluentMl` that makes the existing formula produce the right answer. Mass is
+ * untouched, `vialRemainingMl` comes out as the real new volume, and nothing
+ * downstream needs to know a top up happened. The cost is that `diluentMl`
+ * stops being "how much water went in first" and becomes the basis the
+ * concentration is derived from, which is what it was always used as.
+ *
+ * Null when there is nothing sensible to compute: an unopened vial has no
+ * concentration, and an empty one has no mass to spread over the new volume.
+ */
+export function diluentAfterTopUp(
+  v: Pick<Vial, "strengthMg" | "diluentMl" | "drawnMcg">,
+  addedMl: number): number | null {
+  if (!Number.isFinite(addedMl) || addedMl <= 0) return null;
+
+  const remainingMcg = vialRemainingMcg(v);
+  if (!(remainingMcg > 0)) return null;
+
+  const remainingMl = vialRemainingMl(v);
+  if (!(remainingMl > 0)) return null;
+
+  return vialCapacityMcg(v) * ((remainingMl + addedMl) / remainingMcg);
+}
