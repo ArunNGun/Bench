@@ -8,7 +8,7 @@
  */
 
 import type { Protocol, Vial, VialState } from "../types";
-import { protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
+import { DAY_MS, protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
 
 export const MCG_PER_MG = 1000;
 
@@ -329,4 +329,49 @@ export function daysOfSupplyForProtocol(
   }
 
   return horizonDays;
+}
+
+/**
+ * When the stock runs out, and whether that is a question worth answering.
+ *
+ * `daysOfSupplyForProtocol` returns a number, and a number cannot say which of
+ * three quite different situations produced it. Nothing is scheduled, so there
+ * is no burn rate and no answer. Or there is enough stock that the walk hit its
+ * horizon, in which case the figure is the horizon rather than a prediction. Or
+ * there is a real answer. A caller that cannot tell those apart ends up
+ * printing "runs out in 2 years" for a stock that runs out in ten.
+ */
+export type SupplyOutlook =
+  /** The stock is spent on this date. */
+  | { kind: "runs-out"; at: number }
+  /** More stock than the walk looked ahead. No date, and none needed. */
+  | { kind: "beyond-horizon" }
+  /** No schedule to spend it against, or no stock at all. */
+  | { kind: "unknown" };
+
+/**
+ * The same walk, reported as a date.
+ *
+ * A date rather than a duration on purpose. "Lasts 40 days" invites the reader
+ * to work out whether that covers the rest of the plan, and the answer changes
+ * every morning. A date is the same fact tomorrow, and is what someone deciding
+ * when to reorder actually wants.
+ *
+ * The horizon is deliberately shorter than the one used for the running total
+ * on the Today screen. A date two years out is arithmetic, not information.
+ */
+export function supplyOutlook(
+  stock: Stock,
+  protocol: Protocol,
+  nowMs: number,
+  horizonDays = 365): SupplyOutlook {
+  if (stock.availableMcg <= 0) return { kind: "unknown" };
+
+  const days = daysOfSupplyForProtocol(stock, protocol, nowMs, horizonDays);
+  if (days == null) return { kind: "unknown" };
+  if (days >= horizonDays) return { kind: "beyond-horizon" };
+
+  // Recovering the instant from the day count is exact: the walk produced it by
+  // dividing that same difference.
+  return { kind: "runs-out", at: nowMs + days * DAY_MS };
 }

@@ -19,7 +19,14 @@ import { VialGlyph } from "@/components/Syringe";
 import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "@/lib/store";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 import { MULTI_DOSE_VIAL_BUD_DAYS } from "@/lib/calc/reconstitution";
-import { groupSealedVials, vialRemainingMcg, type VialGroup } from "@/lib/calc/inventory";
+import {
+  groupSealedVials,
+  stockFor,
+  supplyOutlook,
+  vialRemainingMcg,
+  type SupplyOutlook,
+  type VialGroup,
+} from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import { formatMoney, remainingValue, totalSpend } from "@/lib/calc/cost";
@@ -60,6 +67,33 @@ export default function StockPage() {
     const p = protocols.find((x) => x.active && x.peptideId === peptideId);
     return p ? scheduledDoseMcg(p, now) : 0;
   };
+
+  /**
+   * When the stock of a compound runs out, spent against its actual plan.
+   *
+   * Per compound rather than per vial, and the same answer on every row of that
+   * compound, because that is the truth: a protocol draws from whichever vial
+   * `pickVialForDose` reaches for, so "how long does this one vial last" is a
+   * question about an order of use that does not exist. One shelf, one date.
+   *
+   * Memoised per compound because the walk is a loop over scheduled doses and
+   * the Sealed section can hold a dozen rows of the same thing.
+   */
+  const outlookFor = useMemo(() => {
+    const cache = new Map<string, SupplyOutlook>();
+    return (peptideId: string): SupplyOutlook => {
+      const hit = cache.get(peptideId);
+      if (hit) return hit;
+
+      const p = protocols.find((x) => x.active && x.peptideId === peptideId);
+      const out: SupplyOutlook = p
+        ? supplyOutlook(stockFor(vials, peptideId, scheduledDoseMcg(p, now), now), p, now)
+        : { kind: "unknown" };
+
+      cache.set(peptideId, out);
+      return out;
+    };
+  }, [protocols, vials, now]);
 
   if (!hydrated) {
     return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
@@ -141,6 +175,7 @@ export default function StockPage() {
                 now={now}
                 budWarningDays={settings.budWarningDays}
                 doseMcg={doseFor(v.peptideId)}
+                outlook={outlookFor(v.peptideId)}
                 currency={currency}
                 peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                 onRemove={() => removeVial(v.id)}
@@ -166,6 +201,7 @@ export default function StockPage() {
                   now={now}
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
+                  outlook={outlookFor(v.peptideId)}
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
@@ -227,6 +263,7 @@ function VialRow({
   peptideName,
   budWarningDays,
   doseMcg,
+  outlook,
   currency,
   onRemove,
   onReconstitute,
@@ -243,6 +280,11 @@ function VialRow({
   peptideName: string;
   budWarningDays: number;
   doseMcg: number;
+  /**
+   * When the whole stock of this compound runs out. Shared by every row of the
+   * same compound on purpose; see the comment on `outlookFor`.
+   */
+  outlook: SupplyOutlook;
   currency: string;
   onRemove: () => void;
   onReconstitute?: () => void;
@@ -310,6 +352,28 @@ function VialRow({
               {many ? "across these vials" : "in this vial"} · {formatDose(remainingMcg)} left
             </span>
           </p>
+        )}
+
+        {/*
+          The date the shelf empties, not this vial.
+
+          A date rather than "42 days left" because the duration invites the
+          reader to work out whether it covers the rest of the plan, and the
+          answer changes every morning. The date is the same fact tomorrow, and
+          reordering is a decision about a date.
+
+          Deliberately says nothing about the use-by date above it. That is a
+          separate fact about this vial, already shown, and folding the two into
+          one number would hide which of them was doing the talking.
+        */}
+        {outlook.kind === "runs-out" && (
+          <p className="mt-0.5 text-[12px] text-[var(--faint)]">
+            At this plan, stock runs out{" "}
+            <span className="text-[var(--muted)]">{formatDate(outlook.at)}</span>
+          </p>
+        )}
+        {outlook.kind === "beyond-horizon" && (
+          <p className="mt-0.5 text-[12px] text-[var(--faint)]">Over a year of stock at this plan</p>
         )}
 
         {((!many && (vial.supplier || vial.cost != null)) || (many && rowCost != null)) && (
