@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
   daysOfSupplyForProtocol,
+  groupSealedVials,
   supplyOutlook,
   drawFromVial,
   pickVialForDose,
@@ -16,6 +17,7 @@ import {
   vialRemainingMl,
   vialUsable,
 } from "./inventory";
+import { totalSpend } from "./cost";
 import type { Protocol, ProtocolPhase, Vial } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
@@ -550,5 +552,62 @@ describe("supplyOutlook", () => {
     const stepped = supplyOutlook(stockOf(10_000), protocol({ phases: ladder }), start);
     if (flat.kind !== "runs-out" || stepped.kind !== "runs-out") throw new Error("expected dates");
     expect(stepped.at).toBeLessThan(flat.at);
+  });
+});
+
+describe("vials on order", () => {
+  /*
+   * The rule this whole state exists for: paid for, not here, and therefore
+   * counted in what you have spent and in nothing else. An app that says three
+   * weeks of stock remain when half of it is with a courier is worse than one
+   * that says nothing.
+   */
+  const ordered = vial({ id: "post", state: "on-order", strengthMg: 10, cost: 40 });
+  const here = vial({ id: "fridge", state: "sealed", strengthMg: 10, cost: 40 });
+
+  it("cannot supply a dose", () => {
+    expect(vialUsable(ordered, NOW)).toBe(false);
+    expect(vialUsable(here, NOW)).toBe(true);
+  });
+
+  it("is never reached for by pickVialForDose", () => {
+    expect(pickVialForDose([ordered], "klow", 1000, NOW)).toBeNull();
+    expect(pickVialForDose([ordered, here], "klow", 1000, NOW)?.id).toBe("fridge");
+  });
+
+  it("adds nothing to available mass or dose count", () => {
+    const withoutIt = stockFor([here], "klow", 1000, NOW);
+    const withIt = stockFor([here, ordered], "klow", 1000, NOW);
+    expect(withIt.availableMcg).toBe(withoutIt.availableMcg);
+    expect(withIt.dosesRemaining).toBe(withoutIt.dosesRemaining);
+    expect(withIt.sealedCount).toBe(withoutIt.sealedCount);
+  });
+
+  it("does not make an empty shelf look stocked", () => {
+    const stock = stockFor([ordered], "klow", 1000, NOW);
+    expect(stock.availableMcg).toBe(0);
+    expect(stock.dosesRemaining).toBe(0);
+    // Nothing to reconstitute either, so the prompt to do so must stay away.
+    expect(stock.needsReconstitution).toBe(false);
+  });
+
+  it("still counts towards what has been spent", () => {
+    // The money has gone, whatever the courier is doing.
+    expect(totalSpend([here, ordered]).total).toBe(80);
+    expect(totalSpend([here, ordered]).pricedVials).toBe(2);
+  });
+
+  it("is not grouped with the sealed vials on the shelf", () => {
+    // Same compound and strength, different question. One you can open today.
+    const groups = groupSealedVials([here, ordered]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(1);
+    expect(groups[0].vials[0].id).toBe("fridge");
+  });
+
+  it("becomes ordinary stock the moment it is marked arrived", () => {
+    const arrived = { ...ordered, state: "sealed" as const };
+    expect(vialUsable(arrived, NOW)).toBe(true);
+    expect(stockFor([arrived], "klow", 1000, NOW).availableMcg).toBe(10_000);
   });
 });

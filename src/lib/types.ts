@@ -511,7 +511,15 @@ export type InjectionSite =
   | "glute-l"
   | "glute-r";
 
-export type VialState = "sealed" | "reconstituted" | "finished" | "discarded";
+/**
+ * Where a vial is in its life.
+ *
+ * "on-order" is paid for and not here. It exists so that stock in the post is
+ * visible without being counted: the app must never say you have three weeks
+ * left when half of that is with a courier. Everything that asks "can I draw a
+ * dose from this" goes through `vialUsable`, which excludes it.
+ */
+export type VialState = "on-order" | "sealed" | "reconstituted" | "finished" | "discarded";
 
 export interface Vial {
   id: string;
