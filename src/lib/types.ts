@@ -525,6 +525,30 @@ export interface Settings {
   weightUnit: WeightUnit;
 
   /**
+   * Self-hosted sync, web only. Absent means off, which is what every install
+   * has until someone deliberately turns it on.
+   *
+   * The password is deliberately not here. It never leaves the login form: the
+   * key derived from it lives in memory for the session and nowhere else, so
+   * an exported backup cannot hand someone the means to read the server copy.
+   */
+  sync?: {
+    /** Base address of the sync server, for example https://bench.example.com */
+    url: string;
+    username: string;
+    /**
+     * The server version this device last agreed with, not a clock reading of
+     * its own. Two devices disagree about the time and never disagree about
+     * which copy they last saw, which is why the decision in `decide.ts` is
+     * made from this and not from a timestamp comparison.
+     *
+     * Absent means this device has never synced with this server, which is
+     * treated as a question to ask rather than a race to win.
+     */
+    remoteSeenAt?: number;
+  };
+
+  /**
    * Collapse sealed vials of the same compound and strength into one row on the
    * Stock page, with their doses and value added up.
    *

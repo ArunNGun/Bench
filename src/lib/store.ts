@@ -38,9 +38,13 @@ import {
 } from "./calc/inventory";
 
 /**
- * Everything lives on this device. There is one user, no account, and no
- * server: the data is held in IndexedDB and can be exported to a file at any
- * time. Nothing here is transmitted anywhere.
+ * Everything lives on this device. There is one user and no account: the data
+ * is held in IndexedDB and can be exported to a file at any time.
+ *
+ * Nothing here transmits anything. That remains true with sync switched on:
+ * this is still the store, and `src/lib/sync` reads from it and writes to it
+ * from the outside like any other caller. The server is a copy, never the
+ * source, which is why the app works identically with the network unplugged.
  */
 
 /**
@@ -369,7 +373,7 @@ export const useStore = create<StoreState>()(
         // in the store, filtered out of every screen, indistinguishable from
         // having been lost.
         const migrated = migrateAppData(data);
-        set({
+        set((s) => ({
           version: migrated.version,
           profiles: migrated.profiles,
           activeProfileId: migrated.activeProfileId,
@@ -378,10 +382,14 @@ export const useStore = create<StoreState>()(
           protocols: migrated.protocols,
           logs: migrated.logs,
           vials: migrated.vials,
-          settings: migrated.settings,
+          // Whose server this device talks to is this device's business and
+          // survives an import. Pulling from the server would otherwise be able
+          // to switch off the very connection that did the pulling, and
+          // restoring a backup would silently drop the setting.
+          settings: { ...migrated.settings, sync: s.settings.sync },
           customPeptides: migrated.customPeptides,
           checkIns: migrated.checkIns,
-        });
+        }));
       },
       importHistory: ({ logs, measurements }) => {
         set((s) => ({
@@ -394,8 +402,22 @@ export const useStore = create<StoreState>()(
         }));
         return { logs: logs.length, measurements: measurements.length };
       },
+      /**
+       * The document that goes to a backup file and to the sync server.
+       *
+       * `settings.sync` is deliberately left out. It is not data about the
+       * person, it is this device's note of where its server is and what it
+       * last sent, and including it caused two distinct problems. It travelled
+       * into a backup file, so restoring one on a second machine pointed that
+       * machine at a server it had no key for. Worse, it made automatic sync
+       * chase its own tail: a push writes `updatedAt` into settings, settings
+       * are part of the payload, so the payload changes and asks to be pushed
+       * again, forever.
+       */
       exportData: () => {
         const s = get();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { sync, ...settings } = s.settings;
         return {
           version: s.version,
           profiles: s.profiles,
@@ -405,7 +427,7 @@ export const useStore = create<StoreState>()(
           protocols: s.protocols,
           logs: s.logs,
           vials: s.vials,
-          settings: s.settings,
+          settings,
           customPeptides: s.customPeptides,
           checkIns: s.checkIns,
         };

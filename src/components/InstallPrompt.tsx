@@ -120,7 +120,7 @@ export function InstallPrompt() {
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--muted)]">
             {route === "ios-other-browser"
               ? "Adding to the home screen only works from Safari on iPhone and iPad. Open this page in Safari and the option appears in the Share menu."
-              : "Add it to your home screen and it opens full screen and works offline. Your data stays on this device either way."}
+              : "Add it to your home screen and it opens full screen and works offline. Installing changes nothing about where your data is kept."}
           </p>
 
           {route === "prompt" && (

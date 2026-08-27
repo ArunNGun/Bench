@@ -44,6 +44,7 @@ import { CURRENCIES, DEFAULT_SETTINGS, INJECTION_SITES, PROFILE_TONES } from "@/
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
+import { SyncPanel } from "@/components/SyncPanel";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
@@ -140,6 +141,8 @@ export default function SettingsPage() {
 
       <ImportPanel />
 
+      <SyncPanel />
+
       <Card className="space-y-4 p-4">
         <SectionLabel>Defaults</SectionLabel>
 
@@ -228,10 +231,11 @@ export default function SettingsPage() {
       <Card className="space-y-4 p-4">
         <SectionLabel>Your data</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
-          Everything lives in this browser on this device. There is no account and no server, so
-          nothing is uploaded and nothing is backed up for you. Clearing your browser data will erase
-          it, export regularly if you want to keep it. The JSON file restores everything; the CSV is
-          just the dose history, for a spreadsheet or to hand to a clinician.
+          Everything lives in this browser on this device. Unless you set up sync below, there is no
+          account and no server, so nothing is uploaded and nothing is backed up for you. Clearing
+          your browser data will erase it, export regularly if you want to keep it. The JSON file
+          restores everything; the CSV is just the dose history, for a spreadsheet or to hand to a
+          clinician.
         </p>
 
         <div className="flex flex-wrap gap-2.5">
