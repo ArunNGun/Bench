@@ -19,6 +19,7 @@ import { ProfileSwitcher } from "./ProfileSwitcher";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
 import { SyncNotice } from "./SyncNotice";
+import { BackupButton } from "./BackupButton";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
@@ -83,6 +84,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
           <div className="ml-auto flex items-center gap-1.5">
             <ProfileSwitcher />
+            {/*
+              An action among links, on purpose and in this exact spot. It was
+              asked for as something always in reach, and the header is the only
+              place that is true on every screen. Next to the profile because
+              both answer "whose data is this and where is my copy of it".
+            */}
+            <BackupButton />
             {SECONDARY.map((item) => (
               <Link
                 key={item.href}

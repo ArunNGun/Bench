@@ -237,6 +237,10 @@ export default function SettingsPage() {
           restores everything; the CSV is just the dose history, for a spreadsheet or to hand to a
           clinician.
         </p>
+        <p className="text-[13px] leading-relaxed text-[var(--faint)]">
+          The same JSON export is on the Backup button in the header, from any screen, so you do not
+          have to come here for it.
+        </p>
 
         <div className="flex flex-wrap gap-2.5">
           <Button onClick={download}>
@@ -571,8 +575,9 @@ function Backups() {
 
       {available === false && (
         <Callout tone="info">
-          A web page cannot write to a folder on its own, so this runs in the Android app. Use
-          <strong> Export to a file</strong> below to save a copy from here.
+          A web page cannot write to a folder on its own, so this runs in the Android app. On the web
+          the copy has to be saved by hand: the <strong>Backup</strong> button in the header does it
+          from any screen, and <strong>Export to a file</strong> below does the same.
         </Callout>
       )}
 
