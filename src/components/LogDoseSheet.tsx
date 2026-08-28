@@ -14,6 +14,8 @@ import {
   Textarea,
   TONE_SOLID,
 } from "./ui";
+import Link from "next/link";
+import { HelpTip } from "./HelpTip";
 import { Syringe } from "./Syringe";
 import { SiteMap } from "./SiteMap";
 import { BlendBreakdown } from "./BlendBreakdown";
@@ -707,15 +709,42 @@ export function LogDoseSheet({
             />
           </Field>
 
-          <label className="flex items-center gap-2.5 text-[13.5px] text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={skipped}
-              onChange={(e) => setSkipped(e.target.checked)}
-              className="h-4 w-4 accent-[var(--tangerine)]"
-            />
-            Record this as a skipped dose
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2.5 text-[13.5px] text-[var(--muted)]">
+              <input
+                type="checkbox"
+                checked={skipped}
+                onChange={(e) => setSkipped(e.target.checked)}
+                className="h-4 w-4 accent-[var(--tangerine)]"
+              />
+              Record this as a skipped dose
+            </label>
+            {/*
+              Asked for because the phrase is not self-explanatory, and it is
+              not: a skip is a record rather than the absence of one, which is
+              the opposite of what "skipped" suggests.
+
+              Short on purpose. The full account belongs on the About page,
+              which this links to, and a panel long enough to hold it would
+              cover the form it is explaining.
+            */}
+            <HelpTip label="A skipped dose">
+              <span className="block">
+                It is a record, not a gap. The app can tell a dose you decided against from one
+                nobody ever logged, and your adherence figure counts them separately.
+              </span>
+              <span className="block">
+                Nothing is drawn from a vial and no drug is modelled in your body, so the curve and
+                the projection are untouched.
+              </span>
+              <Link
+                href="/about#skipped"
+                className="block font-semibold text-[var(--mint-ink)] underline decoration-dotted"
+              >
+                What else it affects
+              </Link>
+            </HelpTip>
+          </div>
         </div>
 
         <div className="sticky bottom-0 space-y-2.5 border-t border-[var(--line)] bg-[var(--card)] px-4 py-3">
