@@ -241,7 +241,7 @@ describe("editing a compound you added", () => {
     const after = draftToPeptide({ ...peptideToDraft(before), halfLifeHours: 4 });
     expect(curveFor(after)).toEqual({
       params: { halfLifeHours: 4, tmaxHours: undefined },
-      estimated: false,
+      basis: "published",
     });
   });
 });

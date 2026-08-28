@@ -332,3 +332,44 @@ describe("v6: daily check-ins", () => {
     expect(migrateAppData(once)).toEqual(once);
   });
 });
+
+describe("v6 to v7: half-lives you supplied yourself", () => {
+  it("gives older data an empty map rather than nothing", () => {
+    const out = migrateAppData({ version: 6, logs: [] });
+    expect(out.halfLifeOverrides).toEqual({});
+  });
+
+  it("carries your own figures through untouched", () => {
+    const mine = { hours: 2, setAt: 1_700_000_000_000, note: "vendor sheet" };
+    const out = migrateAppData({ version: 7, halfLifeOverrides: { kpv: mine } });
+    expect(out.halfLifeOverrides).toEqual({ kpv: mine });
+  });
+
+  it("drops a figure that could not draw a curve", () => {
+    // An imported file is not under our control. A zero or a negative would
+    // reach the model and produce a flat line with no explanation.
+    const out = migrateAppData({
+      version: 7,
+      halfLifeOverrides: {
+        good: { hours: 4, setAt: 1 },
+        zero: { hours: 0, setAt: 1 },
+        negative: { hours: -2, setAt: 1 },
+        // @ts-expect-error deliberately malformed, as an edited export would be
+        text: { hours: "soon", setAt: 1 },
+      },
+    });
+    expect(Object.keys(out.halfLifeOverrides ?? {})).toEqual(["good"]);
+  });
+
+  it("repairs a missing timestamp rather than dropping the figure", () => {
+    // @ts-expect-error setAt absent, as in a hand-written file
+    const out = migrateAppData({ version: 7, halfLifeOverrides: { kpv: { hours: 2 } } });
+    expect(out.halfLifeOverrides?.kpv.hours).toBe(2);
+    expect(out.halfLifeOverrides?.kpv.setAt).toBeGreaterThan(0);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({ version: 6, halfLifeOverrides: { kpv: { hours: 2, setAt: 5 } } });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});

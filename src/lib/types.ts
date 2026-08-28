@@ -700,6 +700,27 @@ export interface LabResult {
   notes?: string;
 }
 
+/**
+ * A half-life you supplied yourself, for a library compound that has none.
+ *
+ * Deliberately not in the library. A number nobody measured does not belong in
+ * something every install downloads, and the difference between "the library
+ * says 2 hours" and "you decided on 2 hours" is exactly the difference this
+ * whole app is careful about. Yours lives in your data, travels in your backup,
+ * and is labelled as yours everywhere it has an effect.
+ *
+ * Only ever consulted where the library has no published human figure. If one
+ * is added later, the published figure wins and the app says so, because a
+ * measurement in people beats an assumption whoever made it.
+ */
+export interface HalfLifeOverride {
+  hours: number;
+  /** When you set it, so the app can say how old your own figure is. */
+  setAt: number;
+  /** Optional: where you got it. Free text, shown as written. */
+  note?: string;
+}
+
 export interface AppData {
   version: number;
   profiles: Profile[];
@@ -715,6 +736,12 @@ export interface AppData {
   customPeptides: Peptide[];
   /** Daily subjective ratings, at most one per local day. */
   checkIns: CheckIn[];
+  /**
+   * Your own half-lives, keyed by peptide id. Not per profile: it is a belief
+   * about a compound rather than a fact about a person, and the same belief
+   * would otherwise have to be retyped for every profile on the device.
+   */
+  halfLifeOverrides?: Record<string, HalfLifeOverride>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -747,7 +774,7 @@ export const DEFAULT_PROFILE: Profile = {
  * stamped "version 1" holding version 5 data: EMPTY_DATA hard-coded 1, resetAll
  * restored it, and exportData faithfully wrote the lie into the file.
  */
-export const DATA_VERSION = 6;
+export const DATA_VERSION = 7;
 
 export const EMPTY_DATA: AppData = {
   version: DATA_VERSION,
@@ -761,6 +788,7 @@ export const EMPTY_DATA: AppData = {
   settings: DEFAULT_SETTINGS,
   customPeptides: [],
   checkIns: [],
+  halfLifeOverrides: {},
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */

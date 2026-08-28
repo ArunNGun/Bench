@@ -19,7 +19,7 @@ import {
   type Tone,
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
-import { curveFor, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
 import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
@@ -68,6 +68,7 @@ export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { protocols, logs, vials } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
+  const overrides = useStore((s) => s.halfLifeOverrides);
   const settings = useStore((s) => s.settings);
   const addLog = useStore((s) => s.addLog);
   const removeLog = useStore((s) => s.removeLog);
@@ -165,7 +166,7 @@ export default function NowPage() {
               protocolDosesPerWeek(protocol, now))
           : [];
 
-      const curve = peptide ? curveFor(peptide) : null;
+      const curve = peptide ? curveFor(peptide, overrides?.[peptide.id]) : null;
 
       /**
        * The reading, withheld from an estimated curve on purpose.
@@ -178,7 +179,9 @@ export default function NowPage() {
        * the card shows nothing rather than something precise and unfounded.
        */
       const snap =
-        curve && !curve.estimated ? snapshot(now, doses, curve.params, referenceMcg) : null;
+        curve && isMeasuredInPeople(curve.basis)
+          ? snapshot(now, doses, curve.params, referenceMcg)
+          : null;
 
       return {
         protocol,
@@ -199,7 +202,7 @@ export default function NowPage() {
         tone: TRACK_TONES[i % TRACK_TONES.length],
       };
     });
-  }, [active, logs, vials, custom, now]);
+  }, [active, logs, vials, custom, overrides, now]);
 
   /**
    * One colour per line, and per protocol, agreed with the Plan screen.
@@ -245,7 +248,7 @@ export default function NowPage() {
           doses: t.doses,
           params: t.curve.params,
           referenceMcg: t.referenceMcg,
-          estimated: t.curve.estimated,
+          basis: t.curve.basis,
         });
       }
     }
@@ -268,14 +271,16 @@ export default function NowPage() {
     const names = new Set<string>();
     for (const t of tracks) {
       for (const part of t.blendParts) {
-        if (!part.peptide || !curveFor(part.peptide)) names.add(part.name);
+        if (!part.peptide || !curveFor(part.peptide, overrides?.[part.peptide.id])) {
+          names.add(part.name);
+        }
       }
-      if (!t.blendParts.length && t.peptide && !curveFor(t.peptide)) {
+      if (!t.blendParts.length && t.peptide && !t.curve) {
         names.add(t.peptide.name);
       }
     }
     return [...names];
-  }, [tracks]);
+  }, [tracks, overrides]);
 
   /**
    * The lines that are drawn from a measurement made elsewhere, and what that
@@ -286,7 +291,22 @@ export default function NowPage() {
     const out: { id: string; text: string; evidence: HalfLifeEstimate["evidence"] }[] = [];
     for (const t of tracks) {
       const e = t.peptide?.halfLifeEstimate;
-      if (!t.curve?.estimated || !e) continue;
+      if (!t.curve || isMeasuredInPeople(t.curve.basis)) continue;
+
+      if (t.curve.basis === "yours") {
+        const mine = overrides?.[t.peptide!.id];
+        if (!mine) continue;
+        out.push({
+          id: t.protocol.id,
+          text: `${t.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
+            mine.note ? ` (${mine.note})` : ""
+          }. The library has no published figure for it.`,
+          evidence: "anecdotal" as const,
+        });
+        continue;
+      }
+
+      if (!e) continue;
       out.push({
         id: t.protocol.id,
         text: `${t.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
@@ -294,7 +314,7 @@ export default function NowPage() {
       });
     }
     return out;
-  }, [tracks]);
+  }, [tracks, overrides]);
 
   const needsAttention = tracks.filter(
     (t) => t.due.state === "overdue" || t.due.state === "due-now");
@@ -423,13 +443,16 @@ export default function NowPage() {
                   <span
                     className="h-2 w-2 rounded-full"
                     style={
-                      s.estimated
+                      s.basis && s.basis !== "published"
                         ? { border: `1.5px solid ${s.color}` }
                         : { background: s.color }
                     }
                   />
                   {s.label}
-                  {s.estimated && <span className="text-[var(--faint)]">estimated</span>}
+                  {s.basis === "elsewhere" && (
+                    <span className="text-[var(--faint)]">estimated</span>
+                  )}
+                  {s.basis === "yours" && <span className="text-[var(--faint)]">your figure</span>}
                 </span>
               ))}
             </div>

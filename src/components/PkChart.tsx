@@ -1,7 +1,14 @@
 "use client";
 
 import { useId, useMemo, useRef } from "react";
-import { levelAt, levelSeries, type CurveParams, type DoseEvent } from "@/lib/calc/pk";
+import {
+  isMeasuredInPeople,
+  levelAt,
+  levelSeries,
+  type CurveBasis,
+  type CurveParams,
+  type DoseEvent,
+} from "@/lib/calc/pk";
 import { formatDate, formatTime } from "@/lib/format";
 
 /**
@@ -28,12 +35,12 @@ export interface PkSeries {
   params: CurveParams;
   referenceMcg: number;
   /**
-   * Fitted to a half-life measured somewhere other than in a person taking it
-   * this way. Drawn as a different kind of statement: dashed and faded, with no
+   * Where the half-life came from. Anything other than a published human
+   * figure is drawn as a different kind of statement: dashed and faded, with no
    * filled area under it, because the area reads as a quantity and there is no
    * quantity here. The shape of the decay is the whole claim.
    */
-  estimated?: boolean;
+  basis?: CurveBasis;
 }
 
 export function PkChart({
@@ -191,14 +198,16 @@ export function PkChart({
       {/* Curves */}
       {paths.map((p) => (
         <g key={p.id}>
-          {!p.estimated && <path d={p.area} fill={`url(#fill-${uid}-${p.id})`} />}
+          {isMeasuredInPeople(p.basis ?? "published") && (
+            <path d={p.area} fill={`url(#fill-${uid}-${p.id})`} />
+          )}
           <path
             d={p.line}
             fill="none"
             stroke={p.color}
-            strokeWidth={p.estimated ? 1.4 : 1.8}
-            strokeDasharray={p.estimated ? "5 4" : undefined}
-            opacity={p.estimated ? 0.65 : 1}
+            strokeWidth={isMeasuredInPeople(p.basis ?? "published") ? 1.8 : 1.4}
+            strokeDasharray={isMeasuredInPeople(p.basis ?? "published") ? undefined : "5 4"}
+            opacity={isMeasuredInPeople(p.basis ?? "published") ? 1 : 0.65}
             strokeLinejoin="round"
             strokeLinecap="round"
             className={animate ? "animate-trace" : undefined}
