@@ -35,6 +35,7 @@ import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
+  describeHalfLifeEstimate,
   formatConcentration,
   formatDate,
   formatDose,
@@ -50,7 +51,12 @@ import { StackWarnings } from "@/components/StackWarnings";
 import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
-import { INJECTION_SITES, ROUTE_LABEL, type DoseLog, type Protocol } from "@/lib/types";
+import {
+  INJECTION_SITES,
+  type DoseLog,
+  type HalfLifeEstimate,
+  type Protocol,
+} from "@/lib/types";
 
 
 /** Card accents, kept in step with the chart colours. */
@@ -277,14 +283,14 @@ export default function NowPage() {
    * the library page, since the person reading the curve is here.
    */
   const estimatedFrom = useMemo(() => {
-    const out: { id: string; text: string }[] = [];
+    const out: { id: string; text: string; evidence: HalfLifeEstimate["evidence"] }[] = [];
     for (const t of tracks) {
       const e = t.peptide?.halfLifeEstimate;
       if (!t.curve?.estimated || !e) continue;
       out.push({
         id: t.protocol.id,
-        text: `${t.peptide!.name} is drawn from ${formatHalfLife(e.hours)} measured in ${
-          e.species} given it ${ROUTE_LABEL[e.route].toLowerCase()}, from ${e.source}.`,
+        text: `${t.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
+        evidence: e.evidence,
       });
     }
     return out;
@@ -455,10 +461,20 @@ export default function NowPage() {
 
           {estimatedFrom.length > 0 && (
             <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-              A dashed line is a shape, not a level. {estimatedFrom.map((e) => e.text).join(" ")} No
-              percentage of peak, steady state or accumulation figure is shown for{" "}
-              {estimatedFrom.length === 1 ? "it" : "them"}, because a half-life from another species
-              or another route cannot support one.
+              A dashed line is a shape, not a level.{" "}
+              {estimatedFrom.map((e) => (
+                <span
+                  key={e.id}
+                  className={
+                    e.evidence === "anecdotal" ? "text-[var(--tangerine)]" : undefined
+                  }
+                >
+                  {e.text}{" "}
+                </span>
+              ))}
+              No percentage of peak, steady state or accumulation figure is shown for{" "}
+              {estimatedFrom.length === 1 ? "it" : "them"}, because none of those follow from a
+              half-life nobody has measured in a person taking it this way.
             </p>
           )}
 

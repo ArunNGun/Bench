@@ -451,6 +451,7 @@ export const GROWTH: Peptide[] = [
       "Not stated anywhere citable for people. This is the unusual case of an approved drug whose label reports absorption, distribution and excretion but no half-life: peak at 0.5 to 1 hour after subcutaneous injection, 92% bioavailable, and essentially the whole dose recovered in urine as parent or the M1 and M2 metabolites by 48 hours, with minimal accumulation on daily dosing. Those facts bound it below a day without giving a figure. The 4 hours recorded here was measured in dogs given it intravenously, so the curve drawn from it shows a shape and not a level.",
     halfLifeEstimate: {
       hours: 4,
+      evidence: "preclinical",
       species: "dogs",
       route: "intravenous",
       source: "ADDF Cognitive Vitality review, SS-31",

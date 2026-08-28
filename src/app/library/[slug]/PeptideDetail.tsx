@@ -18,7 +18,14 @@ import {
   type EvidenceLevel,
   type Peptide,
 } from "@/lib/types";
-import { formatDose, formatDuration, formatHalfLife, trim } from "@/lib/format";
+import {
+  describeHalfLifeEstimate,
+  ESTIMATE_LABEL,
+  formatDose,
+  formatDuration,
+  formatHalfLife,
+  trim,
+} from "@/lib/format";
 
 const HOUR = 3_600_000;
 
@@ -170,21 +177,27 @@ export function PeptideDetail({ slug }: { slug: string }) {
                 animate={false}
               />
             </div>
-            <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-              A dashed curve, from {formatHalfLife(p.halfLifeEstimate.hours)} measured in{" "}
-              {p.halfLifeEstimate.species} given it{" "}
-              {ROUTE_LABEL[p.halfLifeEstimate.route].toLowerCase()}, reported by{" "}
+            <p
+              className={`border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed ${
+                p.halfLifeEstimate.evidence === "anecdotal"
+                  ? "text-[var(--tangerine)]"
+                  : "text-[var(--muted)]"
+              }`}
+            >
+              <strong className="font-semibold">
+                {ESTIMATE_LABEL[p.halfLifeEstimate.evidence]}.
+              </strong>{" "}
+              {describeHalfLifeEstimate(p.halfLifeEstimate)}{" "}
               <a
                 href={p.halfLifeEstimate.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline decoration-dotted"
               >
-                {p.halfLifeEstimate.source}
+                Check it yourself
               </a>
-              . No human figure has been published, so this shows how the shape behaves and not how
-              much is in you. Nothing is calculated from it: no time to clear, no build-up, no
-              steady state.
+              . The dashed curve shows how the shape behaves, not how much is in you, and nothing is
+              calculated from it: no time to clear, no build-up, no steady state.
             </p>
           </>
         ) : (

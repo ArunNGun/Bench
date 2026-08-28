@@ -61,19 +61,37 @@ describe("peptide library integrity", () => {
     }
   });
 
-  it("makes every estimated half-life say where it came from", () => {
+  it("makes every estimated half-life name who says so", () => {
     // The whole risk of this field is that it becomes the place an unsourced
-    // number gets written. A figure without a species, a route and a citation
-    // is not a measurement, so it cannot be entered at all.
+    // number gets written. Attribution is what separates "nobody knows, and
+    // this vendor claims 2 hours" from an invention, so it is required at
+    // every level, including the one with no experiment behind it.
     for (const p of PEPTIDES) {
       const e = p.halfLifeEstimate;
       if (!e) continue;
       expect(e.hours, p.id).toBeGreaterThan(0);
       expect(e.hours, p.id).toBeLessThan(24 * 60);
-      expect(e.species.trim(), `${p.id} estimate needs a species`).toBeTruthy();
-      expect(e.source.trim(), `${p.id} estimate needs a source`).toBeTruthy();
+      expect(e.source.trim(), `${p.id} estimate must name a source`).toBeTruthy();
       expect(e.url, `${p.id} estimate needs a citation url`).toMatch(/^https:\/\//);
-      expect(Object.keys(ROUTE_LABEL), `${p.id} estimate has an unknown route`).toContain(e.route);
+    }
+  });
+
+  it("makes a measured estimate say what was measured, and how", () => {
+    // Preclinical and preliminary both mean somebody ran an experiment, so the
+    // species and the route are part of the figure. Anecdotal means nobody did,
+    // and inventing a species for it would be worse than leaving it out.
+    for (const p of PEPTIDES) {
+      const e = p.halfLifeEstimate;
+      if (!e) continue;
+      if (e.evidence === "anecdotal") {
+        expect(e.species, `${p.id} is anecdotal and has no species to report`).toBeUndefined();
+        expect(e.route, `${p.id} is anecdotal and has no route to report`).toBeUndefined();
+      } else {
+        expect(e.species?.trim(), `${p.id} measured estimate needs a species`).toBeTruthy();
+        expect(
+          Object.keys(ROUTE_LABEL),
+          `${p.id} estimate has an unknown route`).toContain(e.route);
+      }
     }
   });
 

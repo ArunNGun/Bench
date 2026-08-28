@@ -368,6 +368,9 @@ describe("breakdownAt", () => {
   it("refuses a reference dose that is not a dose", () => {
     const doses = [{ at: t0, amountMcg: 1000 }];
     expect(breakdownAt(t0 + HOUR, doses, params, 0)).toEqual({ total: 0, contributions: [] });
+  });
+});
+
 describe("curveFor", () => {
   it("prefers the human figure and calls it what it is", () => {
     const c = curveFor({ halfLifeHours: 12, tmaxHours: 2, halfLifeEstimate: { hours: 4 } });
