@@ -72,6 +72,22 @@ export type MechanismClass =
   /** Acts at the LH receptor to drive testicular output directly. */
   | "gonadotropin";
 
+/**
+ * A measured half-life from somewhere other than a person taking it the usual
+ * way. Every field is required, because a figure without its species and route
+ * is exactly the kind of number this library refuses.
+ */
+export interface HalfLifeEstimate {
+  hours: number;
+  /** "dogs", "rats", "healthy men". Plain words, they are printed as written. */
+  species: string;
+  /** The route it was measured by, which is often not the one people use. */
+  route: Route;
+  /** Where the figure comes from. Shown next to it, not buried in a footnote. */
+  source: string;
+  url: string;
+}
+
 export type PeptideCategory =
   | "metabolic"
   | "repair"
@@ -106,6 +122,29 @@ export interface Peptide {
   halfLifeHours: number | null;
   /** Uncertainty or species caveat around the half-life figure. */
   halfLifeNote?: string;
+  /**
+   * A half-life that was measured, but not in a person by the route people use.
+   *
+   * The library has always had two states, a number the app computes with or
+   * nothing at all, and some compounds sit between them: SS-31 has 4 hours in
+   * dogs after intravenous dosing and no human figure anywhere, including its
+   * own approved label. Hiding that in a sentence throws away the only
+   * measurement there is, and promoting it to `halfLifeHours` would state it as
+   * this species by this route, which it is not.
+   *
+   * Only ever set alongside `halfLifeHours: null`. If a human figure exists,
+   * that is the figure.
+   *
+   * The curve drawn from this is deliberately marked as a different kind of
+   * claim, and the readings that imply precision, percentage of peak, steady
+   * state, accumulation, are withheld from it.
+   *
+   * The condition that makes this honest rather than a loophole: `hours` must
+   * come from a published measurement, and the citation has to say where. A
+   * community half-life, or one reasoned backwards from how often people
+   * inject, is an invention whichever field it is written into.
+   */
+  halfLifeEstimate?: HalfLifeEstimate;
   /** Time to peak plasma concentration in hours, for subcutaneous dosing. */
   tmaxHours?: number;
 

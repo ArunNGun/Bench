@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PEPTIDES, PEPTIDE_BY_ID } from "./peptides";
 import { singleDoseLevel } from "../calc/pk";
 import { titrationTotalWeeks } from "../calc/schedule";
+import { ROUTE_LABEL } from "../types";
 
 describe("peptide library integrity", () => {
   it("gives every peptide a unique id", () => {
@@ -48,6 +49,41 @@ describe("peptide library integrity", () => {
         // figure entered in days where hours were meant.
         expect(p.halfLifeHours, p.id).toBeLessThan(24 * 60);
       }
+    }
+  });
+
+  it("only carries an estimated half-life when there is no human figure", () => {
+    for (const p of PEPTIDES) {
+      if (!p.halfLifeEstimate) continue;
+      expect(
+        p.halfLifeHours,
+        `${p.id} has a real half-life and does not need an estimate`).toBeNull();
+    }
+  });
+
+  it("makes every estimated half-life say where it came from", () => {
+    // The whole risk of this field is that it becomes the place an unsourced
+    // number gets written. A figure without a species, a route and a citation
+    // is not a measurement, so it cannot be entered at all.
+    for (const p of PEPTIDES) {
+      const e = p.halfLifeEstimate;
+      if (!e) continue;
+      expect(e.hours, p.id).toBeGreaterThan(0);
+      expect(e.hours, p.id).toBeLessThan(24 * 60);
+      expect(e.species.trim(), `${p.id} estimate needs a species`).toBeTruthy();
+      expect(e.source.trim(), `${p.id} estimate needs a source`).toBeTruthy();
+      expect(e.url, `${p.id} estimate needs a citation url`).toMatch(/^https:\/\//);
+      expect(Object.keys(ROUTE_LABEL), `${p.id} estimate has an unknown route`).toContain(e.route);
+    }
+  });
+
+  it("draws a usable curve from every estimated half-life", () => {
+    for (const p of PEPTIDES) {
+      const e = p.halfLifeEstimate;
+      if (!e) continue;
+      const params = { halfLifeHours: e.hours, tmaxHours: p.tmaxHours };
+      expect(singleDoseLevel(p.tmaxHours ?? 0, params), p.id).toBeCloseTo(1, 3);
+      expect(singleDoseLevel(e.hours * 20, params), p.id).toBeLessThan(0.01);
     }
   });
 

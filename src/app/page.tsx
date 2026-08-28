@@ -19,7 +19,7 @@ import {
   type Tone,
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
-import { snapshot, type DoseEvent } from "@/lib/calc/pk";
+import { curveFor, snapshot, type DoseEvent } from "@/lib/calc/pk";
 import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
@@ -50,7 +50,7 @@ import { StackWarnings } from "@/components/StackWarnings";
 import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
-import { INJECTION_SITES, type DoseLog, type Protocol } from "@/lib/types";
+import { INJECTION_SITES, ROUTE_LABEL, type DoseLog, type Protocol } from "@/lib/types";
 
 
 /** Card accents, kept in step with the chart colours. */
@@ -159,14 +159,20 @@ export default function NowPage() {
               protocolDosesPerWeek(protocol, now))
           : [];
 
-      const modellable = peptide?.halfLifeHours != null;
-      const snap = modellable
-        ? snapshot(
-            now,
-            doses,
-            { halfLifeHours: peptide!.halfLifeHours!, tmaxHours: peptide!.tmaxHours },
-            referenceMcg)
-        : null;
+      const curve = peptide ? curveFor(peptide) : null;
+
+      /**
+       * The reading, withheld from an estimated curve on purpose.
+       *
+       * A snapshot is a set of claims about a level: what percentage of a peak
+       * is on board, which phase that puts you in, how long until it clears. A
+       * curve fitted to four hours measured in dogs given it intravenously
+       * cannot support any of that about a person injecting it under the skin.
+       * The shape is worth drawing and the numbers are not worth stating, so
+       * the card shows nothing rather than something precise and unfounded.
+       */
+      const snap =
+        curve && !curve.estimated ? snapshot(now, doses, curve.params, referenceMcg) : null;
 
       return {
         protocol,
@@ -178,6 +184,7 @@ export default function NowPage() {
         stock,
         snap,
         blendParts,
+        curve,
         lastLog,
         lastLoggedAt,
         // What the compound is doing right now, in words.
@@ -225,13 +232,14 @@ export default function NowPage() {
         continue;
       }
 
-      if (t.peptide?.halfLifeHours != null) {
+      if (t.curve) {
         out.push({
           id: t.protocol.id,
-          label: t.peptide.name,
+          label: t.peptide!.name,
           doses: t.doses,
-          params: { halfLifeHours: t.peptide.halfLifeHours, tmaxHours: t.peptide.tmaxHours },
+          params: t.curve.params,
           referenceMcg: t.referenceMcg,
+          estimated: t.curve.estimated,
         });
       }
     }
@@ -254,13 +262,32 @@ export default function NowPage() {
     const names = new Set<string>();
     for (const t of tracks) {
       for (const part of t.blendParts) {
-        if (part.peptide?.halfLifeHours == null) names.add(part.name);
+        if (!part.peptide || !curveFor(part.peptide)) names.add(part.name);
       }
-      if (!t.blendParts.length && t.peptide && t.peptide.halfLifeHours == null) {
+      if (!t.blendParts.length && t.peptide && !curveFor(t.peptide)) {
         names.add(t.peptide.name);
       }
     }
     return [...names];
+  }, [tracks]);
+
+  /**
+   * The lines that are drawn from a measurement made elsewhere, and what that
+   * measurement was. Stated on the card next to the chart rather than left for
+   * the library page, since the person reading the curve is here.
+   */
+  const estimatedFrom = useMemo(() => {
+    const out: { id: string; text: string }[] = [];
+    for (const t of tracks) {
+      const e = t.peptide?.halfLifeEstimate;
+      if (!t.curve?.estimated || !e) continue;
+      out.push({
+        id: t.protocol.id,
+        text: `${t.peptide!.name} is drawn from ${formatHalfLife(e.hours)} measured in ${
+          e.species} given it ${ROUTE_LABEL[e.route].toLowerCase()}, from ${e.source}.`,
+      });
+    }
+    return out;
   }, [tracks]);
 
   const needsAttention = tracks.filter(
@@ -386,8 +413,17 @@ export default function NowPage() {
             <div className="ml-auto flex flex-wrap gap-x-3.5 gap-y-1">
               {series.map((s) => (
                 <span key={s.id} className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-                  <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                  {/* Hollow for an estimate, matching the dashed line it labels. */}
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={
+                      s.estimated
+                        ? { border: `1.5px solid ${s.color}` }
+                        : { background: s.color }
+                    }
+                  />
                   {s.label}
+                  {s.estimated && <span className="text-[var(--faint)]">estimated</span>}
                 </span>
               ))}
             </div>
@@ -416,6 +452,15 @@ export default function NowPage() {
             adding diluent to an open vial rewrites the basis, so a dose drawn before a top up shows
             the strength the vial has now rather than the one that was in the syringe.
           </p>
+
+          {estimatedFrom.length > 0 && (
+            <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
+              A dashed line is a shape, not a level. {estimatedFrom.map((e) => e.text).join(" ")} No
+              percentage of peak, steady state or accumulation figure is shown for{" "}
+              {estimatedFrom.length === 1 ? "it" : "them"}, because a half-life from another species
+              or another route cannot support one.
+            </p>
+          )}
 
           {unplotted.length > 0 && (
             <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
