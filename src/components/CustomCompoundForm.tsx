@@ -13,6 +13,7 @@ import {
 import { allPeptides, useStore } from "@/lib/store";
 import {
   draftToPeptide,
+  peptideToDraft,
   validateDraft,
   type CustomDraft,
   type DraftProblem,
@@ -56,24 +57,35 @@ export const EMPTY_DRAFT: CustomDraft = {
  * then back again to start the protocol over, is how a feature ends up unused.
  *
  * `onCreated` hands back the new entry so the caller can select it immediately.
+ *
+ * Pass `editing` to change an entry that already exists. The same form does
+ * both, because they are the same fields, and because a compound you can create
+ * but never correct is a compound you have to delete and rebuild, taking every
+ * protocol and logged dose that referenced it with you.
  */
 export function CustomCompoundForm({
   onCreated,
   onCancel,
   initialName,
+  editing,
 }: {
   onCreated?: (peptide: Peptide) => void;
   onCancel: () => void;
   initialName?: string;
+  editing?: Peptide;
 }) {
   const addCustomPeptide = useStore((s) => s.addCustomPeptide);
+  const updateCustomPeptide = useStore((s) => s.updateCustomPeptide);
   const custom = useStore((s) => s.customPeptides);
 
-  const [draft, setDraft] = useState<CustomDraft>({ ...EMPTY_DRAFT, name: initialName ?? "" });
+  const [draft, setDraft] = useState<CustomDraft>(() =>
+    editing ? peptideToDraft(editing) : { ...EMPTY_DRAFT, name: initialName ?? "" });
   const [submitted, setSubmitted] = useState(false);
 
   const everything = useMemo(() => allPeptides(custom), [custom]);
-  const problems = useMemo(() => validateDraft(draft, everything), [draft, everything]);
+  const problems = useMemo(
+    () => validateDraft(draft, everything, editing?.id),
+    [draft, everything, editing?.id]);
 
   const errorFor = (field: keyof CustomDraft): DraftProblem | undefined =>
     submitted ? problems.find((p) => p.field === field) : undefined;
@@ -86,6 +98,16 @@ export function CustomCompoundForm({
     if (problems.length) return;
 
     const peptide = draftToPeptide(draft);
+
+    if (editing) {
+      // The id stays whatever it was. Everything that references this compound
+      // references that string, so a rename must not become a new compound.
+      updateCustomPeptide(editing.id, peptide);
+      setSubmitted(false);
+      onCreated?.({ ...peptide, id: editing.id });
+      return;
+    }
+
     addCustomPeptide(peptide);
     setDraft(EMPTY_DRAFT);
     setSubmitted(false);
@@ -278,7 +300,7 @@ export function CustomCompoundForm({
           Cancel
         </Button>
         <Button variant="primary" onClick={save}>
-          Add {draft.name.trim() || "compound"}
+          {editing ? "Save changes" : `Add ${draft.name.trim() || "compound"}`}
         </Button>
       </div>
     </div>

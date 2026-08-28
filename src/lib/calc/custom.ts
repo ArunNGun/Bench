@@ -66,18 +66,41 @@ export const isCustomId = (id: string) => id.startsWith(CUSTOM_PREFIX);
  * itself: a missing name, a dose range the wrong way round, a schedule of zero
  * doses a week that would make burn rate and supply-days divide by zero.
  */
-export function validateDraft(draft: CustomDraft, existing: Peptide[]): DraftProblem[] {
+export function validateDraft(
+  draft: CustomDraft,
+  existing: Peptide[],
+  /**
+   * The entry being edited, excluded from the duplicate check. Without it,
+   * opening your own compound and saving it unchanged would fail on the grounds
+   * that a compound with that name already exists, which it does, and it is
+   * this one.
+   */
+  editingId?: string): DraftProblem[] {
   const problems: DraftProblem[] = [];
   const name = draft.name.trim();
 
+  /**
+   * Who this name is allowed to collide with.
+   *
+   * Creating something the library already has is a mistake worth stopping.
+   * Editing something you made before the library caught up is not: SS-31 was
+   * a compound people added themselves for a year before it was added here, and
+   * refusing to save their entry does not remove the duplicate, it only stops
+   * them correcting the half-life on the copy they actually use. So an edit is
+   * only checked against your own compounds, and a new entry against everything.
+   */
+  const others = editingId
+    ? existing.filter((p) => p.id !== editingId && isCustomId(p.id))
+    : existing;
+
   if (!name) {
     problems.push({ field: "name", message: "Give it a name." });
-  } else if (existing.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+  } else if (others.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
     problems.push({
       field: "name",
       message: `${name} is already in the library. Use that entry, or pick a different name.`,
     });
-  } else if (existing.some((p) => p.id === slugifyCompound(name))) {
+  } else if (others.some((p) => p.id === slugifyCompound(name))) {
     problems.push({ field: "name", message: "You already have a compound with that name." });
   }
 
@@ -173,5 +196,33 @@ export function draftToPeptide(draft: CustomDraft): Peptide {
     citations: [],
     cautionBanner:
       "You created this entry. Every figure in it is yours, and none of it has been checked against a published source.",
+  };
+}
+
+/**
+ * Read an existing entry back into a draft, so the form can edit it.
+ *
+ * Lossy on purpose, and only in one direction: a `Peptide` carries fields the
+ * form never offered, side effects, citations, a status line, and those are
+ * left alone by the caller rather than round-tripped through here. What comes
+ * back is the part a person typed and might want to change.
+ */
+export function peptideToDraft(p: Peptide): CustomDraft {
+  const dose = p.doseRanges[0];
+  return {
+    name: p.name,
+    category: p.category,
+    aka: p.aka.length ? p.aka.join(", ") : undefined,
+    summary: p.summary,
+    halfLifeHours: p.halfLifeHours,
+    routes: p.routes,
+    preparation: p.preparation ?? "powder",
+    doseLowMcg: dose?.lowMcg,
+    doseHighMcg: dose?.highMcg,
+    frequency: dose?.frequency,
+    perWeek: dose?.perWeek,
+    vialSizeMg: p.vialSizesMg[0],
+    iuPerMg: p.iuPerMg,
+    notes: p.mechanism,
   };
 }
