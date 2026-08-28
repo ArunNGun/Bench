@@ -438,6 +438,54 @@ export const GROWTH: Peptide[] = [
   },
 
   {
+    id: "ss-31",
+    name: "SS-31",
+    aka: ["Elamipretide", "Bendavia", "MTP-131", "Forzinity"],
+    category: "longevity",
+    summary:
+      "A four-amino-acid peptide that binds cardiolipin in the inner mitochondrial membrane. Approved in the United States in September 2025, for one rare disease.",
+    mechanism:
+      "D-Arg-dimethylTyr-Lys-Phe-NH2. It concentrates in the inner mitochondrial membrane and binds cardiolipin, the lipid that organises the electron transport chain into supercomplexes. Binding cardiolipin changes how cytochrome c interacts with it, which the approved label describes as improving mitochondrial morphology and function. It is not an antioxidant supplement and not a hormone.",
+    halfLifeHours: null,
+    halfLifeNote:
+      "Not stated anywhere citable. This is the unusual case of an approved drug whose label reports absorption, distribution and excretion but no half-life: peak at 0.5 to 1 hour after subcutaneous injection, 92% bioavailable, and essentially the whole dose recovered in urine as parent or the M1 and M2 metabolites by 48 hours, with minimal accumulation on daily dosing. Those facts bound it below a day without giving a figure. The only number found anywhere is 4 hours in dogs after intravenous dosing, which is neither this species nor this route, so no curve is drawn.",
+    routes: ["subcutaneous", "intravenous"],
+    vialSizesMg: [10, 50],
+    reconstitutedDays: 28,
+    doseRanges: [
+      {
+        lowMcg: 40_000,
+        highMcg: 40_000,
+        frequency: "once daily",
+        perWeek: 7,
+        evidence: "approved",
+        note: "40 mg subcutaneously once daily, in the abdomen or outer thigh, rotating sites. Halved to 20 mg in adults with an eGFR under 30 mL/min who are not on dialysis. This is the Barth syndrome dose in patients weighing at least 30 kg, and it is the same 40 mg daily dose used in the mitochondrial myopathy and heart failure trials.",
+      },
+    ],
+    sideEffects: [
+      "Injection site reactions, which are close to universal: every patient in the approved crossover trial had injection site erythema, and induration, pruritus and pain each affected two thirds or more.",
+      "Raised eosinophils, appearing when dosing runs past 30 days and peaking around day 90, then returning to baseline on continued treatment or after stopping. Not associated with any symptom or other laboratory change.",
+      "Hypersensitivity, including reactions needing emergency treatment. Rash, papular lesions, eczematous dermatitis and cough, from minutes to months after starting.",
+    ],
+    contraindications: [
+      "Serious hypersensitivity to elamipretide. Anyone who has had one should not be rechallenged.",
+      "Neonates. The approved solution is preserved with benzyl alcohol, 20 mg/mL, which has caused fatal gasping syndrome in low birth weight and preterm infants.",
+      "Severe renal impairment without a dose reduction. Exposure to the M1 and M2 metabolites rose by 280% and 640% at a creatinine clearance under 30 mL/min.",
+      "Known or suspected cancer, cautiously. In one mouse model of liver cancer, mitochondria-targeted antioxidants including this one increased tumour number and size while conventional antioxidants reduced them. Mouse data, one model, and never assessed in people.",
+    ],
+    status:
+      "Approved by the FDA in September 2025 as Forzinity, to improve muscle strength in Barth syndrome at 30 kg and above. That is an accelerated approval resting on knee extensor strength, an intermediate endpoint, in twelve patients. Its phase 3 trial in primary mitochondrial myopathy, MMPOWER-3, enrolled 218 people and missed its primary endpoints, as did phase 2 trials in heart failure and the original Barth trial.",
+    cautionBanner:
+      "One narrow approval, and no evidence for the reason most people buy it. Nothing has been shown in humans for mitochondrial ageing, energy, fitness or cognition; the trials that tested harder endpoints in larger populations failed. Note also that the approved product is a ready-made preserved solution at 80 mg/mL, while material sold as research-grade SS-31 is lyophilised powder you reconstitute yourself, so the vial sizes here follow the powder.",
+    citations: [
+      { label: "FDA prescribing information, Forzinity (elamipretide), September 2025", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/215244s000lbl.pdf" },
+      { label: "DailyMed, Forzinity label", url: "https://dailymed.nlm.nih.gov/dailymed/lookup.cfm?setid=146bf34c-76f2-48db-ac07-fb29cce2cd75" },
+      { label: "Karaa et al. 2023, Neurology, MMPOWER-3 phase 3 in primary mitochondrial myopathy", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10382259/" },
+      { label: "ADDF Cognitive Vitality review, SS-31, for the canine 4 hour figure", url: "https://www.alzdiscovery.org/uploads/cognitive_vitality_media/SS-31-Cognitive-Vitality-For-Researchers.pdf" },
+    ],
+  },
+
+  {
     id: "pt-141",
     name: "PT-141",
     aka: ["Bremelanotide", "Vyleesi"],
