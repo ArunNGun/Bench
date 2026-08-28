@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, Flame, Plus, Sparkles, Syringe as SyringeIcon, Undo2 } from "lucide-react";
 import { PkChart, type PkSeries } from "@/components/PkChart";
+import { PkReadout } from "@/components/PkReadout";
 import {
   Badge,
   Button,
@@ -20,7 +21,7 @@ import {
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { snapshot, type DoseEvent } from "@/lib/calc/pk";
 import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { daysOfSupplyForProtocol } from "@/lib/calc/inventory";
+import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
@@ -33,6 +34,7 @@ import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
+  formatConcentration,
   formatDate,
   formatDose,
   formatDuration,
@@ -86,6 +88,41 @@ export default function NowPage() {
     return () => clearInterval(t);
   }, []);
 
+  /**
+   * The moment the chart is being asked about, or null for none.
+   *
+   * Null rather than "now" so that letting go of the chart returns the
+   * readout to the present instead of leaving it stuck wherever the pointer
+   * happened to stop.
+   */
+  const [pickedMs, setPickedMs] = useState<number | null>(null);
+
+  /**
+   * Names the vial behind a dose, for the chart readout.
+   *
+   * Lives here rather than in the chart because components render and do not
+   * read the store. Returns null rather than a guess when the vial has since
+   * been deleted, or when the dose was logged without one, which is true of
+   * anything recorded before vials were tracked at all.
+   *
+   * The strength reported is the vial's basis as it stands today. Topping one
+   * up with more diluent rewrites that basis, so a dose drawn before a top up
+   * reads at the concentration the vial has now, not the one it had in the
+   * syringe. The note under the chart says so.
+   */
+  const describeVial = useCallback(
+    (vialId: string) => {
+      const vial = vials.find((v) => v.id === vialId);
+      if (!vial) return null;
+
+      const conc = vialConcentration(vial);
+      const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
+      return {
+        label: `${name} vial`,
+        concentration: Number.isFinite(conc) ? formatConcentration(conc) : "not reconstituted",
+      };
+    },
+    [vials, custom]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
 
@@ -96,7 +133,11 @@ export default function NowPage() {
       const peptide = findPeptide(custom, protocol.peptideId);
       const protocolLogs = logs.filter(
         (l) => !l.skipped && (l.protocolId === protocol.id || l.peptideId === protocol.peptideId));
-      const doses: DoseEvent[] = protocolLogs.map((l) => ({ at: l.at, amountMcg: l.doseMcg }));
+      const doses: DoseEvent[] = protocolLogs.map((l) => ({
+        at: l.at,
+        amountMcg: l.doseMcg,
+        vialId: l.vialId,
+      }));
       const lastLog = protocolLogs.length
         ? protocolLogs.reduce((a, b) => (b.at > a.at ? b : a))
         : null;
@@ -347,12 +388,28 @@ export default function NowPage() {
             </div>
           </div>
           <div className="px-2 pb-2 pt-3">
-            <PkChart series={series} fromMs={now - 14 * DAY} toMs={now + 7 * DAY} nowMs={now} />
+            <PkChart
+              series={series}
+              fromMs={now - 14 * DAY}
+              toMs={now + 7 * DAY}
+              nowMs={now}
+              pickedMs={pickedMs}
+              onPick={setPickedMs}
+            />
           </div>
+          <PkReadout
+            series={series}
+            atMs={pickedMs ?? now}
+            nowMs={now}
+            describeVial={describeVial}
+          />
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
             Relative levels, not concentrations. One normal dose peaks at 100%, so the line says how
             much is on board compared with a single dose, bioavailability is unpublished for most of
             these compounds, so a real ng/mL figure is not available. Triangles mark logged doses.
+            Where a reading names a vial, that vial&apos;s strength is read as it stands today:
+            adding diluent to an open vial rewrites the basis, so a dose drawn before a top up shows
+            the strength the vial has now rather than the one that was in the syringe.
           </p>
 
           {unplotted.length > 0 && (
