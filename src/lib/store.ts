@@ -21,6 +21,7 @@ import {
   type Vial,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
+import { documentChanged } from "./calc/document";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate } from "./calc/reconstitution";
 import { startOfLocalDay } from "./calc/schedule";
@@ -464,6 +465,26 @@ export const useStore = create<StoreState>()(
         useStore.getState().setHydrated();
       },
     }));
+
+/**
+ * Stamp when the document last changed.
+ *
+ * Subscribed here rather than in a component on purpose. A screen can be
+ * unmounted, and the one moment this must not miss is a change made on a screen
+ * that nobody thought about. The store is always there.
+ *
+ * Guarded on `hydrated` because rehydration replaces every array in the state,
+ * which is not a person changing anything and would otherwise mark a document
+ * unsaved on every reload.
+ *
+ * `dataChangedAt` is itself part of settings, so it has to be excluded from
+ * what counts as a change. `documentChanged` does that, and its test says so.
+ */
+useStore.subscribe((next, prev) => {
+  if (!next.hydrated || !prev.hydrated) return;
+  if (!documentChanged(next, prev)) return;
+  useStore.setState((s) => ({ settings: { ...s.settings, dataChangedAt: Date.now() } }));
+});
 
 // ---------------------------------------------------------------------------
 // Selectors and derived data

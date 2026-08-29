@@ -28,10 +28,22 @@ import { Check, Download } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/lib/store";
 import { downloadJson, exportFileName } from "@/lib/backup/download";
+import { backupDirty } from "@/lib/calc/document";
 
 export function BackupButton({ className }: { className?: string }) {
   const exportData = useStore((s) => s.exportData);
+  const updateSettings = useStore((s) => s.updateSettings);
   const hydrated = useStore((s) => s.hydrated);
+  const settings = useStore((s) => s.settings);
+
+  /**
+   * Whether anything has happened that no file holds yet.
+   *
+   * A rim rather than a filled button, and only a rim: this is a reminder, not
+   * an error, and a header control that shouts every time a dose is logged
+   * would be ignored within a week.
+   */
+  const dirty = backupDirty(settings.dataChangedAt, settings.lastBackupAt);
 
   /*
    * A download gives no feedback of its own on most platforms: no dialog, no
@@ -43,6 +55,18 @@ export function BackupButton({ className }: { className?: string }) {
 
   function save() {
     downloadJson(exportData(), exportFileName());
+    /*
+     * Recording the save was missing entirely, so backing up from here left
+     * Settings reading "Never" and the reminder still firing. The header button
+     * and the Settings one now record the same thing, as they already produced
+     * the same file.
+     *
+     * Stamped on the click, and that is a claim the app cannot fully stand
+     * behind: on the web a download is a request, and the browser may cancel it
+     * or put the file somewhere nobody looks. There is no event that says
+     * otherwise, so the alternative is a rim that never clears.
+     */
+    updateSettings({ lastBackupAt: Date.now() });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -54,13 +78,22 @@ export function BackupButton({ className }: { className?: string }) {
       // Before hydration the store is empty, and exporting emptiness over a
       // real backup is the one way this button could destroy something.
       disabled={!hydrated}
-      aria-label={saved ? "Backup saved" : "Save a backup"}
-      title="Save a copy of everything to a file"
+      aria-label={
+        saved ? "Backup saved" : dirty ? "Save a backup, there are unsaved changes" : "Save a backup"
+      }
+      title={
+        dirty
+          ? "Something has changed since your last backup"
+          : "Save a copy of everything to a file"
+      }
       className={cn(
         "press flex h-10 items-center gap-2 rounded-[var(--r-pill)] px-3 text-[14px] font-medium transition-colors",
         saved
           ? "bg-[var(--leaf-soft)] text-[var(--leaf-ink)]"
           : "text-[var(--muted)] hover:bg-[var(--card)] hover:text-[var(--ink)]",
+        // A ring rather than a border, so nothing shifts by a pixel when it
+        // appears and disappears.
+        dirty && !saved && "ring-1 ring-[var(--rose)]",
         !hydrated && "opacity-40",
         className)}
     >
