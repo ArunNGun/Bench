@@ -30,6 +30,7 @@ import {
   weeklyExposure,
 } from "@/lib/calc/progress";
 import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
+import { assignColors } from "@/lib/calc/palette";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
@@ -49,19 +50,6 @@ import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
 import { INJECTION_SITES, type DoseLog, type Protocol } from "@/lib/types";
 
-
-/**
- * Chart line colours, assigned in order across every series on the chart,
- * including blend components, so two lines can never share a colour.
- */
-const SERIES_COLORS = [
-  "var(--mint)",
-  "var(--grape)",
-  "var(--tangerine)",
-  "var(--sky)",
-  "var(--rose)",
-  "var(--leaf)",
-];
 
 /** Card accents, kept in step with the chart colours. */
 const TRACK_TONES: Tone[] = ["mint", "grape", "tangerine", "sky", "rose", "leaf"];
@@ -159,6 +147,24 @@ export default function NowPage() {
     });
   }, [active, logs, vials, custom, now]);
 
+  /**
+   * One colour per line, and per protocol, agreed with the Plan screen.
+   *
+   * Built from every active protocol rather than only the ones that can be
+   * drawn: a compound with no half-life still appears in a plan, and if it took
+   * no colour here the two screens would count differently from the first one
+   * you owned.
+   */
+  const palette = useMemo(
+    () =>
+      assignColors(
+        tracks.map((t) => ({
+          protocolId: t.protocol.id,
+          componentKeys: modellableComponents(t.blendParts).map(
+            (part) => part.peptideId ?? part.name),
+        }))),
+    [tracks]);
+
   const series: PkSeries[] = useMemo(() => {
     const out: Omit<PkSeries, "color">[] = [];
 
@@ -195,9 +201,14 @@ export default function NowPage() {
       }
     }
 
-    // Colour once, across the whole chart, so no two lines ever collide.
-    return out.map((s, i) => ({ ...s, color: SERIES_COLORS[i % SERIES_COLORS.length] }));
-  }, [tracks]);
+    /*
+     * Coloured from the shared assignment rather than by position here, so the
+     * plan on the other screen names the same compound in the same colour. A
+     * line whose key is missing cannot happen, since the assignment is built
+     * from the same tracks, but a visible fallback beats an invisible line.
+     */
+    return out.map((s) => ({ ...s, color: palette.byKey.get(s.id) ?? "var(--faint)" }));
+  }, [tracks, palette]);
 
   /**
    * Components that are genuinely in you but cannot be drawn, because no

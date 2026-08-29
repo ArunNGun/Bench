@@ -46,6 +46,8 @@ import {
   type ScheduleKind,
   type TitrationStep,
 } from "@/lib/types";
+import { assignColors } from "@/lib/calc/palette";
+import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -817,13 +819,43 @@ function Upcoming() {
   const custom = useStore((s) => s.customPeptides);
   const now = Date.now();
 
+  const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
+
+  /**
+   * The same colours the chart on Today uses, from the same assignment.
+   *
+   * Counting through the protocols here and through the chart's lines there
+   * would agree until the first blend or the first compound with no half-life,
+   * and then quietly stop agreeing. A colour that means one compound on one
+   * screen and another elsewhere is worse than no colour.
+   */
+  const palette = useMemo(
+    () =>
+      assignColors(
+        active.map((p) => {
+          const peptide = findPeptide(custom, p.peptideId);
+          const parts =
+            peptide && isBlend(peptide)
+              ? decomposeDose(
+                  peptide,
+                  scheduledDoseMcg(p, now),
+                  (id) => findPeptide(custom, id),
+                  protocolDosesPerWeek(p, now))
+              : [];
+          return {
+            protocolId: p.id,
+            componentKeys: modellableComponents(parts).map((c) => c.peptideId ?? c.name),
+          };
+        })),
+    [active, custom, now]);
+
   const days = useMemo(() => {
     const to = endOfLocalDay(now + 13 * 86_400_000);
-    const rows = protocols
-      .filter((p) => p.active)
+    const rows = active
       .flatMap((p) =>
         protocolDoseTimesBetween(p, now, to).map((at) => ({
           at,
+          protocolId: p.id,
           name: findPeptide(custom, p.peptideId)?.name ?? p.peptideId,
           doseMcg: scheduledDoseMcg(p, at),
         })))
@@ -838,7 +870,7 @@ function Upcoming() {
       map.get(key)!.push(r);
     }
     return [...map.entries()].sort((a, b) => a[0] - b[0]);
-  }, [protocols, custom, now]);
+  }, [active, custom, now]);
 
   if (!days.length) return null;
 
@@ -852,15 +884,33 @@ function Upcoming() {
               {formatWeekday(day)} {formatDate(day)}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1">
-              {rows.map((r, i) => (
-                <span key={i} className="text-[13px] text-[var(--muted)]">
-                  <span className="tnum font-mono text-[var(--faint)]">{formatTime(r.at)}</span>{" "}
-                  <span className="text-[var(--ink)]">{r.name}</span>{" "}
-                  <span className="tnum font-mono text-[var(--tangerine)]">
-                    {formatDose(r.doseMcg)}
+              {rows.map((r, i) => {
+                const color = palette.byProtocol.get(r.protocolId);
+                return (
+                  <span key={i} className="flex items-center gap-1.5 text-[13px]">
+                    <span className="tnum font-mono text-[var(--faint)]">{formatTime(r.at)}</span>
+                    {color && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: color }}
+                      />
+                    )}
+                    <span style={color ? { color } : undefined} className="font-medium">
+                      {r.name}
+                    </span>
+                    {/*
+                      The amount used to be tangerine for everything, and
+                      tangerine is one of the compound colours, so a compound
+                      that happened to be tangerine sat beside an amount in the
+                      same colour meaning something else entirely. Neutral now:
+                      the colour says which compound, the figure says how much.
+                    */}
+                    <span className="tnum font-mono text-[var(--ink)]">
+                      {formatDose(r.doseMcg)}
+                    </span>
                   </span>
-                </span>
-              ))}
+                );
+              })}
             </div>
           </li>
         ))}
