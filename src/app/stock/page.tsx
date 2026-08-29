@@ -1005,6 +1005,9 @@ function TopUpForm({
         </Button>
       </div>
     </Card>
+  );
+}
+
 const DILUENT_LABEL: Record<DiluentKind, string> = {
   bacteriostatic: "Bacteriostatic water",
   sterile: "Sterile water",
@@ -1025,11 +1028,16 @@ function DiluentShelf() {
   const addDiluent = useStore((s) => s.addDiluent);
   const updateDiluent = useStore((s) => s.updateDiluent);
   const removeDiluent = useStore((s) => s.removeDiluent);
+  const openDiluent = useStore((s) => s.openDiluent);
+  const drawDiluent = useStore((s) => s.drawDiluent);
 
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<DiluentKind>("bacteriostatic");
   const [volumeMl, setVolumeMl] = useState(30);
   const [count, setCount] = useState(1);
+  /** Which bottle is having water written off, and how much. */
+  const [usingId, setUsingId] = useState<string | null>(null);
+  const [usedMl, setUsedMl] = useState(1);
 
   const now = Date.now();
   const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
@@ -1136,6 +1144,27 @@ function DiluentShelf() {
               {bottleUsable(b, now) ? null : <Badge tone="rose">unusable</Badge>}
 
               <div className="ml-auto flex items-center gap-1">
+                {b.state === "sealed" && (
+                  <Button
+                    variant="soft"
+                    className="px-2.5 py-1 text-[12px]"
+                    onClick={() => openDiluent(b.id)}
+                  >
+                    Open
+                  </Button>
+                )}
+                {b.state !== "discarded" && bottleRemainingMl(b) > 0 && (
+                  <Button
+                    variant="soft"
+                    className="px-2.5 py-1 text-[12px]"
+                    onClick={() => {
+                      setUsingId(usingId === b.id ? null : b.id);
+                      setUsedMl(1);
+                    }}
+                  >
+                    Used elsewhere
+                  </Button>
+                )}
                 {b.state !== "discarded" && (
                   <Button
                     variant="soft"
@@ -1154,6 +1183,43 @@ function DiluentShelf() {
                   <Trash2 size={15} />
                 </button>
               </div>
+
+              {/*
+                Water goes into things this app does not track, and without a way
+                to say so the shelf slowly claims more than the fridge holds.
+                Deliberately one-way: this takes water out, and there is no
+                field for putting an arbitrary amount back, because that would
+                be a way to make the figure say anything at all.
+              */}
+              {usingId === b.id && (
+                <div className="mt-2 flex w-full flex-wrap items-end gap-2.5">
+                  <label className="flex-1">
+                    <span className="mb-1 block text-[12px] text-[var(--muted)]">
+                      Used for something not tracked here
+                    </span>
+                    <NumberInput
+                      value={usedMl}
+                      min={0}
+                      step={0.5}
+                      suffix="mL"
+                      onChange={(e) => setUsedMl(Number(e.target.value))}
+                    />
+                  </label>
+                  <Button variant="ghost" onClick={() => setUsingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    disabled={!(usedMl > 0)}
+                    onClick={() => {
+                      drawDiluent(b.id, Math.min(usedMl, left));
+                      setUsingId(null);
+                    }}
+                  >
+                    Take out {trim(Math.min(usedMl, left), 2)} mL
+                  </Button>
+                </div>
+              )}
             </Card>
           );
         })}

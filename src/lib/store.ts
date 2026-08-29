@@ -25,7 +25,7 @@ import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged } from "./calc/document";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate } from "./calc/reconstitution";
-import { drawFromBottle } from "./calc/diluent";
+import { drawFromBottle, openBottle } from "./calc/diluent";
 import { startOfLocalDay } from "./calc/schedule";
 import {
   diluentAfterTopUp,
@@ -162,6 +162,20 @@ interface StoreState extends AppData {
   addDiluent: (b: Omit<DiluentBottle, "id" | "profileId">) => string;
   updateDiluent: (id: string, patch: Partial<DiluentBottle>) => void;
   removeDiluent: (id: string) => void;
+  /** Break the seal without drawing anything yet. */
+  openDiluent: (id: string) => void;
+  /**
+   * Water used for something this app does not track.
+   *
+   * Every manual correction is also a way for a figure to drift away from
+   * reality, so this is deliberately the only one: it takes water out, and
+   * there is no way to put an arbitrary amount back in.
+   */
+  /*
+   * Named "draw" rather than "use" because a store action beginning with `use`
+   * reads as a React hook to both the linter and the next person.
+   */
+  drawDiluent: (id: string, ml: number) => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
 
@@ -451,6 +465,9 @@ export const useStore = create<StoreState>()(
           diluents: s.diluents.map((b) => (b.id === id ? { ...b, ...patch } : b)),
         })),
       removeDiluent: (id) => set((s) => ({ diluents: s.diluents.filter((b) => b.id !== id) })),
+      openDiluent: (id) => set((s) => ({ diluents: openBottle(s.diluents, id, Date.now()) })),
+      drawDiluent: (id, ml) =>
+        set((s) => ({ diluents: drawFromBottle(s.diluents, id, ml, Date.now()) })),
 
       reconstituteVial: (id, diluentMl, diluent, atMs, fromBottleId) =>
         set((s) => {

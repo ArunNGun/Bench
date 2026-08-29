@@ -18,6 +18,7 @@
  */
 
 import type { DiluentBottle, DiluentKind } from "../types";
+import { beyondUseDate } from "./reconstitution";
 
 export const OPEN_STATES: DiluentBottle["state"][] = ["open"];
 const DEAD_STATES: DiluentBottle["state"][] = ["finished", "discarded"];
@@ -74,6 +75,29 @@ export function pickBottle(
 }
 
 /**
+ * Open a bottle without taking anything out of it yet.
+ *
+ * Opening used to be a side effect of drawing, which is true only for water
+ * that goes through this app. Somebody who breaks the seal for something Bench
+ * does not track had nothing to press, and the shelf then said sealed about a
+ * bottle that was not.
+ *
+ * The date matters as much as the state: a bottle's own clock starts at first
+ * puncture, and the beyond-use window is the same 28 days the app already uses
+ * for a multi-dose vial, which is the convention that rule comes from rather
+ * than a number invented here.
+ */
+export function openBottle(
+  bottles: DiluentBottle[],
+  id: string,
+  nowMs: number): DiluentBottle[] {
+  return bottles.map((b) =>
+    b.id === id && b.state === "sealed"
+      ? { ...b, state: "open" as const, openedAt: nowMs, budAt: beyondUseDate(nowMs) }
+      : b);
+}
+
+/**
  * Take water out of a bottle.
  *
  * Opens a sealed one, because drawing from it is what opening means, and marks
@@ -97,7 +121,11 @@ export function drawFromBottle(
     return {
       ...b,
       drawnMl,
+      // Drawing from a sealed bottle opens it, and opening it here has to mean
+      // exactly what the button means, or the same bottle would carry a
+      // different beyond-use date depending on how it was opened.
       openedAt: b.openedAt ?? (wasSealed ? nowMs : b.openedAt),
+      budAt: b.budAt ?? (wasSealed ? beyondUseDate(nowMs) : b.budAt),
       state: emptied && b.state !== "discarded" ? "finished" : wasSealed ? "open" : b.state,
     };
   });

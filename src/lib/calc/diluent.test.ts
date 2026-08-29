@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bottleExpired,
+  openBottle,
   bottleFractionRemaining,
   bottleRemainingMl,
   bottleUsable,
@@ -98,6 +99,38 @@ describe("pickBottle", () => {
       bottle({ id: "sooner", state: "open", budAt: NOW + 3 * DAY }),
     ];
     expect(pickBottle(shelf, "bacteriostatic", 2, NOW)?.id).toBe("sooner");
+  });
+});
+
+describe("openBottle", () => {
+  it("breaks the seal without taking anything out", () => {
+    const out = openBottle([bottle({ id: "a" })], "a", NOW);
+    expect(out[0].state).toBe("open");
+    expect(out[0].openedAt).toBe(NOW);
+    expect(out[0].drawnMl).toBeUndefined();
+  });
+
+  it("starts the beyond-use clock at the puncture", () => {
+    const out = openBottle([bottle({ id: "a" })], "a", NOW);
+    expect(out[0].budAt).toBe(NOW + 28 * DAY);
+  });
+
+  it("gives the same date however the bottle was opened", () => {
+    // Otherwise the same bottle would expire on a different day depending on
+    // whether it was opened by a button or by being drawn from.
+    const byButton = openBottle([bottle({ id: "a" })], "a", NOW);
+    const byDrawing = drawFromBottle([bottle({ id: "a" })], "a", 2, NOW);
+    expect(byDrawing[0].budAt).toBe(byButton[0].budAt);
+  });
+
+  it("leaves an already open bottle alone", () => {
+    const open = bottle({ id: "a", state: "open", openedAt: 5, budAt: 9 });
+    expect(openBottle([open], "a", NOW)[0]).toEqual(open);
+  });
+
+  it("does not resurrect a finished bottle", () => {
+    const done = bottle({ id: "a", state: "finished", drawnMl: 30 });
+    expect(openBottle([done], "a", NOW)[0].state).toBe("finished");
   });
 });
 
