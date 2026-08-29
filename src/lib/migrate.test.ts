@@ -370,6 +370,7 @@ describe("v6 to v7: half-lives you supplied yourself", () => {
 
   it("stays the same when run twice", () => {
     const once = migrateAppData({ version: 6, halfLifeOverrides: { kpv: { hours: 2, setAt: 5 } } });
+    expect(migrateAppData(once)).toEqual(once);
   });
 });
 

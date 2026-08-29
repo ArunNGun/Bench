@@ -31,6 +31,7 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
+import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
   costPerVialInKit,
@@ -41,7 +42,7 @@ import {
   sumByCurrency,
   totalSpend,
 } from "@/lib/calc/cost";
-import { DEFAULT_SETTINGS, type Vial } from "@/lib/types";
+import { CURRENCIES, DEFAULT_SETTINGS, type Vial } from "@/lib/types";
 
 export default function StockPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -247,6 +248,7 @@ export default function StockPage() {
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
+                  shippingOf={shippingOf}
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
@@ -285,8 +287,8 @@ export default function StockPage() {
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
-                  currency={currency}
                   shippingOf={shippingOf}
+                  currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
                   onReconstitute={() => setReconstituting(v.id)}
@@ -572,6 +574,14 @@ function AddVialForm({
    * cost, and typing it into every vial by hand is the work this removes.
    */
   const [shipping, setShipping] = useState<number | "">("");
+  /**
+   * What you actually paid in, which is not always what the app reports in.
+   *
+   * Without this the vial silently took the app's currency, so a purchase in
+   * euros was recorded as the same number of rupees. The field that made the
+   * totals wrong was the one that was never offered.
+   */
+  const [payCurrency, setPayCurrency] = useState(currency);
   const [supplier, setSupplier] = useState("");
   const [cost, setCost] = useState<number | "">("");
   /**
@@ -708,6 +718,45 @@ function AddVialForm({
         </Field>
       </div>
 
+      {/*
+        Offered only when the price is in a currency other than the one every
+        total is shown in, since that is the only moment a conversion is worth
+        doing. Automatic rates were declined: they would need a network call on
+        every open, and this app makes exactly one in its life.
+      */}
+      <Field label="Paid in" hint="Kept with the vial, so totals never add unlike currencies.">
+        <Select value={payCurrency} onChange={(e) => setPayCurrency(e.target.value)}>
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} · {c.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {/*
+        Offered only when what you paid in differs from what the app reports in,
+        since that is the only moment a conversion is worth doing. Fetched rates
+        were declined for a reason worth keeping: the app makes exactly one
+        network request in its life, and a link is not a request.
+      */}
+      {cost !== "" && Number(cost) > 0 && payCurrency !== currency && (
+        <p className="text-[12px] leading-relaxed text-[var(--muted)]">
+          <a
+            href={converterUrl(Number(cost), payCurrency, currency) ?? "#"}
+            target="_blank"
+            // No referrer: the converter needs the amount to answer, and has no
+            // business knowing which app sent it.
+            rel="noopener noreferrer"
+            className="underline decoration-dotted"
+          >
+            Convert {formatMoney(Number(cost), payCurrency)} to {currency}
+          </a>
+          , if you would rather record it in {currency}. Whichever you choose is
+          stored as typed and never looked up again.
+        </p>
+      )}
+
       <Field
         label="Shipping for this order"
         hint={
@@ -737,7 +786,7 @@ function AddVialForm({
               state: arrived ? "sealed" : "on-order",
               supplier: supplier.trim() || undefined,
               cost: perVial,
-              currency: perVial == null ? undefined : currency,
+              currency: perVial == null ? undefined : payCurrency,
               acquiredAt: Date.now(),
             };
             /*
@@ -750,7 +799,7 @@ function AddVialForm({
               Array.from({ length: Math.max(1, count) }, () => base),
               shipping === "" || !(Number(shipping) > 0)
                 ? null
-                : { cost: Number(shipping), currency });
+                : { cost: Number(shipping), currency: payCurrency });
           }}
           disabled={!peptideId || !(strengthMg > 0)}
         >
