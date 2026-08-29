@@ -26,6 +26,7 @@ import {
   DEFAULT_SETTINGS,
   type AppData,
   type CheckIn,
+  type Order,
   type Vial,
 } from "./types";
 import { vialCapacityMcg } from "./calc/inventory";
@@ -109,6 +110,9 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     // v7. Absent in every older payload, and an empty map behaves exactly as
     // the field not existing did, so nothing has to be backfilled.
     halfLifeOverrides: saneOverrides(data.halfLifeOverrides),
+    // v7. Absent in every older payload, and a vial with no order behaves
+    // exactly as it always did, so nothing has to be backfilled.
+    orders: saneOrders(own(data.orders)),
   };
 }
 
@@ -136,6 +140,18 @@ function saneOverrides(raw: AppData["halfLifeOverrides"]): AppData["halfLifeOver
   return out;
 }
 
+/**
+ * Keep only orders that could carry a share.
+ *
+ * An imported file is not under our control, and a zero or a missing cost would
+ * put a shipping line on the Stock page that adds nothing, or divide by
+ * something that is not a number. A dropped order leaves its vials priced at
+ * what they cost, which is what they were before shipping was recorded at all.
+ */
+function saneOrders(rows: Order[]): Order[] {
+  return rows.filter((o) => o && o.id && Number.isFinite(Number(o.shippingCost)) && o.shippingCost > 0);
+}
+
 /** A valid empty store, for when there is nothing readable to migrate. */
 function emptyLike(): AppData {
   return {
@@ -151,6 +167,7 @@ function emptyLike(): AppData {
     customPeptides: [],
     checkIns: [],
     halfLifeOverrides: {},
+    orders: [],
   };
 }
 

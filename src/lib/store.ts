@@ -118,6 +118,17 @@ interface StoreState extends AppData {
   ) => void;
 
   addVial: (v: Omit<Vial, "id" | "profileId">) => string;
+  /**
+   * Add several vials as one order, so their shipping can be shared.
+   *
+   * One call rather than several, because an order is exactly the set of vials
+   * that arrived together, and that fact is only knowable at the moment they
+   * are entered. No shipping means no order record, since an order that says
+   * nothing is a row kept for its own sake.
+   */
+  addOrder: (
+    vials: Omit<Vial, "id" | "profileId">[],
+    shipping: { cost: number; currency?: string } | null) => void;
   updateVial: (id: string, patch: Partial<Vial>) => void;
   removeVial: (id: string) => void;
   reconstituteVial: (id: string, diluentMl: number, diluent: Vial["diluent"], atMs?: number) => void;
@@ -367,7 +378,50 @@ export const useStore = create<StoreState>()(
       },
       updateVial: (id, patch) =>
         set((s) => ({ vials: s.vials.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
-      removeVial: (id) => set((s) => ({ vials: s.vials.filter((v) => v.id !== id) })),
+      addOrder: (vials, shipping) =>
+        set((s) => {
+          const orderId = shipping && shipping.cost > 0 ? nanoid(10) : undefined;
+          const added = vials.map((v) => ({
+            ...v,
+            id: nanoid(10),
+            profileId: s.activeProfileId,
+            orderId,
+          }));
+
+          return {
+            vials: [...s.vials, ...added],
+            orders:
+              orderId && shipping
+                ? [
+                    ...s.orders,
+                    {
+                      id: orderId,
+                      profileId: s.activeProfileId,
+                      shippingCost: shipping.cost,
+                      currency: shipping.currency,
+                      placedAt: Date.now(),
+                    },
+                  ]
+                : s.orders,
+          };
+        }),
+      /*
+       * Removing the last vial of an order removes the order with it. Left
+       * behind it would keep a shipping figure on the Stock page for a delivery
+       * with nothing in it, which is a number about nothing.
+       */
+      removeVial: (id) =>
+        set((s) => {
+          const gone = s.vials.find((v) => v.id === id);
+          const vials = s.vials.filter((v) => v.id !== id);
+          const orphaned =
+            gone?.orderId && !vials.some((v) => v.orderId === gone.orderId) ? gone.orderId : null;
+
+          return {
+            vials,
+            orders: orphaned ? s.orders.filter((o) => o.id !== orphaned) : s.orders,
+          };
+        }),
       reconstituteVial: (id, diluentMl, diluent, atMs) =>
         set((s) => ({
           vials: s.vials.map((v) =>
@@ -437,6 +491,7 @@ export const useStore = create<StoreState>()(
           customPeptides: migrated.customPeptides,
           checkIns: migrated.checkIns,
           halfLifeOverrides: migrated.halfLifeOverrides ?? {},
+          orders: migrated.orders,
         }));
       },
       importHistory: ({ logs, measurements }) => {
@@ -479,6 +534,7 @@ export const useStore = create<StoreState>()(
           customPeptides: s.customPeptides,
           checkIns: s.checkIns,
           halfLifeOverrides: s.halfLifeOverrides ?? {},
+          orders: s.orders,
         };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
@@ -500,6 +556,7 @@ export const useStore = create<StoreState>()(
         customPeptides: s.customPeptides,
         checkIns: s.checkIns,
         halfLifeOverrides: s.halfLifeOverrides,
+        orders: s.orders,
       }),
       /**
        * Shared with importData, so a backup restored from a file and this
@@ -559,6 +616,7 @@ export function useProfileData() {
   const measurements = useStore((s) => s.measurements);
   const labs = useStore((s) => s.labs);
   const checkIns = useStore((s) => s.checkIns);
+  const orders = useStore((s) => s.orders);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -569,8 +627,9 @@ export function useProfileData() {
       measurements: measurements.filter((x) => x.profileId === activeId),
       labs: labs.filter((x) => x.profileId === activeId),
       checkIns: checkIns.filter((x) => x.profileId === activeId),
+      orders: orders.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, checkIns, activeId]);
+    [protocols, logs, vials, measurements, labs, checkIns, orders, activeId]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */

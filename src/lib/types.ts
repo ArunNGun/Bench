@@ -536,6 +536,14 @@ export interface Vial {
   cost?: number;
   /** ISO currency code, e.g. "INR". Falls back to the app setting. */
   currency?: string;
+  /**
+   * The order this vial arrived in, if its shipping was recorded.
+   *
+   * Only ever set when there is shipping to share. A vial bought on its own
+   * carries no order, because an order with nothing to say about it would be a
+   * record kept for its own sake.
+   */
+  orderId?: string;
   acquiredAt?: number;
   /** Manufacturer expiry of the sealed vial. */
   expiresAt?: number;
@@ -729,6 +737,31 @@ export interface HalfLifeOverride {
   note?: string;
 }
 
+/**
+ * One purchase, and the only thing the app knows about it: what the postage
+ * cost.
+ *
+ * A shelf of vials is not a shelf of orders, and this deliberately stops short
+ * of becoming one. There is no supplier, no tracking number and no date beyond
+ * when it was recorded, because the request was about cost per vial and every
+ * extra field would be a field to maintain, migrate and eventually disagree
+ * with reality.
+ *
+ * The share each vial carries is not stored. It is derived from how many vials
+ * still point at the order, so deleting one redistributes its share across the
+ * rest without rewriting a single row. Sixty dollars of postage on a box of
+ * three is twenty each; throw one away and the remaining two carry thirty.
+ */
+export interface Order {
+  id: string;
+  profileId: string;
+  /** Postage and handling for the whole order, in whole currency units. */
+  shippingCost: number;
+  /** Matches the vials it covers. Falls back to the app setting. */
+  currency?: string;
+  placedAt: number;
+}
+
 export interface AppData {
   version: number;
   profiles: Profile[];
@@ -750,6 +783,8 @@ export interface AppData {
    * would otherwise have to be retyped for every profile on the device.
    */
   halfLifeOverrides?: Record<string, HalfLifeOverride>;
+  /** Purchases whose shipping was recorded, referenced by their vials. */
+  orders: Order[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -797,6 +832,7 @@ export const EMPTY_DATA: AppData = {
   customPeptides: [],
   checkIns: [],
   halfLifeOverrides: {},
+  orders: [],
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */
