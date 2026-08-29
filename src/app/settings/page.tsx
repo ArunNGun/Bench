@@ -40,7 +40,8 @@ import type { BackupFile } from "@/lib/backup/plan";
 import { formatMoney } from "@/lib/calc/cost";
 import { fromDisplayWeight, toDisplayWeight } from "@/lib/calc/outcomes";
 import { formatDate, relativeTime, trim } from "@/lib/format";
-import { CURRENCIES, DEFAULT_SETTINGS, INJECTION_SITES, PROFILE_TONES } from "@/lib/types";
+import { CURRENCIES, DEFAULT_SETTINGS, PROFILE_TONES } from "@/lib/types";
+import { doseCsv } from "@/lib/calc/dosecsv";
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
@@ -71,47 +72,9 @@ export default function SettingsPage() {
 
   /** CSV of the dose history, for a spreadsheet or to hand to a clinician. */
   function downloadCsv() {
-    const esc = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const header = [
-      "date",
-      "time",
-      "peptide",
-      "dose_mcg",
-      "dose_mg",
-      "route",
-      "site",
-      "units",
-      "syringe_scale",
-      "volume_ml",
-      "skipped",
-      "notes",
-    ];
-    const rows = [...logs]
-      .sort((a, b) => a.at - b.at)
-      .map((l) => {
-        const d = new Date(l.at);
-        return [
-          d.toLocaleDateString("en-CA"),
-          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          findPeptide(custom, l.peptideId)?.name ?? l.peptideId,
-          l.doseMcg,
-          l.doseMcg / 1000,
-          l.route,
-          INJECTION_SITES.find((s) => s.id === l.site)?.label ?? "",
-          l.units ?? "",
-          l.syringeScale ?? "",
-          l.volumeMl ?? "",
-          l.skipped ? "yes" : "no",
-          l.notes ?? "",
-        ].map(esc).join(",");
-      });
+    const { rows, text } = doseCsv(logs, (id) => findPeptide(custom, id)?.name ?? id);
 
-    const blob = new Blob([[header.join(","), ...rows].join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

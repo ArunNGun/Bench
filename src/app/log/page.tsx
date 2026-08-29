@@ -10,7 +10,8 @@ import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { overusedSites } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
-import { INJECTION_SITES } from "@/lib/types";
+import { FEELING_TONE } from "@/lib/calc/feeling";
+import { FEELING_LABELS, INJECTION_SITES } from "@/lib/types";
 
 const DAY = 86_400_000;
 
@@ -100,7 +101,7 @@ export default function LogPage() {
           <Stat label="Skipped" value={stats.skipped} tone={stats.skipped > 0 ? "rose" : "neutral"} />
           <Stat
             label="Adherence"
-            value={stats.adherenceRate == null ? ", " : percent(stats.adherenceRate)}
+            value={stats.adherenceRate == null ? "n/a" : percent(stats.adherenceRate)}
             tone={
               stats.adherenceRate == null
                 ? "neutral"
@@ -229,6 +230,29 @@ export default function LogPage() {
                             <span className="font-medium text-[var(--ink)]">{siteLabel}</span>
                           )}
                         </div>
+                        {/*
+                          What was tapped, not only what was typed.
+
+                          The log sheet offers a row of common side effects and
+                          a feeling rating, stored them faithfully, and showed
+                          them nowhere afterwards. That is worse than not
+                          offering them: someone recording nausea by tapping it
+                          reasonably believes they have recorded it.
+                        */}
+                        {(l.feeling != null || l.sideEffects?.length) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {l.feeling != null && (
+                              <Badge tone={FEELING_TONE[l.feeling] ?? "neutral"}>
+                                {FEELING_LABELS[l.feeling] ?? `Feeling ${l.feeling}`}
+                              </Badge>
+                            )}
+                            {l.sideEffects?.map((effect) => (
+                              <Badge key={effect} tone="neutral">
+                                {effect}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         {l.notes && (
                           <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--muted)]">
                             {l.notes}

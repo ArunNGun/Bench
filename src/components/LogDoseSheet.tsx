@@ -16,6 +16,7 @@ import {
 } from "./ui";
 import Link from "next/link";
 import { HelpNote } from "./HelpNote";
+import { FEELING_TONE } from "@/lib/calc/feeling";
 import { Syringe } from "./Syringe";
 import { SiteMap } from "./SiteMap";
 import { BlendBreakdown } from "./BlendBreakdown";
@@ -46,14 +47,6 @@ import {
   type Route,
 } from "@/lib/types";
 
-/** Rough reads red, great reads green. */
-const FEELING_TONE: Record<number, "rose" | "tangerine" | "sky" | "mint" | "leaf"> = {
-  1: "rose",
-  2: "tangerine",
-  3: "sky",
-  4: "mint",
-  5: "leaf",
-};
 import { formatDose, fromDateTimeLocal, toDateTimeLocal, trim } from "@/lib/format";
 
 /**
