@@ -32,7 +32,14 @@ import {
 } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
-import { costPerVialInKit, formatMoney, remainingValue, totalSpend } from "@/lib/calc/cost";
+import {
+  costPerVialInKit,
+  formatMoney,
+  formatTotals,
+  remainingValue,
+  sumByCurrency,
+  totalSpend,
+} from "@/lib/calc/cost";
 import { DEFAULT_SETTINGS, type Vial } from "@/lib/types";
 
 export default function StockPage() {
@@ -70,8 +77,13 @@ export default function StockPage() {
   const totalMg =
     [...sealed, ...open].reduce((s, v) => s + vialRemainingMcg(v), 0) / 1000;
 
-  const spend = totalSpend(vials);
-  const unusedValue = [...sealed, ...open].reduce((s, v) => s + (remainingValue(v) ?? 0), 0);
+  /*
+   * Both figures are per currency. A vial carries its own, so a shelf can hold
+   * one bought in euros and one in dollars, and the old totals added them and
+   * printed the result in whichever currency the settings happened to name.
+   */
+  const spend = totalSpend(vials, currency);
+  const unusedValue = sumByCurrency([...sealed, ...open], remainingValue, currency);
 
   /** The dose this peptide is actually being run at, for a per-vial count. */
   const doseFor = (peptideId: string) => {
@@ -136,13 +148,13 @@ export default function StockPage() {
         <Card className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3">
           <Stat
             label="Spent"
-            value={formatMoney(spend.total, currency)}
+            value={formatTotals(spend.byCurrency)}
             tone="grape"
-            hint={`${spend.pricedVials} priced vial${spend.pricedVials === 1 ? "" : "s"}${spend.unpricedVials ? `, ${spend.unpricedVials} without a price` : ""}.`}
+            hint={`${spend.pricedVials} priced vial${spend.pricedVials === 1 ? "" : "s"}${spend.unpricedVials ? `, ${spend.unpricedVials} without a price` : ""}.${spend.mixed ? " Kept apart by currency rather than added together." : ""}`}
           />
           <Stat
             label="Still in vials"
-            value={formatMoney(unusedValue, currency)}
+            value={formatTotals(unusedValue)}
             tone="mint"
             hint="Value of what you have not used yet."
           />

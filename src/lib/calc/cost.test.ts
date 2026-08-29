@@ -4,8 +4,10 @@ import {
   costPerMg,
   costPerVialInKit,
   formatMoney,
+  formatTotals,
   remainingValue,
   spendFor,
+  sumByCurrency,
   totalSpend,
 } from "./cost";
 import type { Vial } from "../types";
@@ -117,18 +119,94 @@ describe("remainingValue", () => {
 
 describe("totalSpend", () => {
   it("adds up every priced vial regardless of peptide", () => {
-    const t = totalSpend([
-      vial({ id: "a", cost: 160 }),
-      vial({ id: "b", peptideId: "reta", cost: 300 }),
-      vial({ id: "c" }),
-    ]);
-    expect(t.total).toBe(460);
+    const t = totalSpend(
+      [
+        vial({ id: "a", cost: 160 }),
+        vial({ id: "b", peptideId: "reta", cost: 300 }),
+        vial({ id: "c" }),
+      ],
+      "USD");
+    expect(t.byCurrency).toEqual([{ currency: "USD", total: 460, vials: 2 }]);
     expect(t.pricedVials).toBe(2);
     expect(t.unpricedVials).toBe(1);
+    expect(t.mixed).toBe(false);
   });
 
-  it("is zero for an empty inventory", () => {
-    expect(totalSpend([])).toEqual({ total: 0, pricedVials: 0, unpricedVials: 0 });
+  it("keeps currencies apart instead of adding them", () => {
+    // The bug: 40 dollars and 3000 rupees used to become 3040 of whatever the
+    // settings happened to name.
+    const t = totalSpend(
+      [
+        vial({ id: "a", cost: 40, currency: "USD" }),
+        vial({ id: "b", cost: 3000, currency: "INR" }),
+        vial({ id: "c", cost: 10, currency: "USD" }),
+      ],
+      "USD");
+    expect(t.mixed).toBe(true);
+    expect(t.byCurrency).toEqual([
+      { currency: "INR", total: 3000, vials: 1 },
+      { currency: "USD", total: 50, vials: 2 },
+    ]);
+  });
+
+  it("treats a vial with no currency as the app's own", () => {
+    const t = totalSpend([vial({ id: "a", cost: 10 }), vial({ id: "b", cost: 5, currency: "EUR" })], "EUR");
+    expect(t.mixed).toBe(false);
+    expect(t.byCurrency).toEqual([{ currency: "EUR", total: 15, vials: 2 }]);
+  });
+
+  it("is empty for an empty inventory", () => {
+    expect(totalSpend([], "USD")).toEqual({
+      byCurrency: [],
+      pricedVials: 0,
+      unpricedVials: 0,
+      mixed: false,
+    });
+  });
+});
+
+describe("sumByCurrency", () => {
+  it("sorts the largest first, so one line shows the one that matters", () => {
+    const rows = sumByCurrency(
+      [
+        vial({ id: "a", cost: 10, currency: "USD" }),
+        vial({ id: "b", cost: 900, currency: "INR" }),
+      ],
+      (v) => v.cost ?? null,
+      "USD");
+    expect(rows.map((r) => r.currency)).toEqual(["INR", "USD"]);
+  });
+
+  it("skips anything with no amount to add", () => {
+    const rows = sumByCurrency([vial({ id: "a" })], (v) => v.cost ?? null, "USD");
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("formatTotals", () => {
+  it("reads as one figure when there is one currency", () => {
+    expect(formatTotals([{ currency: "USD", total: 160, vials: 1 }])).toContain("160");
+  });
+
+  it("joins rather than adds when there are two", () => {
+    const out = formatTotals([
+      { currency: "INR", total: 3000, vials: 1 },
+      { currency: "USD", total: 40, vials: 1 },
+    ]);
+    expect(out).toContain("3,000");
+    expect(out).toContain("40");
+    expect(out).toContain("+");
+  });
+
+  it("names the ones it has no room for rather than dropping them", () => {
+    const out = formatTotals(
+      [
+        { currency: "INR", total: 3000, vials: 1 },
+        { currency: "USD", total: 40, vials: 1 },
+        { currency: "EUR", total: 20, vials: 1 },
+      ],
+      2);
+    expect(out).toContain("1 more");
   });
 });
 
