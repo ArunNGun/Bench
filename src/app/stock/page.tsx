@@ -31,6 +31,7 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
+import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle } from "@/lib/calc/diluent";
 import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
@@ -42,11 +43,17 @@ import {
   sumByCurrency,
   totalSpend,
 } from "@/lib/calc/cost";
-import { CURRENCIES, DEFAULT_SETTINGS, type Vial } from "@/lib/types";
+import {
+  CURRENCIES,
+  DEFAULT_SETTINGS,
+  type DiluentBottle,
+  type DiluentKind,
+  type Vial,
+} from "@/lib/types";
 
 export default function StockPage() {
   const hydrated = useStore((s) => s.hydrated);
-  const { protocols, vials, orders } = useProfileData();
+  const { protocols, vials, orders, diluents } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const addOrder = useStore((s) => s.addOrder);
   const updateVial = useStore((s) => s.updateVial);
@@ -195,6 +202,8 @@ export default function StockPage() {
         />
       )}
 
+      <DiluentShelf />
+
       {!vials.length && !adding && (
         <EmptyState
           title="Nothing in stock"
@@ -296,9 +305,10 @@ export default function StockPage() {
                 {reconstituting === v.id && (
                   <ReconstituteForm
                     vial={v}
+                    bottles={diluents}
                     onCancel={() => setReconstituting(null)}
-                    onSave={(ml, diluent) => {
-                      reconstituteVial(v.id, ml, diluent);
+                    onSave={(ml, diluent, fromBottleId) => {
+                      reconstituteVial(v.id, ml, diluent, undefined, fromBottleId);
                       setReconstituting(null);
                     }}
                   />
@@ -812,16 +822,38 @@ function AddVialForm({
 
 function ReconstituteForm({
   vial,
+  bottles,
   onCancel,
   onSave,
 }: {
   vial: Vial;
+  /** Water on the shelf. Empty for anyone who does not track it. */
+  bottles: DiluentBottle[];
   onCancel: () => void;
-  onSave: (ml: number, diluent: Vial["diluent"]) => void;
+  onSave: (ml: number, diluent: Vial["diluent"], fromBottleId?: string) => void;
 }) {
   const [ml, setMl] = useState(2);
   const [diluent, setDiluent] = useState<NonNullable<Vial["diluent"]>>("bacteriostatic");
   const conc = ml > 0 ? vial.strengthMg / ml : 0;
+
+  const now = Date.now();
+  const available = bottles.filter((b) => b.kind === diluent && bottleUsable(b, now));
+
+  /**
+   * Which bottle the water came from.
+   *
+   * Asked for only when there is something to ask about. Requiring it outright
+   * would have stopped every existing user from making up a vial on the day
+   * this shipped, since nobody had a bottle recorded, and a feature that blocks
+   * the app's central action to collect bookkeeping is worse than no feature.
+   *
+   * "" means not from tracked stock, which stays available even when bottles
+   * exist: a bottle you never entered should not stop you.
+   */
+  const suggested = pickBottle(bottles, diluent, ml, now)?.id ?? "";
+  const [bottleId, setBottleId] = useState(suggested);
+  const chosen = available.find((b) => b.id === bottleId) ?? null;
+  const short = chosen != null && bottleRemainingMl(chosen) < ml - 1e-9;
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--tangerine)]/35 p-4">
@@ -849,6 +881,34 @@ function ReconstituteForm({
         </Field>
       </div>
 
+      {available.length > 0 && (
+        <Field
+          label="From which bottle"
+          hint={
+            chosen
+              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
+              : "Recorded as not coming from tracked stock, so no bottle is drawn down."
+          }
+        >
+          <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
+            {available.map((b) => (
+              <option key={b.id} value={b.id}>
+                {trim(b.volumeMl, 2)} mL bottle · {trim(bottleRemainingMl(b), 2)} mL left
+                {b.state === "sealed" ? " · sealed" : ""}
+              </option>
+            ))}
+            <option value="">Not from tracked stock</option>
+          </Select>
+        </Field>
+      )}
+
+      {short && (
+        <Callout tone="warn">
+          That bottle holds {trim(bottleRemainingMl(chosen!), 2)} mL and you are drawing {trim(ml, 2)}{" "}
+          mL. It will be recorded as empty, and the rest came from somewhere this app cannot see.
+        </Callout>
+      )}
+
       {diluent === "sterile" && (
         <Callout tone="warn">
           Sterile water has no preservative, so the vial is single-use and should be discarded after
@@ -866,7 +926,11 @@ function ReconstituteForm({
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={() => onSave(ml, diluent)} disabled={!(ml > 0)}>
+        <Button
+          variant="primary"
+          onClick={() => onSave(ml, diluent, bottleId || undefined)}
+          disabled={!(ml > 0)}
+        >
           Reconstitute
         </Button>
       </div>
@@ -941,5 +1005,159 @@ function TopUpForm({
         </Button>
       </div>
     </Card>
+const DILUENT_LABEL: Record<DiluentKind, string> = {
+  bacteriostatic: "Bacteriostatic water",
+  sterile: "Sterile water",
+  saline: "0.9% sodium chloride",
+  oil: "Carrier oil",
+};
+
+/**
+ * Water, on its own shelf.
+ *
+ * Separate from the vials above rather than mixed in, for the same reason it is
+ * a separate type: everything in that list is a mass with a dose count and a
+ * date it runs out, and a bottle of water is none of those. Putting it in the
+ * same list would invite the same arithmetic.
+ */
+function DiluentShelf() {
+  const { diluents } = useProfileData();
+  const addDiluent = useStore((s) => s.addDiluent);
+  const updateDiluent = useStore((s) => s.updateDiluent);
+  const removeDiluent = useStore((s) => s.removeDiluent);
+
+  const [adding, setAdding] = useState(false);
+  const [kind, setKind] = useState<DiluentKind>("bacteriostatic");
+  const [volumeMl, setVolumeMl] = useState(30);
+  const [count, setCount] = useState(1);
+
+  const now = Date.now();
+  const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
+  const stock = diluentStock(diluents, "bacteriostatic", now);
+
+  if (!live.length && !adding) {
+    return (
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <SectionLabel className="mb-0.5">Water and diluents</SectionLabel>
+          <p className="text-[12.5px] text-[var(--muted)]">
+            Optional. Track bottles here and reconstituting will draw from one.
+          </p>
+        </div>
+        <Button variant="soft" onClick={() => setAdding(true)}>
+          <Plus size={15} /> Add a bottle
+        </Button>
+      </Card>
+    );
+  }
+
+  return (
+    <section>
+      <SectionLabel
+        action={
+          !adding && (
+            <Button variant="soft" onClick={() => setAdding(true)} className="px-2.5 py-1 text-[12px]">
+              <Plus size={13} /> Add a bottle
+            </Button>
+          )
+        }
+      >
+        Water and diluents
+      </SectionLabel>
+
+      {stock.remainingMl > 0 && (
+        <p className="mb-2 text-[12.5px] text-[var(--muted)]">
+          {trim(stock.remainingMl, 1)} mL of bacteriostatic water across {stock.bottles}{" "}
+          {stock.bottles === 1 ? "bottle" : "bottles"}.
+        </p>
+      )}
+
+      {adding && (
+        <Card className="mb-2.5 space-y-4 p-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="What">
+              <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
+                {(Object.keys(DILUENT_LABEL) as DiluentKind[]).map((k) => (
+                  <option key={k} value={k}>
+                    {DILUENT_LABEL[k]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Bottle size">
+              <NumberInput
+                value={volumeMl}
+                min={1}
+                step={1}
+                suffix="mL"
+                onChange={(e) => setVolumeMl(Number(e.target.value))}
+              />
+            </Field>
+            <Field label="How many">
+              <NumberInput
+                value={count}
+                min={1}
+                step={1}
+                onChange={(e) => setCount(Number(e.target.value))}
+              />
+            </Field>
+          </div>
+
+          <div className="flex gap-2.5">
+            <Button variant="ghost" onClick={() => setAdding(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!(volumeMl > 0)}
+              onClick={() => {
+                for (let i = 0; i < Math.max(1, count); i++) {
+                  addDiluent({ kind, volumeMl, state: "sealed" });
+                }
+                setAdding(false);
+              }}
+            >
+              Add {count > 1 ? `${count} bottles` : "bottle"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="space-y-1.5">
+        {live.map((b) => {
+          const left = bottleRemainingMl(b);
+          return (
+            <Card key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
+              <span className="text-[13.5px] text-[var(--ink)]">{DILUENT_LABEL[b.kind]}</span>
+              <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>{b.state}</Badge>
+              <span className="tnum font-mono text-[13px] text-[var(--muted)]">
+                {trim(left, 1)} of {trim(b.volumeMl, 1)} mL
+              </span>
+              {bottleUsable(b, now) ? null : <Badge tone="rose">unusable</Badge>}
+
+              <div className="ml-auto flex items-center gap-1">
+                {b.state !== "discarded" && (
+                  <Button
+                    variant="soft"
+                    className="px-2.5 py-1 text-[12px]"
+                    onClick={() => updateDiluent(b.id, { state: "discarded" })}
+                  >
+                    Discard
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeDiluent(b.id)}
+                  aria-label="Remove bottle"
+                  className="press p-1 text-[var(--faint)] hover:text-[var(--rose)]"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
   );
 }

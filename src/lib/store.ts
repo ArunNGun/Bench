@@ -19,11 +19,13 @@ import {
   type Profile,
   type Settings,
   type Vial,
+  type DiluentBottle,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged } from "./calc/document";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate } from "./calc/reconstitution";
+import { drawFromBottle } from "./calc/diluent";
 import { startOfLocalDay } from "./calc/schedule";
 import {
   diluentAfterTopUp,
@@ -131,7 +133,6 @@ interface StoreState extends AppData {
     shipping: { cost: number; currency?: string } | null) => void;
   updateVial: (id: string, patch: Partial<Vial>) => void;
   removeVial: (id: string) => void;
-  reconstituteVial: (id: string, diluentMl: number, diluent: Vial["diluent"], atMs?: number) => void;
   /**
    * Add more solvent to a vial that is already open.
    *
@@ -143,6 +144,24 @@ interface StoreState extends AppData {
    * concentration nobody can act on.
    */
   topUpVial: (id: string, addedMl: number) => void;
+  /**
+   * Make up a vial, and take the water out of a bottle if it came from one.
+   *
+   * `fromBottleId` is optional because it has to be: nobody tracked bottles
+   * before this existed, and a required argument would have made the app
+   * unusable on the day it shipped for everyone who does not want to count
+   * millilitres.
+   */
+  reconstituteVial: (
+    id: string,
+    diluentMl: number,
+    diluent: Vial["diluent"],
+    atMs?: number,
+    fromBottleId?: string) => void;
+
+  addDiluent: (b: Omit<DiluentBottle, "id" | "profileId">) => string;
+  updateDiluent: (id: string, patch: Partial<DiluentBottle>) => void;
+  removeDiluent: (id: string) => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
 
@@ -422,21 +441,42 @@ export const useStore = create<StoreState>()(
             orders: orphaned ? s.orders.filter((o) => o.id !== orphaned) : s.orders,
           };
         }),
-      reconstituteVial: (id, diluentMl, diluent, atMs) =>
+      addDiluent: (b) => {
+        const id = nanoid(10);
+        set((s) => ({ diluents: [...s.diluents, { ...b, id, profileId: s.activeProfileId }] }));
+        return id;
+      },
+      updateDiluent: (id, patch) =>
         set((s) => ({
-          vials: s.vials.map((v) =>
-            v.id === id
-              ? {
-                  ...v,
-                  state: "reconstituted" as const,
-                  reconstitutedAt: atMs ?? Date.now(),
-                  diluentMl,
-                  diluent,
-                  drawnMcg: v.drawnMcg ?? 0,
-                  budAt: beyondUseDate(atMs ?? Date.now()),
-                }
-              : v),
+          diluents: s.diluents.map((b) => (b.id === id ? { ...b, ...patch } : b)),
         })),
+      removeDiluent: (id) => set((s) => ({ diluents: s.diluents.filter((b) => b.id !== id) })),
+
+      reconstituteVial: (id, diluentMl, diluent, atMs, fromBottleId) =>
+        set((s) => {
+          const at = atMs ?? Date.now();
+          return {
+            vials: s.vials.map((v) =>
+              v.id === id
+                ? {
+                    ...v,
+                    state: "reconstituted" as const,
+                    reconstitutedAt: at,
+                    diluentMl,
+                    diluent,
+                    diluentBottleId: fromBottleId,
+                    drawnMcg: v.drawnMcg ?? 0,
+                    budAt: beyondUseDate(at),
+                  }
+                : v),
+            // The water leaves the bottle at the same moment it enters the
+            // vial, in one write, so the two can never disagree about how much
+            // was used.
+            diluents: fromBottleId
+              ? drawFromBottle(s.diluents, fromBottleId, diluentMl, at)
+              : s.diluents,
+          };
+        }),
 
       topUpVial: (id, addedMl) =>
         set((s) => ({
@@ -492,6 +532,7 @@ export const useStore = create<StoreState>()(
           checkIns: migrated.checkIns,
           halfLifeOverrides: migrated.halfLifeOverrides ?? {},
           orders: migrated.orders,
+          diluents: migrated.diluents,
         }));
       },
       importHistory: ({ logs, measurements }) => {
@@ -535,6 +576,7 @@ export const useStore = create<StoreState>()(
           checkIns: s.checkIns,
           halfLifeOverrides: s.halfLifeOverrides ?? {},
           orders: s.orders,
+          diluents: s.diluents,
         };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
@@ -557,6 +599,7 @@ export const useStore = create<StoreState>()(
         checkIns: s.checkIns,
         halfLifeOverrides: s.halfLifeOverrides,
         orders: s.orders,
+        diluents: s.diluents,
       }),
       /**
        * Shared with importData, so a backup restored from a file and this
@@ -617,6 +660,7 @@ export function useProfileData() {
   const labs = useStore((s) => s.labs);
   const checkIns = useStore((s) => s.checkIns);
   const orders = useStore((s) => s.orders);
+  const diluents = useStore((s) => s.diluents);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -628,8 +672,9 @@ export function useProfileData() {
       labs: labs.filter((x) => x.profileId === activeId),
       checkIns: checkIns.filter((x) => x.profileId === activeId),
       orders: orders.filter((x) => x.profileId === activeId),
+      diluents: diluents.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, checkIns, orders, activeId]);
+    [protocols, logs, vials, measurements, labs, checkIns, orders, diluents, activeId]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */
