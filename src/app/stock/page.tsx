@@ -278,9 +278,10 @@ export default function StockPage() {
                 {toppingUp === v.id && (
                   <TopUpForm
                     vial={v}
+                    bottles={diluents}
                     onCancel={() => setToppingUp(null)}
-                    onSave={(addedMl) => {
-                      topUpVial(v.id, addedMl);
+                    onSave={(addedMl, fromBottleId) => {
+                      topUpVial(v.id, addedMl, fromBottleId);
                       setToppingUp(null);
                     }}
                   />
@@ -992,14 +993,27 @@ function ReconstituteForm({
  */
 function TopUpForm({
   vial,
+  bottles,
   onCancel,
   onSave,
 }: {
   vial: Vial;
+  bottles: DiluentBottle[];
   onCancel: () => void;
-  onSave: (addedMl: number) => void;
+  onSave: (addedMl: number, fromBottleId?: string) => void;
 }) {
   const [ml, setMl] = useState(0.5);
+
+  /*
+   * The same question reconstitution asks, because it is the same water. Asking
+   * it in one place and not the other let the shelf drift by exactly the amount
+   * people top up with.
+   */
+  const now = Date.now();
+  const kind = vial.diluent ?? "bacteriostatic";
+  const available = bottles.filter((b) => b.kind === kind && bottleUsable(b, now));
+  const [bottleId, setBottleId] = useState(pickBottle(bottles, kind, ml, now)?.id ?? "");
+  const chosen = available.find((b) => b.id === bottleId) ?? null;
 
   const before = vialConcentration(vial);
   const nextDiluentMl = diluentAfterTopUp(vial, ml);
@@ -1037,11 +1051,36 @@ function TopUpForm({
         the first puncture rather than from this.
       </p>
 
+      {available.length > 0 && (
+        <Field
+          label="From which bottle"
+          hint={
+            chosen
+              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
+              : "Recorded as not coming from tracked stock, so no bottle is drawn down."
+          }
+        >
+          <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
+            {available.map((b) => (
+              <option key={b.id} value={b.id}>
+                {trim(b.volumeMl, 2)} mL bottle · {trim(bottleRemainingMl(b), 2)} mL left
+                {b.state === "sealed" ? " · sealed" : ""}
+              </option>
+            ))}
+            <option value="">Not from tracked stock</option>
+          </Select>
+        </Field>
+      )}
+
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={() => onSave(ml)} disabled={after == null}>
+        <Button
+          variant="primary"
+          onClick={() => onSave(ml, bottleId || undefined)}
+          disabled={after == null}
+        >
           Add {trim(ml, 2)} mL
         </Button>
       </div>
