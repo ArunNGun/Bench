@@ -242,13 +242,14 @@ body {
   border: 1px solid var(--line);
 }
 
-input,
-select,
-textarea,
-button {
-  font: inherit;
-  color: inherit;
-}
+/*
+ * There is deliberately no `input, select, textarea, button { font: inherit }`
+ * here. Tailwind's preflight already does exactly that, in `@layer base`, where
+ * a utility class can still override it. Repeating it in this file put the same
+ * declaration outside every layer, and unlayered rules beat layered ones
+ * whatever their specificity, so it silently overruled every `text-[14px]` and
+ * `font-medium` a button carried. See 06-traps.md before adding it back.
+ */
 
 /* Keep iOS from zooming the viewport when a field takes focus. */
 @media (max-width: 640px) {
