@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useMemo } from "react";
-import { levelSeries, type CurveParams, type DoseEvent } from "@/lib/calc/pk";
+import { useId, useMemo, useRef } from "react";
+import { levelAt, levelSeries, type CurveParams, type DoseEvent } from "@/lib/calc/pk";
 import { formatDate, formatTime } from "@/lib/format";
 
 /**
@@ -36,6 +36,8 @@ export function PkChart({
   nowMs,
   className,
   animate = true,
+  pickedMs = null,
+  onPick,
 }: {
   series: PkSeries[];
   fromMs: number;
@@ -43,10 +45,18 @@ export function PkChart({
   nowMs: number;
   className?: string;
   animate?: boolean;
+  /**
+   * The moment being read, or null for none. Controlled by the parent, which
+   * owns the readout: the chart knows where the finger is, the parent knows
+   * what to say about it.
+   */
+  pickedMs?: number | null;
+  onPick?: (ms: number | null) => void;
 }) {
   const uid = useId().replace(/:/g, "");
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  const { paths, maxLevel, ticks } = useMemo(() => {
+  const { paths, maxLevel, ticks, ceiling } = useMemo(() => {
     const steps = 160;
     const computed = series.map((s) => ({
       ...s,
@@ -80,17 +90,67 @@ export function PkChart({
       if (d.getTime() >= fromMs) t.push({ x: x(d.getTime()), label: formatDate(d.getTime()) });
     }
 
-    return { paths: built, maxLevel: peak, ticks: t };
+    return { paths: built, maxLevel: peak, ticks: t, ceiling };
   }, [series, fromMs, toMs]);
 
   const nowX = PAD_L + ((nowMs - fromMs) / (toMs - fromMs)) * (W - PAD_L - PAD_R);
   const inWindow = nowMs >= fromMs && nowMs <= toMs;
 
+  const toX = (t: number) => PAD_L + ((t - fromMs) / (toMs - fromMs)) * (W - PAD_L - PAD_R);
+  const yFor = (level: number) => H - PAD_B - (level / ceiling) * (H - PAD_T - PAD_B);
+
+  /**
+   * Where a pointer is, as a moment.
+   *
+   * The svg is drawn in viewBox units and displayed at whatever width the card
+   * gives it, so a client x has to be scaled by the ratio between the two. Read
+   * from the live element rather than assumed, since that width changes with
+   * the window and on a phone rotating it.
+   */
+  function pickFromPointer(e: React.PointerEvent<SVGSVGElement>) {
+    const box = svgRef.current?.getBoundingClientRect();
+    if (!box || box.width <= 0) return;
+
+    const xInView = ((e.clientX - box.left) / box.width) * W;
+    const frac = (xInView - PAD_L) / (W - PAD_L - PAD_R);
+    const clamped = Math.max(0, Math.min(1, frac));
+    onPick?.(fromMs + clamped * (toMs - fromMs));
+  }
+
+  /** Each curve's height at the moment being read, for the dots on the lines. */
+  const readings = useMemo(() => {
+    if (pickedMs == null) return [];
+    return paths.map((p) => ({
+      id: p.id,
+      color: p.color,
+      level: levelAt(pickedMs, p.doses, p.params, p.referenceMcg),
+    }));
+  }, [pickedMs, paths]);
+
+  const pickedX = pickedMs == null ? 0 : toX(pickedMs);
+
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
       className={className}
-      style={{ width: "100%", height: "auto", display: "block" }}
+      style={{ width: "100%", height: "auto", display: "block", touchAction: "pan-y" }}
+      onPointerDown={(e) => {
+        // Capture, so a finger that slides off the chart keeps being followed
+        // rather than handing the gesture to whatever it lands on.
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pickFromPointer(e);
+      }}
+      onPointerMove={(e) => {
+        // A mouse tracks on hover. A finger only tracks while it is down,
+        // which is what `buttons` reports for touch as well as for a drag.
+        if (e.pointerType === "mouse" || e.buttons > 0) pickFromPointer(e);
+      }}
+      // Leaving with a mouse means the question is over. A finger lifting does
+      // not, since on touch the reading has to stay to be read at all.
+      onPointerLeave={(e) => {
+        if (e.pointerType === "mouse") onPick?.(null);
+      }}
       role="img"
       aria-label={`Relative plasma levels from ${formatDate(fromMs)} to ${formatDate(toMs)}. Peak ${(
         maxLevel * 100
@@ -168,6 +228,35 @@ export function PkChart({
             className="animate-now"
           />
           <circle cx={nowX} cy={PAD_T - 8} r={2.5} fill="var(--ink)" />
+        </g>
+      )}
+
+      {/*
+        The moment being read. A line and a dot per curve, and nothing else:
+        the words go in the readout below the chart, where they cannot be
+        clipped by the card and cannot cover the curve they describe.
+      */}
+      {pickedMs != null && (
+        <g pointerEvents="none">
+          <line
+            x1={pickedX}
+            y1={PAD_T - 8}
+            x2={pickedX}
+            y2={H - PAD_B}
+            stroke="var(--muted)"
+            strokeWidth={1}
+          />
+          {readings.map((r) => (
+            <circle
+              key={r.id}
+              cx={pickedX}
+              cy={yFor(r.level)}
+              r={3}
+              fill="var(--card)"
+              stroke={r.color}
+              strokeWidth={2}
+            />
+          ))}
         </g>
       )}
 

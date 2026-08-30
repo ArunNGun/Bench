@@ -144,6 +144,12 @@ export interface DoseEvent {
   at: number;
   /** Dose in micrograms. Scales the curve so a double dose reads double. */
   amountMcg: number;
+  /**
+   * The vial it was drawn from, where one was recorded. Carried through so a
+   * reading can say which vial is behind a dose. Nothing in the model uses it,
+   * and a dose without one is drawn exactly as before.
+   */
+  vialId?: string;
 }
 
 /**
@@ -167,6 +173,70 @@ export function levelAt(
     total += singleDoseLevel(hours, params) * (dose.amountMcg / referenceMcg);
   }
   return total;
+}
+
+export interface DoseContribution {
+  dose: DoseEvent;
+  /** What this dose alone accounts for at that moment, on the same scale. */
+  level: number;
+  /** Its share of the total, 0 to 1. */
+  share: number;
+}
+
+export interface LevelBreakdown {
+  /** The whole level, including doses too small to be listed. */
+  total: number;
+  /** The doses worth naming, largest first. */
+  contributions: DoseContribution[];
+}
+
+/**
+ * The same level, with the doses that make it up.
+ *
+ * `levelAt` answers "how much" and a reader looking at a curve usually wants
+ * "from what". Halfway between two injections the honest answer is that both
+ * are present in different amounts, and a single number cannot say it.
+ *
+ * Superposition is what makes this possible at all: the model adds independent
+ * single-dose curves, so pulling them apart again is exact rather than an
+ * apportionment after the fact.
+ *
+ * `minShare` drops the long tail. A dose from three half-lives ago contributes
+ * something, and listing it next to this morning's injection suggests the two
+ * are comparable. The total keeps every dose regardless, so the parts can add
+ * up to less than the whole, which is the correct thing to happen: the
+ * remainder is real, it is just not worth a line each.
+ */
+export function breakdownAt(
+  atMs: number,
+  doses: DoseEvent[],
+  params: CurveParams,
+  referenceMcg: number,
+  minShare = 0.05): LevelBreakdown {
+  if (!(referenceMcg > 0)) return { total: 0, contributions: [] };
+
+  const parts: DoseContribution[] = [];
+  let total = 0;
+
+  for (const dose of doses) {
+    if (dose.at > atMs) continue;
+    const hours = (atMs - dose.at) / 3_600_000;
+    if (hours > params.halfLifeHours * 10) continue;
+
+    const level = singleDoseLevel(hours, params) * (dose.amountMcg / referenceMcg);
+    if (level <= 0) continue;
+    total += level;
+    parts.push({ dose, level, share: 0 });
+  }
+
+  if (total <= 0) return { total: 0, contributions: [] };
+
+  const contributions = parts
+    .map((p) => ({ ...p, share: p.level / total }))
+    .filter((p) => p.share >= minShare)
+    .sort((a, b) => b.level - a.level);
+
+  return { total, contributions };
 }
 
 export interface SeriesPoint {
