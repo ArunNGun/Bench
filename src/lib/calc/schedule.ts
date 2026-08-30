@@ -541,6 +541,31 @@ export interface DueOptions {
 }
 
 /**
+ * Whether a log taken before a scheduled dose was that dose.
+ *
+ * People take the morning injection when they get up, not when the plan says.
+ * Log at half six for a seven o'clock dose and the log lands before the only
+ * scheduled time it could belong to, so matching backwards counts it against
+ * yesterday and leaves today's still asking to be taken. That reading is the
+ * bug: the card said Due now for a dose already in the leg.
+ *
+ * Two conditions, both needed. The log has to be inside the same grace window
+ * that already decides what counts as on time, which stops a dose taken very
+ * late in the evening from quietly cancelling tomorrow morning's. And it has
+ * to sit nearer to the coming dose than to the one behind it, so a log that
+ * plainly belongs to the previous dose is never read as the next one.
+ */
+function loggedEarlyFor(
+  next: number,
+  prev: number | null,
+  lastLoggedAt: number,
+  graceMs: number): boolean {
+  const early = next - lastLoggedAt;
+  if (early < 0 || early > graceMs) return false;
+  return prev == null || early < lastLoggedAt - prev;
+}
+
+/**
  * How a protocol's next dose should be presented.
  *
  * The most recent scheduled dose is only overdue when nothing has been logged
@@ -563,7 +588,11 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
     return { state: "overdue", at: prev, hoursAway, label: "Overdue" };
   }
 
-  const next = protocolNextDoseTime(protocol, nowMs);
+  let next = protocolNextDoseTime(protocol, nowMs);
+  // Taken ahead of the clock, so the one being asked for is the one after it.
+  if (next != null && lastLoggedAt != null && loggedEarlyFor(next, prev, lastLoggedAt, grace)) {
+    next = protocolNextDoseTime(protocol, next + 1);
+  }
   if (next == null) return { state: "none", at: null, hoursAway: 0, label: "No dose scheduled" };
 
   const hours = (next - nowMs) / 3_600_000;

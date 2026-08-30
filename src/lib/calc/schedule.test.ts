@@ -455,6 +455,57 @@ describe("dueStatus", () => {
     expect(s.state).toBe("scheduled");
   });
 
+  /*
+   * Taking the dose before the clock says to.
+   *
+   * The morning injection happens when you get up, which is rarely the minute
+   * the plan names. These fix a reading where an early log counted against
+   * yesterday, so the dose already taken stayed on the list as due.
+   */
+  const morning = { ...p, schedule: { kind: "daily", timeOfDay: "07:00" } as Schedule };
+
+  it("clears the dose logged half an hour before it was due", () => {
+    const at = local(2026, 9, 8, 6, 30);
+    const s = dueStatus(morning, at, { lastLoggedAt: at });
+    expect(s.state).toBe("scheduled");
+    expect(s.at).toBe(local(2026, 9, 9, 7, 0));
+  });
+
+  it("still asks for the dose when nothing was logged this morning", () => {
+    // Same moment, but the last log was yesterday's dose.
+    const s = dueStatus(morning, local(2026, 9, 8, 6, 30), {
+      lastLoggedAt: local(2026, 9, 7, 7, 0),
+    });
+    expect(s.state).toBe("due-now");
+    expect(s.at).toBe(local(2026, 9, 8, 7, 0));
+  });
+
+  it("does not let a dose taken late in the evening cancel tomorrow's", () => {
+    // Thirteen hours after this morning's dose, which is nearer to tomorrow's
+    // than to today's, and would be read as tomorrow's by distance alone.
+    const at = local(2026, 9, 8, 20, 0);
+    const s = dueStatus(morning, at, { lastLoggedAt: at });
+    expect(s.state).toBe("scheduled");
+    expect(s.at).toBe(local(2026, 9, 9, 7, 0));
+  });
+
+  it("does not read a dose taken just after its time as the next one", () => {
+    const s = dueStatus(morning, local(2026, 9, 8, 7, 20), {
+      lastLoggedAt: local(2026, 9, 8, 7, 5),
+    });
+    expect(s.state).toBe("scheduled");
+    expect(s.at).toBe(local(2026, 9, 9, 7, 0));
+  });
+
+  it("clears an early log on a weekly protocol too", () => {
+    // Weekly, so the previous dose is seven days back and the grace window is
+    // what has to do the work rather than the gap.
+    const at = local(2026, 9, 14, 7, 30);
+    const s = dueStatus(p, at, { lastLoggedAt: at });
+    expect(s.state).toBe("scheduled");
+    expect(s.at).toBe(loggedOn(14));
+  });
+
   it("reports no dose scheduled for an as-needed protocol", () => {
     const s = dueStatus({ ...p, schedule: { kind: "as-needed" } }, start);
     expect(s.state).toBe("none");
