@@ -31,7 +31,7 @@ import {
   weeklyExposure,
 } from "@/lib/calc/progress";
 import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
-import { assignColors } from "@/lib/calc/palette";
+import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
@@ -197,14 +197,8 @@ export default function NowPage() {
    * you owned.
    */
   const palette = useMemo(
-    () =>
-      assignColors(
-        tracks.map((t) => ({
-          protocolId: t.protocol.id,
-          componentKeys: modellableComponents(t.blendParts).map(
-            (part) => part.peptideId ?? part.name),
-        }))),
-    [tracks]);
+    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
+    [active, custom, now]);
 
   const series: PkSeries[] = useMemo(() => {
     const out: Omit<PkSeries, "color">[] = [];
