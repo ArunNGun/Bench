@@ -15,7 +15,7 @@
  */
 
 import { marksForDose } from "@/lib/calc/inventory";
-import { SYRINGES, syringeById } from "@/lib/calc/reconstitution";
+import { SYRINGES, syringeById, unitsToMl } from "@/lib/calc/reconstitution";
 import { useStore, useProfileData } from "@/lib/store";
 import { trim } from "@/lib/format";
 
@@ -43,7 +43,19 @@ export function DoseMarks({
   if (marks == null) return null;
 
   return (
-    <span className={`tnum font-mono ${className}`}>
+    /*
+      One word on screen, the rest on hover. "Marks" is the word the
+      calculator, the log and the about page already use, and millilitres are
+      the reading that cannot be mistaken for anything else: IU means activity
+      elsewhere in the app, so it is the one abbreviation these graduations
+      must not borrow.
+    */
+    <span
+      className={`tnum font-mono ${className}`}
+      title={`${trim(marks, 2)} marks on a ${
+        scale === "U40" ? "U-40" : "U-100"
+      } barrel, ${trim(unitsToMl(marks, scale), 3)} mL`}
+    >
       {trim(marks, 2)} marks{scale === "U40" ? " (U-40)" : ""}
     </span>
   );
