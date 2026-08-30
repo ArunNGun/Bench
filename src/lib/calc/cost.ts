@@ -105,3 +105,27 @@ export function formatMoney(amount: number | null, currency = "INR") {
     return `${amount.toFixed(2)} ${currency}`;
   }
 }
+
+/**
+ * What one vial of a kit cost, from the price of the whole kit.
+ *
+ * Kits are priced as a box: ten vials for two hundred, not twenty each. Doing
+ * that division by hand before typing it in is the sort of small friction that
+ * ends with the price left blank, and a vial with no price is treated as free
+ * everywhere downstream.
+ *
+ * Deliberately not rounded. Two hundred across three vials is 66.666..., and
+ * storing 66.67 would make the Spent figure read 200.01, which is not what
+ * anybody paid. Seven vials at seventy five would be out by three cents in the
+ * other direction. The exact quotient is kept and `formatMoney` rounds only for
+ * display, so each vial reads as a sensible price and the total still comes to
+ * the number on the receipt.
+ *
+ * Null rather than zero for input that cannot be divided, because zero is a
+ * real price meaning "this was free" and the difference matters to a total.
+ */
+export function costPerVialInKit(kitTotal: number, vialCount: number): number | null {
+  if (!Number.isFinite(kitTotal) || kitTotal < 0) return null;
+  if (!Number.isInteger(vialCount) || vialCount < 1) return null;
+  return kitTotal / vialCount;
+}

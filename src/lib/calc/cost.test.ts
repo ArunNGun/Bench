@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { costPerDose, costPerMg, formatMoney, remainingValue, spendFor, totalSpend } from "./cost";
+import {
+  costPerDose,
+  costPerMg,
+  costPerVialInKit,
+  formatMoney,
+  remainingValue,
+  spendFor,
+  totalSpend,
+} from "./cost";
 import type { Vial } from "../types";
 
 const vial = (over: Partial<Vial> & { id: string }): Vial =>
@@ -172,5 +180,46 @@ describe("formatMoney in rupees", () => {
 
   it("still honours an explicitly different currency", () => {
     expect(formatMoney(185, "USD")).not.toContain("₹");
+  });
+});
+
+describe("costPerVialInKit", () => {
+  it("splits a kit price across its vials", () => {
+    expect(costPerVialInKit(200, 10)).toBe(20);
+    expect(costPerVialInKit(129.99, 3)).toBeCloseTo(43.33, 10);
+  });
+
+  it("keeps the exact quotient rather than a rounded price", () => {
+    // The whole point. Rounding each vial to 66.67 would make the Spent figure
+    // read 200.01, which is not what anybody paid.
+    const each = costPerVialInKit(200, 3)!;
+    expect(each * 3).toBeCloseTo(200, 10);
+    expect(each).not.toBe(66.67);
+  });
+
+  it("adds back up to the kit price for awkward divisions", () => {
+    // Seven vials at seventy five drifts three cents the other way if rounded.
+    for (const [total, count] of [[75, 7], [129.99, 4], [49.95, 6], [1000, 3]] as const) {
+      expect(costPerVialInKit(total, count)! * count).toBeCloseTo(total, 8);
+    }
+  });
+
+  it("treats a single vial kit as its own price", () => {
+    expect(costPerVialInKit(45, 1)).toBe(45);
+  });
+
+  it("keeps free and unknown apart", () => {
+    // Zero is a real price and belongs in a total. Null means the input could
+    // not be divided at all, and a vial with no price is counted separately
+    // rather than as free.
+    expect(costPerVialInKit(0, 4)).toBe(0);
+    expect(costPerVialInKit(-10, 4)).toBeNull();
+    expect(costPerVialInKit(Number.NaN, 4)).toBeNull();
+  });
+
+  it("refuses a count that is not a whole number of vials", () => {
+    expect(costPerVialInKit(200, 0)).toBeNull();
+    expect(costPerVialInKit(200, -3)).toBeNull();
+    expect(costPerVialInKit(200, 2.5)).toBeNull();
   });
 });
