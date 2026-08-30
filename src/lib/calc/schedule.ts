@@ -610,6 +610,36 @@ export function adherence(
   };
 }
 
+/**
+ * The doses in a window that nothing has been logged against.
+ *
+ * `dueStatus` answers "what is the one thing to do next", which is the right
+ * question for a card and the wrong one for the rest of a day: a compound
+ * taken morning and evening has an evening dose whether or not the morning one
+ * is still outstanding, and asking about the next dose alone hides it.
+ *
+ * A dose counts as covered by a log inside the same early window `dueStatus`
+ * uses, so the two cannot disagree about the same dose, and so a dose taken a
+ * little ahead of its hour stops asking rather than sitting there until it is
+ * late.
+ *
+ * `logs` must already be narrowed to this protocol, via `logsForProtocol`.
+ */
+export function unloggedDoseTimes(
+  protocol: Protocol,
+  logs: { at: number; skipped?: boolean }[],
+  fromMs: number,
+  toMs: number,
+  toleranceHours = 12): number[] {
+  const tolerance = toleranceHours * 3_600_000;
+
+  return protocolDoseTimesBetween(protocol, fromMs, toMs).filter((at) => {
+    const before = protocolPreviousDoseTime(protocol, at - 1);
+    const early = earlyWindowMs(before != null ? at - before : null, tolerance);
+    return !logs.some((l) => !l.skipped && l.at >= at - early && l.at <= at);
+  });
+}
+
 export type DueState = "overdue" | "due-now" | "upcoming" | "scheduled" | "none";
 
 export interface DueStatus {

@@ -18,6 +18,7 @@ import {
   scheduledDoseMcg,
   startOfLocalDay,
   titrationStepAt,
+  unloggedDoseTimes,
   titrationStepStartWeeks,
   titrationTotalWeeks,
 } from "./schedule";
@@ -705,6 +706,61 @@ describe("dueStatus", () => {
     const s = dueStatus({ ...p, schedule: { kind: "as-needed" } }, start);
     expect(s.state).toBe("none");
     expect(s.at).toBeNull();
+  });
+});
+
+describe("unloggedDoseTimes", () => {
+  const start = local(2026, 9, 7, 7, 0);
+  const twice: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "bpc-157",
+    name: "BPC",
+    active: true,
+    startedAt: start,
+    doseMcg: 500,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timesOfDay: ["07:00", "19:00"] },
+    titrationAutoAdvance: false,
+  };
+
+  const day = (h: number, min = 0) => local(2026, 9, 8, h, min);
+  const rest = (from: number) => unloggedDoseTimes(twice, logs, from, local(2026, 9, 8, 23, 59));
+  let logs: { at: number; skipped?: boolean }[] = [];
+
+  it("shows the evening dose while the morning one is still outstanding", () => {
+    // The whole reason for this function: asking only for the next dose hides
+    // the evening one for as long as the morning one goes unlogged.
+    logs = [];
+    expect(rest(day(8))).toEqual([day(19)]);
+  });
+
+  it("drops a dose once it has been logged", () => {
+    logs = [{ at: day(19, 4) }];
+    expect(rest(day(19, 30))).toEqual([]);
+  });
+
+  it("drops a dose taken a little early", () => {
+    logs = [{ at: day(17, 30) }];
+    expect(rest(day(17, 45))).toEqual([]);
+  });
+
+  it("does not let the morning dose answer for the evening", () => {
+    // Twelve hours apart, so the window that clears the evening dose is three
+    // hours, and a log at five past seven is nowhere near it.
+    logs = [{ at: day(7, 5) }];
+    expect(rest(day(8))).toEqual([day(19)]);
+  });
+
+  it("keeps asking for a dose that was marked skipped", () => {
+    // Consistent with dueStatus, which counts only doses actually taken.
+    logs = [{ at: day(19), skipped: true }];
+    expect(rest(day(12))).toEqual([day(19)]);
+  });
+
+  it("is empty once the day is out", () => {
+    logs = [];
+    expect(rest(day(20))).toEqual([]);
   });
 });
 

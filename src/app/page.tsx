@@ -20,7 +20,14 @@ import {
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
-import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
+import {
+  dueStatus,
+  endOfLocalDay,
+  logsForProtocol,
+  protocolDosesPerWeek,
+  scheduledDoseMcg,
+  unloggedDoseTimes,
+} from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
 import {
@@ -41,6 +48,7 @@ import {
   formatDose,
   formatDuration,
   formatHalfLife,
+  formatTime,
   formatWeekday,
   relativeTime,
 } from "@/lib/format";
@@ -120,6 +128,8 @@ export default function NowPage() {
     [vials, custom]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
+  /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
+  const [confirmEarly, setConfirmEarly] = useState<string | null>(null);
 
   const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
 
@@ -318,6 +328,33 @@ export default function NowPage() {
 
   const needsAttention = tracks.filter(
     (t) => t.due.state === "overdue" || t.due.state === "due-now");
+
+  /**
+   * The rest of today, in order.
+   *
+   * Built from the day's remaining scheduled times rather than from `due`,
+   * which knows only the next dose per protocol. A compound taken morning and
+   * evening has an evening dose whether or not the morning one is still
+   * outstanding, and that is exactly the morning this was written on.
+   *
+   * A dose already shown above is left out rather than listed twice: as its
+   * hour arrives it stops appearing here and appears there, which is the same
+   * row moving up the page rather than two rows disagreeing.
+   */
+  const laterToday = useMemo(() => {
+    const end = endOfLocalDay(now);
+    const shownAbove = new Set(
+      tracks
+        .filter((t) => t.due.state === "overdue" || t.due.state === "due-now")
+        .map((t) => `${t.protocol.id}:${t.due.at}`));
+
+    return tracks
+      .flatMap((t) =>
+        unloggedDoseTimes(t.protocol, logsForProtocol(t.protocol, logs), now, end)
+          .filter((at) => !shownAbove.has(`${t.protocol.id}:${at}`))
+          .map((at) => ({ track: t, at })))
+      .sort((a, b) => a.at - b.at);
+  }, [tracks, logs, now]);
   const lowStock = tracks.filter(
     (t) => t.stock.dosesRemaining <= settings.lowStockDoses && t.targetMcg > 0);
   const expiringVials = vials.filter(
@@ -429,6 +466,88 @@ export default function NowPage() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/*
+        The rest of the day, quieter than the band above on purpose. Same
+        rows, one step earlier in their life, so the eye reads down the page
+        in the order the day happens.
+      */}
+      {laterToday.length > 0 && (
+        <div>
+          <SectionLabel>Later today</SectionLabel>
+          <div className="divide-y divide-[var(--line)] rounded-[var(--r-card)] border border-[var(--line)]">
+            {laterToday.map(({ track: t, at }) => {
+              const key = `${t.protocol.id}:${at}`;
+              const asking = confirmEarly === key;
+
+              return (
+                <div key={key} className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
+                  <span className="tnum w-12 shrink-0 font-mono text-[12.5px] text-[var(--faint)]">
+                    {formatTime(at)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[13.5px] text-[var(--ink)]">
+                      {t.peptide?.name ?? t.protocol.peptideId} · {formatDose(t.targetMcg)}
+                    </span>
+                    {/*
+                      Logging a dose hours before its time is nearly always a
+                      misread row rather than an early injection, and it is not
+                      a harmless mistake: it takes the dose off the vial, moves
+                      the curve, and leaves the real dose looking taken. So the
+                      button asks, and says which dose it is asking about.
+                    */}
+                    {asking && (
+                      <p className="mt-0.5 text-[12px] text-[var(--muted)]">
+                        Not due until {formatTime(at)}, {relativeTime(at, now)}. Log it now?
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {asking ? (
+                      <>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            const id = addLog({
+                              peptideId: t.protocol.peptideId,
+                              protocolId: t.protocol.id,
+                              at: Date.now(),
+                              doseMcg: t.targetMcg,
+                              route: t.protocol.route,
+                              site: suggestSite(
+                                logs.filter((l) => l.peptideId === t.protocol.peptideId),
+                                Date.now(),
+                                14,
+                                t.protocol.sites),
+                            });
+                            setConfirmEarly(null);
+                            setLastQuickLog({
+                              id,
+                              name: t.peptide?.name ?? t.protocol.peptideId,
+                            });
+                          }}
+                        >
+                          <Check size={15} /> Yes, log it
+                        </Button>
+                        <Button variant="ghost" onClick={() => setConfirmEarly(null)}>
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        title={`Log this ${formatTime(at)} dose ahead of time`}
+                        onClick={() => setConfirmEarly(key)}
+                      >
+                        <Check size={15} /> Taken
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
