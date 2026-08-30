@@ -89,10 +89,46 @@ describe("dayProgress", () => {
     expect(dayProgress([protocol()], [dose(1)], NOW).taken).toBe(0);
   });
 
-  it("caps the fraction when more doses are logged than scheduled", () => {
+  it("credits a protocol only for the doses it asked for", () => {
     const d = dayProgress([protocol()], [dose(0), { ...dose(0), at: dose(0).at + 3600_000 }], NOW);
-    expect(d.taken).toBe(2);
+    expect(d.taken).toBe(1);
     expect(d.fraction).toBe(1);
+    expect(d.complete).toBe(true);
+  });
+
+  it("does not let a second dose of one compound answer for another", () => {
+    // Reported from use: a day needing BPC-157 and KPV, with KPV logged twice
+    // and BPC-157 not at all, came out complete and the dot went green over a
+    // compound that was never taken.
+    const two = [
+      protocol({ id: "bpc", peptideId: "bpc-157" }),
+      protocol({ id: "kpv", peptideId: "kpv" }),
+    ];
+    const twice = [
+      dose(0, { protocolId: "kpv", peptideId: "kpv" }),
+      dose(0, { protocolId: "kpv", peptideId: "kpv", at: dose(0).at + 3600_000 }),
+    ];
+    const d = dayProgress(two, twice, NOW);
+    expect(d.expected).toBe(2);
+    expect(d.taken).toBe(1);
+    expect(d.complete).toBe(false);
+  });
+
+  it("counts a dose logged without a protocol against the compound it names", () => {
+    const two = [
+      protocol({ id: "bpc", peptideId: "bpc-157" }),
+      protocol({ id: "kpv", peptideId: "kpv" }),
+    ];
+    const imported = [dose(0, { protocolId: undefined, peptideId: "bpc-157" })];
+    expect(dayProgress(two, imported, NOW).taken).toBe(1);
+  });
+
+  it("ignores a dose of something the day never asked for", () => {
+    // The ring reports on the plan. A compound taken outside it is real and is
+    // in the Log; it is not progress through today.
+    const d = dayProgress([protocol()], [dose(0, { peptideId: "tb-500", protocolId: undefined })], NOW);
+    expect(d.taken).toBe(0);
+    expect(d.complete).toBe(false);
   });
 
   it("reports the day as local midnight", () => {

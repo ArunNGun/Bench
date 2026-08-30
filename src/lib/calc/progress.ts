@@ -30,8 +30,21 @@ export interface DayProgress {
  * How a single day went.
  *
  * A logged dose counts toward the day it was logged on, which is what a person
- * means by "did I take it today", matching to a specific scheduled slot is the
- * adherence calculation's job, not this one.
+ * means by "did I take it today". Which scheduled time inside that day it
+ * belongs to is the adherence calculation's job and not this one.
+ *
+ * Which protocol it belongs to is this one's job, though, and it used to be
+ * skipped: the day counted logs against a total of scheduled doses without
+ * asking what had been logged. A day needing one dose each of three compounds
+ * came out complete when two of one and none of a third were logged, and the
+ * dot went green over a compound that was never taken. Reported after a second
+ * KPV dose covered a missing BPC-157 one.
+ *
+ * So each log is attributed to a protocol, exactly where it names one and by
+ * compound otherwise, and no protocol can be credited past what it asked for.
+ * A dose outside the plan altogether, of a compound with nothing scheduled
+ * today, counts towards nothing rather than towards anything: the ring is a
+ * report on the plan.
  */
 export function dayProgress(
   protocols: Protocol[],
@@ -41,14 +54,35 @@ export function dayProgress(
   const end = endOfLocalDay(dayMs);
 
   const active = protocols.filter((p) => p.active);
-  let expected = 0;
-  for (const p of active) {
-    expected += protocolDoseTimesBetween(p, day, end).length;
-  }
+  const slots = active.map((p) => protocolDoseTimesBetween(p, day, end).length);
+  const expected = slots.reduce((sum, n) => sum + n, 0);
 
   const onDay = logs.filter((l) => l.at >= day && l.at <= end);
-  const taken = onDay.filter((l) => !l.skipped).length;
-  const skipped = onDay.filter((l) => l.skipped).length;
+  const credited = active.map(() => ({ taken: 0, skipped: 0 }));
+  const room = (i: number) => slots[i] - credited[i].taken - credited[i].skipped;
+  const claimed = new Set<number>();
+
+  const credit = (i: number, l: { skipped?: boolean }, idx: number) => {
+    if (l.skipped) credited[i].skipped++;
+    else credited[i].taken++;
+    claimed.add(idx);
+  };
+
+  // Named protocols first, so a dose logged against one is never taken by
+  // another that happens to run the same compound.
+  onDay.forEach((l, idx) => {
+    const i = active.findIndex((p) => l.protocolId === p.id);
+    if (i >= 0 && room(i) > 0) credit(i, l, idx);
+  });
+
+  onDay.forEach((l, idx) => {
+    if (claimed.has(idx)) return;
+    const i = active.findIndex((p, x) => p.peptideId === l.peptideId && room(x) > 0);
+    if (i >= 0) credit(i, l, idx);
+  });
+
+  const taken = credited.reduce((sum, c) => sum + c.taken, 0);
+  const skipped = credited.reduce((sum, c) => sum + c.skipped, 0);
 
   const restDay = expected === 0;
 
