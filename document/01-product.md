@@ -5,8 +5,9 @@ what you are running, what you actually took, what is left in the fridge, what
 it cost, and whether any of it is working: weight, bloodwork, how you felt.
 
 It began as Arun's personal tracker and has been widened into something a
-stranger can use. It is free, has no accounts and no server, and is published
-publicly (GitHub, then Vercel).
+stranger can use. It is free, has no accounts and no server of ours, and is
+published publicly (GitHub, then Vercel). Someone who wants their data on two
+devices can run a sync server of their own, which is opt in and off by default.
 
 ## Who it is for
 

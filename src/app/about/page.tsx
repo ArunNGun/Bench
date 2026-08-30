@@ -52,9 +52,16 @@ export default function AboutPage() {
         </SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
-            There is no account, no server and no analytics. Everything you enter is stored in this
-            browser, on this device, and never leaves it. Not to me, not to whoever is hosting it. The
-            app makes no network requests of its own at all.
+            By default there is no account, no server and no analytics. Everything you enter is
+            stored in this browser, on this device, and never leaves it. Not to me, not to whoever
+            is hosting it.
+          </p>
+          <p>
+            One exception, and it is off unless you switch it on. In Settings you can point the app
+            at a sync server you run yourself, so a second device can read the same data. Your data
+            is encrypted in this browser before it is uploaded, with a key derived from your
+            password, so that server holds something it cannot read either. Leave it alone and
+            nothing is ever sent.
           </p>
           <p>
             That is a real privacy guarantee and a real risk at the same time. Nobody can read your

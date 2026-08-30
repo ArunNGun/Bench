@@ -18,6 +18,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
+import { SyncNotice } from "./SyncNotice";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
@@ -140,11 +141,19 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </ul>
 
           <p className="mt-6 rounded-[var(--r-inner)] bg-[var(--card)] p-3.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-            Everything stays on this device. Nothing is uploaded.
+            Everything stays on this device. Nothing is uploaded unless you set up sync yourself.
           </p>
         </nav>
 
-        <main className="min-w-0 flex-1 pb-28 pt-2 md:pb-12">{children}</main>
+        <main className="min-w-0 flex-1 pb-28 pt-2 md:pb-12">
+          {/*
+            Above the page, not inside it. A sync that has stopped is not news
+            about protocols or stock, it is news about whether what you are
+            looking at is the whole picture.
+          */}
+          <SyncNotice />
+          {children}
+        </main>
       </div>
 
       {/* Mobile tab bar */}

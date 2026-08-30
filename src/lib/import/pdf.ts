@@ -3,8 +3,10 @@
  *
  * Lab results arrive as PDFs and typing sixteen numbers off a printout is the
  * reason nobody uses a bloodwork tracker twice. Every app that solves this
- * uploads the file to a server to be read. This app has no server and says so
- * on its landing page, so the file has to be read here or not at all.
+ * uploads the file to a server to be read. This app has none to upload to, and
+ * says so on its landing page, so the file has to be read here or not at all.
+ * The optional sync server is no exception: it takes a sealed blob and would
+ * not know what to do with a PDF.
  *
  * The scope is deliberately narrow. A PDF is a container of objects, some of
  * which are compressed streams, some of which are content streams describing

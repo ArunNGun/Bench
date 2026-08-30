@@ -11,8 +11,8 @@ import { useEffect } from "react";
  * old ones after an app update, with no deploy to invalidate them.
  *
  * Also asks for persistent storage. Browsers are entitled to evict IndexedDB
- * under storage pressure, and this app has no server copy to re-fetch from, so
- * eviction means the data is simply gone. The request is granted silently for an
+ * under storage pressure, and for anyone who has not set up sync there is no
+ * server copy to re-fetch from, so eviction means the data is simply gone. The request is granted silently for an
  * installed app on most engines and declined on some; either way it costs
  * nothing to ask.
  */
