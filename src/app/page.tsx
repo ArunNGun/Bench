@@ -537,11 +537,19 @@ export default function NowPage() {
                         {t.snap.phase.label}
                       </Badge>
                     )}
-                    {t.due.state === "scheduled" && t.due.at != null && (
-                      <span className="text-[12px] text-[var(--faint)]">
-                        next {relativeTime(t.due.at, now)}
-                      </span>
-                    )}
+                    {/*
+                      "Due today" used to say nothing here, because with one
+                      dose a day it was a state you passed through in the four
+                      hours before it. A compound taken twice sits in it for
+                      most of the day, and a card that shows nothing reads as a
+                      card with nothing to do.
+                    */}
+                    {(t.due.state === "scheduled" || t.due.state === "upcoming") &&
+                      t.due.at != null && (
+                        <span className="text-[12px] text-[var(--faint)]">
+                          next {relativeTime(t.due.at, now)}
+                        </span>
+                      )}
                   </div>
                   <p className="mt-1 text-[12.5px] text-[var(--muted)]">
                     {formatDose(t.targetMcg)} · {t.protocol.name}
