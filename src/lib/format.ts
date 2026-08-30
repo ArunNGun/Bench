@@ -82,13 +82,32 @@ const dateYearFmt = new Intl.DateTimeFormat(undefined, {
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
-export const formatDate = (ms: number) => dateFmt.format(ms);
+/**
+ * A date, carrying the year only when it is not the current one.
+ *
+ * "Mar 13" read in August is not a date, it is a guess. The reader has to
+ * decide whether it means seven months ahead or five behind, and on the Stock
+ * page, where the question is when to reorder, guessing wrong in either
+ * direction is expensive.
+ *
+ * Not a new idea in this file: `formatDateTime` has always worked this way, and
+ * now shares the implementation. The dropped year was only ever an economy for
+ * dates near today, and it stops being one the moment a date crosses a new
+ * year.
+ *
+ * `nowMs` is a parameter so the choice can be tested without waiting for
+ * December.
+ */
+export function formatDate(ms: number, nowMs = Date.now()) {
+  const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
+  return (sameYear ? dateFmt : dateYearFmt).format(ms);
+}
+
 export const formatTime = (ms: number) => timeFmt.format(ms);
 export const formatWeekday = (ms: number) => weekdayFmt.format(ms);
 
 export function formatDateTime(ms: number, nowMs = Date.now()) {
-  const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
-  return `${(sameYear ? dateFmt : dateYearFmt).format(ms)}, ${timeFmt.format(ms)}`;
+  return `${formatDate(ms, nowMs)}, ${timeFmt.format(ms)}`;
 }
 
 /** Value for a datetime-local input, in local time rather than UTC. */

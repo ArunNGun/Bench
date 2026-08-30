@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
   daysOfSupplyForProtocol,
+  supplyOutlook,
   drawFromVial,
-  groupSealedVials,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -477,5 +477,78 @@ describe("daysOfSupplyForProtocol", () => {
 
   it("caps rather than walking to the end of time on a deep stock", () => {
     expect(daysOfSupplyForProtocol(stockOf(10_000_000), protocol(), start, 365)).toBe(365);
+  });
+});
+
+describe("supplyOutlook", () => {
+  /** A Monday, so weekly dosing lands on the same weekday throughout. */
+  const start = new Date(2026, 0, 5, 9, 0, 0, 0).getTime();
+
+  const protocol = (over: Partial<Protocol> = {}): Protocol => ({
+    id: "p1",
+    profileId: "me",
+    peptideId: "klow",
+    name: "Test",
+    active: true,
+    startedAt: start,
+    doseMcg: 1000,
+    route: "subcutaneous",
+    schedule: { kind: "interval-days", intervalDays: 7, timeOfDay: "09:00" },
+    titrationAutoAdvance: false, ...over,
+  });
+
+  const stockOf = (availableMcg: number) => ({
+    availableMcg,
+    sealedCount: 1,
+    openCount: 0,
+    dosesRemaining: 0,
+    dosesInOpenVials: 0,
+    needsReconstitution: false,
+  });
+
+  it("gives the date the stock is spent", () => {
+    // The same ten weekly doses as above, so the answer is the same instant the
+    // day count describes, seventy days out.
+    const out = supplyOutlook(stockOf(10_000), protocol(), start);
+    expect(out.kind).toBe("runs-out");
+    if (out.kind !== "runs-out") return;
+    expect(Math.round((out.at - start) / 86_400_000)).toBe(70);
+  });
+
+  it("agrees exactly with the day count it is derived from", () => {
+    // A date that disagreed with the figure on the Today screen would be worse
+    // than no date at all.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start, 365)!;
+    const out = supplyOutlook(stockOf(10_000), protocol(), start);
+    if (out.kind !== "runs-out") throw new Error("expected a date");
+    expect(out.at).toBeCloseTo(start + days * 86_400_000, 3);
+  });
+
+  it("says beyond the horizon rather than inventing a distant date", () => {
+    // The dangerous case: the walk returns the horizon itself, which reads as a
+    // real answer and is not one.
+    expect(supplyOutlook(stockOf(10_000_000), protocol(), start).kind).toBe("beyond-horizon");
+  });
+
+  it("knows nothing when there is no schedule to spend against", () => {
+    const p = protocol({ schedule: { kind: "as-needed" } });
+    expect(supplyOutlook(stockOf(10_000), p, start).kind).toBe("unknown");
+  });
+
+  it("knows nothing when there is no stock", () => {
+    // Distinct from running out today. There is nothing to make a claim about,
+    // and "runs out now" on an empty shelf is noise on every empty compound.
+    expect(supplyOutlook(stockOf(0), protocol(), start).kind).toBe("unknown");
+  });
+
+  it("brings the date forward when the plan steps up", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    const flat = supplyOutlook(stockOf(10_000), protocol(), start);
+    const stepped = supplyOutlook(stockOf(10_000), protocol({ phases: ladder }), start);
+    if (flat.kind !== "runs-out" || stepped.kind !== "runs-out") throw new Error("expected dates");
+    expect(stepped.at).toBeLessThan(flat.at);
   });
 });
