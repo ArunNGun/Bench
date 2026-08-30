@@ -21,8 +21,10 @@ import {
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
 import {
+  dosesPerDoseDay,
   dueStatus,
   endOfLocalDay,
+  phaseSpanAt,
   logsForProtocol,
   protocolDosesPerWeek,
   scheduledDoseMcg,
@@ -47,6 +49,7 @@ import {
   formatConcentration,
   formatDate,
   formatDose,
+  formatDosePerDay,
   formatDuration,
   formatHalfLife,
   formatTime,
@@ -219,6 +222,9 @@ export default function NowPage() {
         // What the compound is doing right now, in words.
         phase: peptide ? timelinePhaseAt(peptide, hoursSince(lastLoggedAt, now) ?? -1) : null,
         supplyDays: daysOfSupplyForProtocol(stock, protocol, now),
+        // Injections a dose day holds, for the screens that describe the plan
+        // rather than the next dose.
+        perDay: dosesPerDoseDay(phaseSpanAt(protocol, now)?.schedule ?? protocol.schedule),
         color: palette.byProtocol.get(protocol.id),
         // The card accent is the compound's colour, not a sixth name counted
         // out separately. Counting separately is what let a chip and its own
@@ -706,8 +712,13 @@ export default function NowPage() {
                         </span>
                       )}
                   </div>
+                  {/*
+                    This card is the protocol, not the next injection, so it
+                    names the amount and how many of them a day holds. The rows
+                    above, which are each about one dose, stay plain.
+                  */}
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-[var(--muted)]">
-                    <span>{formatDose(t.targetMcg)}</span>
+                    <span>{formatDosePerDay(t.targetMcg, t.perDay)}</span>
                     <DoseMarks
                       peptideId={t.protocol.peptideId}
                       doseMcg={t.targetMcg}

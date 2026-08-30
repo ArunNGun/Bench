@@ -19,6 +19,7 @@ import { PctPanel } from "@/components/PctPanel";
 import { ProjectionPreview } from "@/components/ProjectionPreview";
 import { allPeptides, findPeptide, useStore, useProfileData } from "@/lib/store";
 import {
+  dosesPerDoseDay,
   endOfLocalDay,
   phaseSpanAt,
   protocolDoseTimesBetween,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/calc/schedule";
 import {
   formatDose,
+  formatDosePerDay,
   formatDate,
   formatWeekday,
   formatTime,
@@ -175,7 +177,15 @@ export default function PlanPage() {
                   </div>
                   <p className="mt-1 text-[13px] text-[var(--muted)]">{p.name}</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
-                    <span className="tnum font-mono text-[var(--tangerine)]">{formatDose(target)}</span>
+                    {/*
+                      The amount that goes in one syringe, and how many of them
+                      a dose day holds. Bare "250 mcg" beside a plan someone
+                      entered as 500 reads as a contradiction rather than as a
+                      split.
+                    */}
+                    <span className="tnum font-mono text-[var(--tangerine)]">
+                      {formatDosePerDay(target, dosesPerDoseDay(showSchedule))}
+                    </span>
                     <span className="text-[var(--muted)]">{describeSchedule(showSchedule)}</span>
                     <span className="text-[var(--faint)]">
                       {trim(protocolDosesPerWeek(p, now), 2)} per week

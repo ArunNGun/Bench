@@ -32,10 +32,10 @@ import {
   type SupplyOutlook,
   type VialGroup,
 } from "@/lib/calc/inventory";
-import { scheduledDoseMcg } from "@/lib/calc/schedule";
+import { dosesPerDoseDay, phaseSpanAt, scheduledDoseMcg } from "@/lib/calc/schedule";
 import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle } from "@/lib/calc/diluent";
 import { converterUrl } from "@/lib/calc/converter";
-import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
+import { formatConcentration, formatDate, formatDose, formatDosePerDay, trim } from "@/lib/format";
 import {
   costPerVialInKit,
   formatMoney,
@@ -110,6 +110,13 @@ export default function StockPage() {
   const doseFor = (peptideId: string) => {
     const p = protocols.find((x) => x.active && x.peptideId === peptideId);
     return p ? scheduledDoseMcg(p, now) : 0;
+  };
+
+  /** How many of those a dose day holds, so a count of doses can be read as days. */
+  const timesPerDayFor = (peptideId: string) => {
+    const p = protocols.find((x) => x.active && x.peptideId === peptideId);
+    if (!p) return 1;
+    return dosesPerDoseDay(phaseSpanAt(p, now)?.schedule ?? p.schedule);
   };
 
   /**
@@ -231,6 +238,7 @@ export default function StockPage() {
                 now={now}
                 budWarningDays={settings.budWarningDays}
                 doseMcg={doseFor(v.peptideId)}
+                timesPerDay={timesPerDayFor(v.peptideId)}
                 outlook={outlookFor(v.peptideId)}
                 shippingOf={shippingOf}
                 currency={currency}
@@ -258,6 +266,7 @@ export default function StockPage() {
                   now={now}
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
+                  timesPerDay={timesPerDayFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
                   shippingOf={shippingOf}
                   currency={currency}
@@ -297,6 +306,7 @@ export default function StockPage() {
                   now={now}
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
+                  timesPerDay={timesPerDayFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
                   shippingOf={shippingOf}
                   currency={currency}
@@ -361,6 +371,7 @@ function VialRow({
   peptideName,
   budWarningDays,
   doseMcg,
+  timesPerDay,
   outlook,
   currency,
   shippingOf,
@@ -381,6 +392,8 @@ function VialRow({
   peptideName: string;
   budWarningDays: number;
   doseMcg: number;
+  /** Injections a dose day holds, so a count of doses can be read as days. */
+  timesPerDay: number;
   /**
    * When the whole stock of this compound runs out. Shared by every row of the
    * same compound on purpose; see the comment on `outlookFor`.
@@ -485,9 +498,17 @@ function VialRow({
             <span className="tnum font-mono text-[var(--tangerine)]">
               {Math.floor(remainingMcg / doseMcg)}
             </span>{" "}
+            {/*
+              The count is injections, which is what actually comes out of a
+              vial, and on a plan taken twice a day that is half as many days.
+              Naming the rhythm beside the amount is what lets the reader do
+              that division; without it, "250 mcg doses" contradicts a plan
+              they entered as 500.
+            */}
             <span className="text-[var(--muted)]">
-              more {formatDose(doseMcg)} dose
-              {Math.floor(remainingMcg / doseMcg) === 1 ? "" : "s"}{" "}
+              more dose
+              {Math.floor(remainingMcg / doseMcg) === 1 ? "" : "s"} of{" "}
+              {formatDosePerDay(doseMcg, timesPerDay)}{" "}
               {many ? "across these vials" : "in this vial"} · {formatDose(remainingMcg)} left
             </span>
           </p>

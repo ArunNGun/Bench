@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatDate,
+  formatDosePerDay,
   formatDateTime,
   fromDateInput,
   toDateInput,
@@ -108,5 +109,22 @@ describe("formatDate", () => {
     for (const at of [new Date(2026, 8, 13, 9, 30).getTime(), new Date(2027, 2, 13, 9, 30).getTime()]) {
       expect(formatDateTime(at, aug).startsWith(`${formatDate(at, aug)}, `)).toBe(true);
     }
+  });
+});
+
+describe("formatDosePerDay", () => {
+  it("names one dose plainly", () => {
+    expect(formatDosePerDay(250, 1)).toBe("250 mcg");
+  });
+
+  it("says how many a day holds when it holds more than one", () => {
+    // The form takes the day's dose, so someone who typed 500 and split it
+    // reads 250 here. The multiplier is what reconciles the two.
+    expect(formatDosePerDay(250, 2)).toBe("250 mcg \u00d7 2");
+    expect(formatDosePerDay(1500, 3)).toBe("1.5 mg \u00d7 3");
+  });
+
+  it("does not multiply by nothing", () => {
+    expect(formatDosePerDay(250, 0)).toBe("250 mcg");
   });
 });
