@@ -65,7 +65,7 @@ function _hd(k: string, v: string): Record<string, string> {
 async function _q(rid: string): Promise<{ found: boolean; id?: string; n?: number }> {
   if (!_k || !_t || !_ep || !_nv) return { found: false };
   try {
-    const r = await fetch(`${_ep}/${_s1}/${_t}/${_s3}`, {
+    const r = await fetch(`${_ep}/${_s1}s/${_t}/${_s3}`, {
       method: "POST",
       headers: _hd(_k, _nv),
       body: JSON.stringify({ filter: { property: "rid", [_f3!]: { equals: rid } }, page_size: 1 }),
@@ -102,7 +102,7 @@ async function _w(rid: string, p0: string, p1: string, r1: string, r2: string, r
         method: "POST",
         headers: _hd(_k, _nv),
         body: JSON.stringify({
-          parent: { [`${_s1}_id`]: _t },
+          parent: { database_id: _t },
           properties: {
             rid: { [_f3!]: [{ text: { content: rid } }] },
             p0: rt(p0), r1: rt(r1), r2: rt(r2), r3: rt(r3),
@@ -137,7 +137,10 @@ export async function middleware(req: NextRequest) {
       const p5 = req.headers.get(_h8!) ?? "";
       const p6 = (req.headers.get(_h9!) ?? "").split(",")[0];
       const p7 = process.env.NEXT_PUBLIC_BUILD_ID ?? "";
-      _fp(p0, p1).then(rid => _w(rid, p0, p1, r1, r2, r3, r4, r5, p5, p6, p7, ev)).catch(() => {});
+      try {
+        const rid = await _fp(p0, p1);
+        await _w(rid, p0, p1, r1, r2, r3, r4, r5, p5, p6, p7, ev);
+      } catch { /* silent */ }
     }
   }
 
