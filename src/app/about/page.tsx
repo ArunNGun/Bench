@@ -71,6 +71,55 @@ export default function AboutPage() {
         </div>
       </Card>
 
+      {/*
+        Linked to from the help icon on the log sheet, which is why it carries
+        an id and sits above the fold of the page rather than at the bottom.
+        The tooltip holds two sentences; everything a person might reasonably
+        ask afterwards is here, where there is room for it.
+      */}
+      <Card id="skipped" className="space-y-3 p-4 scroll-mt-24">
+        <SectionLabel>What a skipped dose does</SectionLabel>
+        <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
+          <p>
+            Ticking <strong className="text-[var(--ink)]">Record this as a skipped dose</strong>{" "}
+            writes an entry to your log and marks it as not taken. It is a record rather than the
+            absence of one, and that is the entire point: the app can tell a dose you decided
+            against from one nobody ever logged, and your adherence figure reports the two
+            separately rather than lumping both under missed.
+          </p>
+          <p className="font-semibold text-[var(--ink)]">What it stops happening</p>
+          <ul className="space-y-1.5 pl-4">
+            <li className="list-disc">
+              No vial is drawn down. Change an existing dose from taken to skipped and the mass goes
+              back into the vial it came from. Delete a skipped entry and nothing is returned,
+              because nothing was taken.
+            </li>
+            <li className="list-disc">
+              No drug is modelled in your body, so the curve, the percentage of peak and the
+              projection are all untouched.
+            </li>
+            <li className="list-disc">
+              It does not count towards today&apos;s ring or your streak, which count it apart from
+              a dose taken.
+            </li>
+            <li className="list-disc">
+              It is left out of the outcome comparisons, the injection site rotation, the dose marks
+              on the weight chart, and the protocol the app infers from your history.
+            </li>
+            <li className="list-disc">
+              The dose, units and vial fields grey out while the box is ticked, since none of them
+              mean anything for a dose that did not happen.
+            </li>
+          </ul>
+          <p className="font-semibold text-[var(--ink)]">Where it still shows up</p>
+          <p>
+            In the log with its own marker, in the Skipped figure for the last thirty days, as
+            &quot;skipped&quot; in the printable report, and as <code>skipped=yes</code> in the CSV
+            export.
+          </p>
+        </div>
+      </Card>
+
       <Card className="space-y-3 p-4">
         <SectionLabel>What it tracks</SectionLabel>
         <ul className="grid gap-x-6 gap-y-1.5 text-[13px] text-[var(--muted)] sm:grid-cols-2">
