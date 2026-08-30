@@ -306,6 +306,24 @@ export function protocolPhases(protocol: Protocol): ProtocolPhase[] | null {
 }
 
 /**
+ * What a band's frequency actually comes to.
+ *
+ * A band overrides only what it names. It was written as a whole copy of the
+ * protocol's schedule taken at the moment the band was given a frequency of its
+ * own, which means it silently pins whatever the protocol said that day, and
+ * anything added to a schedule afterwards can never reach it.
+ *
+ * That is not theory. Times of day arrived after these copies existed: someone
+ * with a plan in bands added an evening dose at the top of the form, the form
+ * accepted it, the plan carried on dosing once a day, and nothing on screen
+ * admitted the difference. Merging means an existing band picks up the evening
+ * dose, and a band that sets its own times still keeps them.
+ */
+export function bandSchedule(protocol: Schedule, band?: Schedule): Schedule {
+  return band ? { ...protocol, ...band } : protocol;
+}
+
+/**
  * Phases resolved onto the calendar.
  *
  * A protocol without phases yields a single span covering all of time, carrying
@@ -345,7 +363,7 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
     spans.push({
       index: i,
       phase,
-      schedule: phase.schedule ?? protocol.schedule,
+      schedule: bandSchedule(protocol.schedule, phase.schedule),
       anchor,
       from: anchor,
       to,

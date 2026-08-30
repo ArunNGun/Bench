@@ -342,7 +342,9 @@ function renumberPhases(phases: ProtocolPhase[]) {
       schedule: {
         ...p.schedule,
         timeOfDay: clean[0] ?? p.schedule.timeOfDay ?? "09:00",
-        timesOfDay: clean.length < 2 ? undefined : clean,
+        // A band keeps its list even at one time, because an absent list means
+        // "whatever the protocol says" rather than "once a day".
+        timesOfDay: clean.length ? clean : undefined,
       },
     };
   });
