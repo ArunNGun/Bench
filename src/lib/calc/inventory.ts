@@ -319,7 +319,21 @@ export function marksForDose(
   doseMcg: number,
   scale: SyringeScale,
   nowMs: number): number | null {
-  const vial = pickVialForDose(vials, peptideId, doseMcg, nowMs);
+  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs), doseMcg, scale);
+}
+
+/**
+ * The same reading, for a vial already in hand.
+ *
+ * Separate because two callers know exactly which vial they mean: a row on the
+ * Stock page is about one vial, and a dose being logged has already been
+ * attributed to one. Neither should go back through the picker and risk being
+ * told about a different vial than the one on screen.
+ */
+export function marksFromVial(
+  vial: Vial | null | undefined,
+  doseMcg: number,
+  scale: SyringeScale): number | null {
   if (!vial || vial.state !== "reconstituted") return null;
 
   const conc = vialConcentration(vial);

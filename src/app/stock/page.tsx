@@ -18,10 +18,12 @@ import {
 import { VialGlyph } from "@/components/Syringe";
 import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "@/lib/store";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
-import { MULTI_DOSE_VIAL_BUD_DAYS } from "@/lib/calc/reconstitution";
+import { MULTI_DOSE_VIAL_BUD_DAYS, unitsToMl } from "@/lib/calc/reconstitution";
+import { useSyringeScale } from "@/components/DoseMarks";
 import {
   diluentAfterTopUp,
   groupSealedVials,
+  marksFromVial,
   stockFor,
   supplyOutlook,
   vialConcentration,
@@ -397,6 +399,8 @@ function VialRow({
 }) {
   const st = vialStatus(vial, now);
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
+  const scale = useSyringeScale();
+  const marks = doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
 
   const many = (group?.count ?? 1) > 1;
   // One row, one set of numbers: either this vial's or the whole group's.
@@ -440,6 +444,22 @@ function VialRow({
               {formatConcentration(st.concentrationMcgPerMl)}
             </span>
             <span className="tnum font-mono">{trim(st.remainingMl, 2)} mL left</span>
+            {/*
+              What this vial reads on the barrel, for the dose it is being run
+              at. Per vial rather than through the picker: this row is about
+              one vial, and two vials of the same compound made up differently
+              give different marks for the same dose.
+            */}
+            {marks != null && (
+              <span
+                className="tnum font-mono"
+                title={`${trim(marks, 2)} marks on a ${
+                  scale === "U40" ? "U-40" : "U-100"
+                } barrel, ${trim(unitsToMl(marks, scale), 3)} mL`}
+              >
+                {trim(marks, 2)} marks per {formatDose(doseMcg)}
+              </span>
+            )}
             {vial.budAt != null && (
               <span className={budSoon ? "text-[var(--rose)]" : ""}>
                 use by {formatDate(vial.budAt)}
