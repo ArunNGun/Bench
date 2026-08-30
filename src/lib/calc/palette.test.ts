@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { assignColors, colorSubjects, doseColor, SERIES_COLORS } from "./palette";
+import {
+  assignColors,
+  colorSubjects,
+  doseColor,
+  SERIES_COLORS,
+  SERIES_TONES,
+  toneFor,
+} from "./palette";
 import { PEPTIDE_BY_ID } from "../data/peptides";
 import type { Peptide, Protocol } from "../types";
 
@@ -73,6 +80,23 @@ describe("assignColors", () => {
   it("answers the same way twice for the same input", () => {
     const subjects = [{ protocolId: "a", componentKeys: ["x"] }, { protocolId: "b" }];
     expect([...assignColors(subjects).byKey]).toEqual([...assignColors(subjects).byKey]);
+  });
+});
+
+describe("tones", () => {
+  it("names the same six things in the same order as the colours", () => {
+    expect(SERIES_COLORS).toEqual(SERIES_TONES.map((t) => `var(--${t})`));
+  });
+
+  it("finds the tone for a colour it handed out", () => {
+    const { byProtocol } = assignColors([{ protocolId: "a" }, { protocolId: "b" }]);
+    expect(toneFor(byProtocol.get("a"))).toBe("mint");
+    expect(toneFor(byProtocol.get("b"))).toBe("grape");
+  });
+
+  it("has no tone for a colour it never handed out", () => {
+    expect(toneFor("var(--ink)")).toBeUndefined();
+    expect(toneFor(undefined)).toBeUndefined();
   });
 });
 

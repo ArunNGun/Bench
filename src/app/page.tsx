@@ -26,6 +26,7 @@ import {
   logsForProtocol,
   protocolDosesPerWeek,
   scheduledDoseMcg,
+  startOfLocalDay,
   unloggedDoseTimes,
 } from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
@@ -38,7 +39,7 @@ import {
   weeklyExposure,
 } from "@/lib/calc/progress";
 import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
-import { assignColors, colorSubjects } from "@/lib/calc/palette";
+import { assignColors, colorSubjects, toneFor } from "@/lib/calc/palette";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
@@ -65,10 +66,6 @@ import {
   type HalfLifeEstimate,
   type Protocol,
 } from "@/lib/types";
-
-
-/** Card accents, kept in step with the chart colours. */
-const TRACK_TONES: Tone[] = ["mint", "grape", "tangerine", "sky", "rose", "leaf"];
 
 const DAY = 86_400_000;
 
@@ -133,8 +130,20 @@ export default function NowPage() {
 
   const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
 
+  /**
+   * One colour per line, and per protocol, agreed with the Plan screen.
+   *
+   * Built from every active protocol rather than only the ones that can be
+   * drawn: a compound with no half-life still appears in a plan, and if it took
+   * no colour here the two screens would count differently from the first one
+   * you owned.
+   */
+  const palette = useMemo(
+    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
+    [active, custom, now]);
+
   const tracks = useMemo(() => {
-    return active.map((protocol, i) => {
+    return active.map((protocol) => {
       const peptide = findPeptide(custom, protocol.peptideId);
       const protocolLogs = logs.filter(
         (l) => !l.skipped && (l.protocolId === protocol.id || l.peptideId === protocol.peptideId));
@@ -209,22 +218,14 @@ export default function NowPage() {
         // What the compound is doing right now, in words.
         phase: peptide ? timelinePhaseAt(peptide, hoursSince(lastLoggedAt, now) ?? -1) : null,
         supplyDays: daysOfSupplyForProtocol(stock, protocol, now),
-        tone: TRACK_TONES[i % TRACK_TONES.length],
+        color: palette.byProtocol.get(protocol.id),
+        // The card accent is the compound's colour, not a sixth name counted
+        // out separately. Counting separately is what let a chip and its own
+        // line disagree as soon as a blend took two colours.
+        tone: (toneFor(palette.byProtocol.get(protocol.id)) ?? "neutral") as Tone,
       };
     });
-  }, [active, logs, vials, custom, overrides, now]);
-
-  /**
-   * One colour per line, and per protocol, agreed with the Plan screen.
-   *
-   * Built from every active protocol rather than only the ones that can be
-   * drawn: a compound with no half-life still appears in a plan, and if it took
-   * no colour here the two screens would count differently from the first one
-   * you owned.
-   */
-  const palette = useMemo(
-    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
-    [active, custom, now]);
+  }, [active, logs, vials, custom, overrides, palette, now]);
 
   const series: PkSeries[] = useMemo(() => {
     const out: Omit<PkSeries, "color">[] = [];
@@ -421,8 +422,19 @@ export default function NowPage() {
             >
               <Badge tone={t.due.state === "overdue" ? "rose" : "tangerine"}>{t.due.label}</Badge>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] text-[var(--ink)]">
-                  {t.peptide?.name ?? t.protocol.peptideId} · {formatDose(t.targetMcg)}
+                <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
+                  {t.color && (
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: t.color }}
+                    />
+                  )}
+                  <span className="truncate font-medium" style={{ color: t.color ?? "var(--ink)" }}>
+                    {t.peptide?.name ?? t.protocol.peptideId}
+                  </span>
+                  <span className="tnum font-mono text-[13px] text-[var(--ink)]">
+                    {formatDose(t.targetMcg)}
+                  </span>
                 </div>
                 <div className="text-[12px] text-[var(--muted)]">
                   {t.due.at != null &&
@@ -488,8 +500,19 @@ export default function NowPage() {
                     {formatTime(at)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[13.5px] text-[var(--ink)]">
-                      {t.peptide?.name ?? t.protocol.peptideId} · {formatDose(t.targetMcg)}
+                    <span className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
+                      {t.color && (
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ background: t.color }}
+                        />
+                      )}
+                      <span className="font-medium" style={{ color: t.color ?? "var(--ink)" }}>
+                        {t.peptide?.name ?? t.protocol.peptideId}
+                      </span>
+                      <span className="tnum font-mono text-[12.5px] text-[var(--ink)]">
+                        {formatDose(t.targetMcg)}
+                      </span>
                     </span>
                     {/*
                       Logging a dose hours before its time is nearly always a
@@ -907,33 +930,62 @@ function TodayCard({
         </div>
       </div>
 
-      {/* Seven dots, oldest to today. */}
+      {/*
+        Seven days, oldest to today.
+
+        Today is drawn differently on purpose. Orange means a day that ended
+        with doses missing, and until midnight today is not that day: it is a
+        day in progress, and colouring it as a miss at nine in the morning
+        reads as a telling off for something you have all day to do. So today
+        fills from the bottom as it goes, in the same green a finished day
+        wears, and reaches that green by being finished rather than by being
+        recoloured.
+      */}
       <div className="mt-5 flex items-end justify-between gap-1.5">
-        {week.map((d) => (
-          <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
-            <span
-              className="h-9 w-full rounded-[8px]"
-              style={{
-                background: d.restDay
-                  ? "var(--line)"
-                  : d.complete
-                    ? "var(--leaf)"
-                    : d.taken > 0
-                      ? "var(--tangerine)"
-                      : "var(--line)",
-                opacity: d.restDay ? 0.5 : 1,
-              }}
-              title={
-                d.restDay
-                  ? "Nothing scheduled"
-                  : `${d.taken} of ${d.expected} logged`
-              }
-            />
-            <span className="text-[10px] font-semibold text-[var(--faint)]">
-              {formatWeekday(d.day).slice(0, 2)}
-            </span>
-          </div>
-        ))}
+        {week.map((d) => {
+          const isToday = d.day === startOfLocalDay(now);
+          const filled = d.restDay ? 0 : Math.round(d.fraction * 100);
+
+          return (
+            <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
+              <span
+                className="relative h-9 w-full overflow-hidden rounded-[8px]"
+                style={{
+                  background: d.restDay
+                    ? "var(--line)"
+                    : isToday || d.complete
+                      ? "var(--line)"
+                      : d.taken > 0
+                        ? "var(--tangerine)"
+                        : "var(--line)",
+                  opacity: d.restDay ? 0.5 : 1,
+                  boxShadow: isToday ? "inset 0 0 0 1.5px var(--faint)" : undefined,
+                }}
+                title={
+                  d.restDay
+                    ? "Nothing scheduled"
+                    : isToday
+                      ? `${d.taken} of ${d.expected} logged, the day is not over`
+                      : `${d.taken} of ${d.expected} logged`
+                }
+              >
+                {(isToday || d.complete) && !d.restDay && filled > 0 && (
+                  <span
+                    className="absolute inset-x-0 bottom-0 block"
+                    style={{ height: `${filled}%`, background: "var(--leaf)" }}
+                  />
+                )}
+              </span>
+              <span
+                className={`text-[10px] font-semibold ${
+                  isToday ? "text-[var(--ink)]" : "text-[var(--faint)]"
+                }`}
+              >
+                {formatWeekday(d.day).slice(0, 2)}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
