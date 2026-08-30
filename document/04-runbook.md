@@ -82,6 +82,55 @@ New features go on a feature branch, get merged into `beta` via PR (direct push
 allowed only for Arun), and are tested at the beta URL before being promoted to
 `main`. Releases are triggered by pushing a version tag to `main`.
 
+## Self-hosting, and the one non-negotiable step
+
+Nothing here applies to the Vercel deploys. This is for anyone running their own
+copy with the optional sync server in [`server/`](../server/README.md).
+
+```bash
+docker compose up -d --build web            # the app, :3210
+docker compose --profile sync up -d sync    # the sync server, :8787
+docker compose logs sync                    # the setup token is in here
+```
+
+The sync service mounts `./server` read only and runs the stock node image, so
+after editing `server.mjs` a `docker compose --profile sync restart sync` is
+enough. There is no image to rebuild, and `up -d` alone will not notice.
+
+### The whole site goes behind the proxy gate. Not optional.
+
+If the instance is reachable from an address you do not control,
+[`server/npm-advanced.conf`](../server/npm-advanced.conf) goes in **before** you
+point a browser at it. It uses nginx's `auth_request` to ask the sync server
+whether the visitor has a session, and serves nothing until the answer is yes.
+
+The API endpoints authenticate themselves already. What this adds is that the
+application never reaches an unauthenticated browser at all. A login the app
+draws for itself runs in the visitor's browser and can be walked past; this
+cannot, because the files never arrive.
+
+Verify rather than assume. From a machine with no session, the first two must
+answer `302`:
+
+```bash
+curl -sI https://your.domain/ | head -1
+curl -sI https://your.domain/plan | head -1
+curl -s  https://your.domain/login | head -1
+```
+
+A `200` on either of the first two means the gate is not on, whatever the config
+box says. The server also prints a reminder at startup whenever `BENCH_ORIGIN`
+is not a machine you are sitting at.
+
+Two things that have already caught us out here:
+
+- Declaring `location /` in the advanced block is correct and is not a conflict.
+  NPM omits its own default location when the block already contains one. An
+  earlier version avoided it out of caution and was the wrong shape.
+- The proxy has to reach the containers by an address that works from where it
+  runs. If NPM is not in the same Docker network, that means the host's LAN
+  address rather than the container names.
+
 ## Android
 
 Needs JDK 21:

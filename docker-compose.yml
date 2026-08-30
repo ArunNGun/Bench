@@ -1,0 +1,96 @@
+# Two ways to run Bench locally.
+#
+#   docker compose up --build web        production image, http://localhost:3210
+#   docker compose --profile dev up dev  hot reload, http://localhost:3211
+#   docker compose --profile test run --rm test    the vitest suite
+#   docker compose --profile sync up sync          the optional sync server, :8787
+#
+# Only "web" starts by default. The others sit behind profiles so a plain
+# "docker compose up" does not launch four node processes at once.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Override to pin a build id, for example BUILD_ID=1.9.0 docker compose build.
+        BUILD_ID: ${BUILD_ID:-}
+    image: bench-web:local
+    container_name: bench-web
+    ports:
+      - "3210:3210"
+    environment:
+      # Container clock only, so that docker compose logs read in local time.
+      # The app itself is unaffected: every screen that touches dates is a
+      # client component and uses the browser's timezone.
+      TZ: Europe/Ljubljana
+    restart: unless-stopped
+
+  dev:
+    profiles: ["dev"]
+    image: node:22-bookworm-slim
+    container_name: bench-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- -H 0.0.0.0 -p 3211"
+    ports:
+      - "3211:3211"
+    environment:
+      # Bind mounts on Windows do not deliver inotify events, so the watcher has
+      # to poll. Without this, edits on the host never trigger a rebuild.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - .:/app
+      # node_modules lives in a named volume rather than on the bind mount. Two
+      # reasons: the host tree may hold Windows binaries the container cannot
+      # run, and dependency reads across a bind mount are slow enough to be felt
+      # on every request.
+      - bench_node_modules:/app/node_modules
+      - bench_next_cache:/app/.next
+
+  test:
+    profiles: ["test"]
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm install && npm test"
+    environment:
+      # DST has caught real bugs in this project, so the suite runs somewhere
+      # that observes it. See CLAUDE.md.
+      TZ: America/New_York
+    volumes:
+      - .:/app
+      - bench_node_modules:/app/node_modules
+
+  # The sync server. Behind a profile because it is opt in, and because a
+  # server that starts by itself is a server you forget is running.
+  sync:
+    profiles: ["sync"]
+    image: node:22-bookworm-slim
+    container_name: bench-sync
+    working_dir: /app
+    command: node server/server.mjs
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      BENCH_DATA_DIR: /data
+      # The browser origin allowed to call this. Not the server's own address:
+      # the request comes from whatever machine the browser is on, so reaching
+      # the app from another device means naming that address here.
+      #   $env:BENCH_ORIGIN="http://192.168.1.20:3210"
+      BENCH_ORIGIN: ${BENCH_ORIGIN:-http://localhost:3210}
+      # Set this for anything beyond a look, or every restart logs you out.
+      # Registration needs no switch: the server prints a setup token while it
+      # has no account, and closes itself once it has one.
+      BENCH_SESSION_SECRET: ${BENCH_SESSION_SECRET:-}
+    volumes:
+      - ./server:/app/server:ro
+      - bench_sync_data:/data
+    restart: unless-stopped
+
+volumes:
+  bench_node_modules:
+  bench_next_cache:
+  bench_sync_data:
