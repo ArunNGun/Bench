@@ -10,6 +10,8 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { Button, NumberInput, Segmented, Select } from "@/components/ui";
+import { TimesOfDay, describeSplit } from "@/components/TimesOfDay";
+import { scheduleTimes } from "@/lib/calc/schedule";
 import { formatDose } from "@/lib/format";
 import type { ProtocolPhase, Schedule, ScheduleKind } from "@/lib/types";
 
@@ -78,6 +80,18 @@ export function PhaseEditor({
     patch(index, { schedule: { ...base, ...changes } });
   }
 
+  /** The same shape the protocol form stores: one time stays a single time. */
+  function patchTimes(index: number, next: string[]) {
+    const clean = [...new Set(next.map((t) => t.trim()).filter(Boolean))].sort();
+    patchSchedule(index, {
+      timeOfDay: clean[0] ?? "09:00",
+      // Held as typed, blanks and all, so a time just added does not vanish
+      // before it can be filled in. The maths ignores the blanks and the form
+      // drops them on save.
+      timesOfDay: next.length < 2 ? undefined : next,
+    });
+  }
+
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-3">
@@ -99,6 +113,9 @@ export function PhaseEditor({
         const isLast = i === phases.length - 1;
         const inherits = !phase.schedule;
         const kind: ScheduleKind | typeof INHERIT = inherits ? INHERIT : phase.schedule!.kind;
+        const inheritedTimes =
+          protocolSchedule.kind === "as-needed" ? [] : scheduleTimes(protocolSchedule);
+        const inheritedSplit = describeSplit(phase.doseMcg, inheritedTimes);
 
         return (
           <div
@@ -200,6 +217,29 @@ export function PhaseEditor({
                 </label>
               )}
             </div>
+
+            {/*
+              Times belong to the band only when the band has taken its
+              frequency into its own hands. A band that says "same as the
+              protocol" is told what that works out to rather than given a
+              second place to set it, since two editable copies of one fact is
+              how they come to disagree.
+            */}
+            {!inherits && phase.schedule!.kind !== "as-needed" && (
+              <TimesOfDay
+                times={phase.schedule!.timesOfDay?.length
+                  ? phase.schedule!.timesOfDay
+                  : scheduleTimes(phase.schedule!)}
+                onChange={(next) => patchTimes(i, next)}
+                dailyMcg={phase.doseMcg}
+              />
+            )}
+
+            {inherits && inheritedTimes.length > 0 && (
+              <p className="text-[12px] text-[var(--faint)]">
+                {inheritedSplit ?? `At ${inheritedTimes[0]}, same as the protocol.`}
+              </p>
+            )}
 
             {!inherits && phase.schedule!.kind === "days-of-week" && (
               <div className="flex flex-wrap gap-1.5">
