@@ -11,7 +11,7 @@ import { toDisplayWeight, weightChange } from "@/lib/calc/outcomes";
 import { averages } from "@/lib/calc/checkins";
 import { pctPlan } from "@/lib/calc/pct";
 import { formatDate, formatDose, trim } from "@/lib/format";
-import { CATEGORY_LABEL } from "@/lib/types";
+import { CATEGORY_LABEL, FEELING_LABELS } from "@/lib/types";
 
 const DAY = 86_400_000;
 
@@ -231,14 +231,26 @@ export default function ReportPage() {
             <Empty>No doses recorded in this period.</Empty>
           ) : (
             <>
+              {/*
+                One column rather than two, so the table still prints on a
+                page. What was tapped on the log sheet used to appear in no
+                report at all, which for a clinician is the one place it was
+                worth appearing.
+              */}
               <Table
-                head={["Date", "Compound", "Dose", "Route", "Site"]}
+                head={["Date", "Compound", "Dose", "Route", "Site", "Reported"]}
                 rows={recentLogs.slice(0, 60).map((l) => [
                   formatDate(l.at),
                   findPeptide(custom, l.peptideId)?.name ?? l.peptideId,
                   l.skipped ? "skipped" : formatDose(l.doseMcg),
                   l.route,
                   l.site ?? "not recorded",
+                  [
+                    l.feeling != null ? (FEELING_LABELS[l.feeling] ?? `${l.feeling}`) : null,
+                    l.sideEffects?.length ? l.sideEffects.join(", ") : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "nothing reported",
                 ])}
               />
               {recentLogs.length > 60 && (
