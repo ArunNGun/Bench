@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   averages,
   checkInFor,
+  diaryDays,
   inWindow,
   isTrendworthy,
   series,
@@ -202,5 +203,60 @@ describe("series", () => {
       { at: at(2), value: 1 },
       { at: at(0), value: 5 },
     ]);
+  });
+});
+
+describe("diaryDays", () => {
+  const day = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).getTime();
+  const check = (at: number, notes?: string): CheckIn => ({
+    id: `c-${at}`,
+    profileId: "me",
+    at: startOfLocalDay(at),
+    ratings: { energy: 3 },
+    notes,
+  });
+
+  it("puts the day's doses and its rating together", () => {
+    const dose = { at: day(2026, 8, 20, 7) };
+    const [only] = diaryDays([dose], [check(day(2026, 8, 20), "rough night")]);
+    expect(only.entries).toEqual([dose]);
+    expect(only.checkIn?.notes).toBe("rough night");
+  });
+
+  it("keeps a day that was only rated", () => {
+    // The case the report was about: side effects on a day with no injection.
+    const days = diaryDays<{ at: number }>([], [check(day(2026, 8, 21), "woke at three")]);
+    expect(days).toHaveLength(1);
+    expect(days[0].entries).toEqual([]);
+    expect(days[0].checkIn?.notes).toBe("woke at three");
+  });
+
+  it("keeps a day that was only dosed", () => {
+    const days = diaryDays([{ at: day(2026, 8, 22, 8) }], []);
+    expect(days).toHaveLength(1);
+    expect(days[0].checkIn).toBeUndefined();
+  });
+
+  it("reads newest first", () => {
+    const days = diaryDays(
+      [{ at: day(2026, 8, 20) }, { at: day(2026, 8, 22) }],
+      [check(day(2026, 8, 21))]);
+    expect(days.map((d) => new Date(d.day).getDate())).toEqual([22, 21, 20]);
+  });
+
+  it("gathers everything logged on one day into that day", () => {
+    const entries = [day(2026, 8, 23, 7), day(2026, 8, 23, 22), day(2026, 8, 24, 7)].map((at) => ({ at }));
+    const days = diaryDays(entries, []);
+    expect(days.map((d) => d.entries.length)).toEqual([1, 2]);
+  });
+
+  it("keeps the entries in the order it was given them", () => {
+    const evening = { at: day(2026, 8, 25, 22), id: "b" };
+    const morning = { at: day(2026, 8, 25, 7), id: "a" };
+    expect(diaryDays([evening, morning], [])[0].entries.map((e) => e.id)).toEqual(["b", "a"]);
+  });
+
+  it("is empty when there is nothing at all", () => {
+    expect(diaryDays([], [])).toEqual([]);
   });
 });
