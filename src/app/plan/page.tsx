@@ -46,8 +46,7 @@ import {
   type ScheduleKind,
   type TitrationStep,
 } from "@/lib/types";
-import { assignColors } from "@/lib/calc/palette";
-import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
+import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -830,23 +829,7 @@ function Upcoming() {
    * screen and another elsewhere is worse than no colour.
    */
   const palette = useMemo(
-    () =>
-      assignColors(
-        active.map((p) => {
-          const peptide = findPeptide(custom, p.peptideId);
-          const parts =
-            peptide && isBlend(peptide)
-              ? decomposeDose(
-                  peptide,
-                  scheduledDoseMcg(p, now),
-                  (id) => findPeptide(custom, id),
-                  protocolDosesPerWeek(p, now))
-              : [];
-          return {
-            protocolId: p.id,
-            componentKeys: modellableComponents(parts).map((c) => c.peptideId ?? c.name),
-          };
-        })),
+    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
     [active, custom, now]);
 
   const days = useMemo(() => {
