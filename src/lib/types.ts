@@ -287,8 +287,22 @@ export interface Schedule {
   intervalDays?: number;
   /** For days-of-week: 0 = Sunday .. 6 = Saturday. */
   daysOfWeek?: number[];
-  /** Local time of day, "HH:MM". */
+  /**
+   * Local time of day, "HH:MM". The first of `timesOfDay` when there are
+   * several, kept in step so that anything reading a single time still reads
+   * the right one.
+   */
   timeOfDay?: string;
+  /**
+   * Every time a dose day carries, "HH:MM" each, for a compound taken more
+   * than once a day. Absent means the single `timeOfDay`, which is what every
+   * protocol made before this held and why nothing needed migrating.
+   *
+   * The dose is for the day and is split evenly across these, so two times
+   * turn 500 mcg into 250 mcg morning and 250 mcg evening. Read through
+   * `scheduleTimes` rather than directly.
+   */
+  timesOfDay?: string[];
   /** Weeks on, then weeks off. Zero means continuous. */
   cycleWeeksOn?: number;
   cycleWeeksOff?: number;

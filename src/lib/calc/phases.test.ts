@@ -14,6 +14,7 @@ import {
   protocolPhases,
   protocolPreviousDoseTime,
   scheduledDoseMcg,
+  startOfLocalDay,
 } from "./schedule";
 import type { Protocol, ProtocolPhase } from "../types";
 
@@ -206,6 +207,56 @@ describe("per phase frequency", () => {
   it("never repeats a time at a boundary", () => {
     const times = protocolDoseTimesBetween(p, start, addLocalDays(start, 40));
     expect(new Set(times).size).toBe(times.length);
+  });
+});
+
+describe("a band overrides only what it names", () => {
+  /**
+   * A band's schedule is a copy of the protocol's, taken when the band was
+   * given a frequency of its own. Anything a schedule learns to hold after
+   * that copy was made would never reach the band, which is how an evening
+   * dose added at the top of the form went nowhere for a plan in bands.
+   */
+  const banded = protocol({
+    schedule: { kind: "daily", timeOfDay: "07:00", timesOfDay: ["07:00", "19:00"] },
+    phases: [
+      // Written the way the editor wrote them before times existed.
+      { step: 1, doseMcg: 500, weeks: 4, schedule: { kind: "daily", timeOfDay: "07:00" } },
+      { step: 2, doseMcg: 1000, weeks: 4, schedule: { kind: "daily", timeOfDay: "07:00" } },
+    ],
+  });
+
+  it("gives an older band the times the protocol has since gained", () => {
+    const day = startOfLocalDay(addLocalDays(start, 3));
+    const times = protocolDoseTimesBetween(banded, day, addLocalDays(day, 1) - 1);
+    expect(times.map((t) => new Date(t).getHours())).toEqual([7, 19]);
+  });
+
+  it("splits the band's dose across those times", () => {
+    expect(scheduledDoseMcg(banded, addLocalDays(start, 3))).toBe(250);
+  });
+
+  it("leaves a band that names its own times alone", () => {
+    const own = protocol({
+      schedule: { kind: "daily", timeOfDay: "07:00", timesOfDay: ["07:00", "19:00"] },
+      phases: [
+        { step: 1, doseMcg: 500, weeks: 4, schedule: { kind: "daily", timesOfDay: ["12:00"] } },
+      ],
+    });
+    const day = startOfLocalDay(addLocalDays(start, 3));
+    const times = protocolDoseTimesBetween(own, day, addLocalDays(day, 1) - 1);
+    expect(times.map((t) => new Date(t).getHours())).toEqual([12]);
+    expect(scheduledDoseMcg(own, day)).toBe(500);
+  });
+
+  it("keeps the band's own kind, which is the thing it does name", () => {
+    const weeklyBand = protocol({
+      schedule: { kind: "daily", timeOfDay: "07:00" },
+      phases: [
+        { step: 1, doseMcg: 500, weeks: 4, schedule: { kind: "interval-days", intervalDays: 7 } },
+      ],
+    });
+    expect(protocolDosesPerWeek(weeklyBand, addLocalDays(start, 3))).toBe(1);
   });
 });
 

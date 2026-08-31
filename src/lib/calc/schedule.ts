@@ -45,6 +45,41 @@ export function atTimeOfDay(dayMs: number, timeOfDay?: string) {
   return d.getTime();
 }
 
+/** "7:5" and "07:05" are the same time. Anything unreadable is nine o'clock. */
+function normalizeTime(raw: string): string {
+  const [h, m] = String(raw).split(":").map(Number);
+  const hh = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 9;
+  const mm = Number.isFinite(m) ? Math.min(59, Math.max(0, Math.trunc(m))) : 0;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+/**
+ * Every time a dose day carries, in order, deduplicated.
+ *
+ * The one place `timesOfDay` and `timeOfDay` are reconciled. Two fields for
+ * one fact is a smell, and the alternative was migrating every protocol and
+ * every phase inside it on the promise that no importer, no backup and no
+ * older copy of the app would ever hand back the old shape. This is the
+ * cheaper half of that trade, on the condition that nothing reads either field
+ * directly, which is what makes this function the rule rather than a helper.
+ */
+export function scheduleTimes(schedule: Schedule): string[] {
+  // Blanks are dropped rather than read as midnight or as nine o'clock: a time
+  // field being edited is empty for a keystroke or two, and a schedule must not
+  // grow a dose out of that.
+  const listed = (schedule.timesOfDay ?? []).filter((t) => String(t).trim());
+  const raw = listed.length ? listed : [schedule.timeOfDay ?? "09:00"];
+  const seen = new Set<string>();
+
+  for (const t of raw) seen.add(normalizeTime(t));
+  return [...seen].sort();
+}
+
+/** How many injections a dose day asks for. Never zero, so it is safe to divide by. */
+export function dosesPerDoseDay(schedule: Schedule): number {
+  return schedule.kind === "as-needed" ? 1 : scheduleTimes(schedule).length;
+}
+
 /**
  * Whether a cycling protocol is in an "on" week on a given day.
  * A protocol with no cycle configured is always on.
@@ -97,10 +132,14 @@ export function doseTimesBetween(
   // Guard against a pathological window rather than looping forever.
   let guard = 0;
 
+  const times = scheduleTimes(schedule);
+
   while (day <= last && guard++ < 4000) {
     if (isDoseDay(schedule, startedAt, day)) {
-      const t = atTimeOfDay(day, schedule.timeOfDay);
-      if (t >= fromMs && t <= toMs && t <= limit) out.push(t);
+      for (const time of times) {
+        const t = atTimeOfDay(day, time);
+        if (t >= fromMs && t <= toMs && t <= limit) out.push(t);
+      }
     }
     day = addLocalDays(day, 1);
   }
@@ -115,11 +154,15 @@ export function nextDoseTime(
   endedAt?: number): number | null {
   if (schedule.kind === "as-needed") return null;
 
+  const times = scheduleTimes(schedule);
+
   let day = startOfLocalDay(Math.max(fromMs, startedAt));
   for (let i = 0; i < 400; i++) {
     if (isDoseDay(schedule, startedAt, day)) {
-      const t = atTimeOfDay(day, schedule.timeOfDay);
-      if (t >= fromMs && (endedAt == null || t <= endedAt)) return t;
+      for (const time of times) {
+        const t = atTimeOfDay(day, time);
+        if (t >= fromMs && (endedAt == null || t <= endedAt)) return t;
+      }
     }
     day = addLocalDays(day, 1);
   }
@@ -133,19 +176,28 @@ export function previousDoseTime(
   fromMs: number): number | null {
   if (schedule.kind === "as-needed") return null;
 
+  const times = [...scheduleTimes(schedule)].reverse();
+
   let day = startOfLocalDay(fromMs);
   const floor = startOfLocalDay(startedAt);
   for (let i = 0; i < 400 && day >= floor; i++) {
     if (isDoseDay(schedule, startedAt, day)) {
-      const t = atTimeOfDay(day, schedule.timeOfDay);
-      if (t <= fromMs) return t;
+      for (const time of times) {
+        const t = atTimeOfDay(day, time);
+        if (t <= fromMs) return t;
+      }
     }
     day = addLocalDays(day, -1);
   }
   return null;
 }
 
-/** Scheduled doses per week, for burn-rate and inventory maths. */
+/**
+ * Scheduled doses per week, for burn-rate and inventory maths.
+ *
+ * Counts injections rather than dose days, because everything downstream of it
+ * counts injections: doses left in a vial, days of supply, cost per week.
+ */
 export function dosesPerWeek(schedule: Schedule) {
   let base: number;
   switch (schedule.kind) {
@@ -161,6 +213,8 @@ export function dosesPerWeek(schedule: Schedule) {
     case "as-needed":
       return 0;
   }
+  base *= scheduleTimes(schedule).length;
+
   const on = schedule.cycleWeeksOn ?? 0;
   const off = schedule.cycleWeeksOff ?? 0;
   if (on > 0 && off > 0) base *= on / (on + off);
@@ -252,6 +306,24 @@ export function protocolPhases(protocol: Protocol): ProtocolPhase[] | null {
 }
 
 /**
+ * What a band's frequency actually comes to.
+ *
+ * A band overrides only what it names. It was written as a whole copy of the
+ * protocol's schedule taken at the moment the band was given a frequency of its
+ * own, which means it silently pins whatever the protocol said that day, and
+ * anything added to a schedule afterwards can never reach it.
+ *
+ * That is not theory. Times of day arrived after these copies existed: someone
+ * with a plan in bands added an evening dose at the top of the form, the form
+ * accepted it, the plan carried on dosing once a day, and nothing on screen
+ * admitted the difference. Merging means an existing band picks up the evening
+ * dose, and a band that sets its own times still keeps them.
+ */
+export function bandSchedule(protocol: Schedule, band?: Schedule): Schedule {
+  return band ? { ...protocol, ...band } : protocol;
+}
+
+/**
  * Phases resolved onto the calendar.
  *
  * A protocol without phases yields a single span covering all of time, carrying
@@ -291,7 +363,7 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
     spans.push({
       index: i,
       phase,
-      schedule: phase.schedule ?? protocol.schedule,
+      schedule: bandSchedule(protocol.schedule, phase.schedule),
       anchor,
       from: anchor,
       to,
@@ -388,8 +460,14 @@ export function protocolDosesPerWeek(protocol: Protocol, atMs: number) {
   return dosesPerWeek(span?.schedule ?? protocol.schedule);
 }
 
-/** The dose a protocol calls for at a given moment. */
-export function scheduledDoseMcg(protocol: Protocol, atMs: number) {
+/**
+ * The dose a protocol calls for on a dose day, before it is split.
+ *
+ * This is the figure a plan is written in and the one the form asks for. It is
+ * not what goes in a syringe unless the day carries a single time, so almost
+ * everything wants `scheduledDoseMcg` instead.
+ */
+export function scheduledDailyMcg(protocol: Protocol, atMs: number) {
   if (protocol.phases?.length) {
     const span = phaseSpanAt(protocol, atMs);
     if (span) return span.phase.doseMcg;
@@ -399,6 +477,21 @@ export function scheduledDoseMcg(protocol: Protocol, atMs: number) {
     if (current) return current.step.doseMcg;
   }
   return protocol.doseMcg;
+}
+
+/**
+ * The dose for one injection at a given moment.
+ *
+ * A day's dose divided by the times that day carries. Every caller wants this
+ * one: what to draw up, what to log, what to take off the vial, what to feed a
+ * curve. A day with one time divides by one and is unchanged, which is why
+ * nothing had to move when splitting arrived.
+ */
+export function scheduledDoseMcg(protocol: Protocol, atMs: number) {
+  const span = phaseSpanAt(protocol, atMs);
+  const per = dosesPerDoseDay(span?.schedule ?? protocol.schedule);
+  const daily = scheduledDailyMcg(protocol, atMs);
+  return per > 1 ? daily / per : daily;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +610,36 @@ export function adherence(
   };
 }
 
+/**
+ * The doses in a window that nothing has been logged against.
+ *
+ * `dueStatus` answers "what is the one thing to do next", which is the right
+ * question for a card and the wrong one for the rest of a day: a compound
+ * taken morning and evening has an evening dose whether or not the morning one
+ * is still outstanding, and asking about the next dose alone hides it.
+ *
+ * A dose counts as covered by a log inside the same early window `dueStatus`
+ * uses, so the two cannot disagree about the same dose, and so a dose taken a
+ * little ahead of its hour stops asking rather than sitting there until it is
+ * late.
+ *
+ * `logs` must already be narrowed to this protocol, via `logsForProtocol`.
+ */
+export function unloggedDoseTimes(
+  protocol: Protocol,
+  logs: { at: number; skipped?: boolean }[],
+  fromMs: number,
+  toMs: number,
+  toleranceHours = 12): number[] {
+  const tolerance = toleranceHours * 3_600_000;
+
+  return protocolDoseTimesBetween(protocol, fromMs, toMs).filter((at) => {
+    const before = protocolPreviousDoseTime(protocol, at - 1);
+    const early = earlyWindowMs(before != null ? at - before : null, tolerance);
+    return !logs.some((l) => !l.skipped && l.at >= at - early && l.at <= at);
+  });
+}
+
 export type DueState = "overdue" | "due-now" | "upcoming" | "scheduled" | "none";
 
 export interface DueStatus {
@@ -566,6 +689,24 @@ function loggedEarlyFor(
 }
 
 /**
+ * How long before a scheduled dose a log can be and still be that dose.
+ *
+ * A fixed twelve hours was half a day, which is fine for a weekly injection
+ * and exactly wrong for a daily one: a dose taken at half eleven at night sits
+ * seven hours before the seven o'clock dose, so the following morning read as
+ * already taken and the compound quietly dropped off the Today page.
+ *
+ * A quarter of the gap to the dose before it keeps both. Daily allows six
+ * hours, so an evening dose belongs to the evening it was taken in. Weekly
+ * allows the full twelve, so a Sunday night injection still covers Monday
+ * morning. Where there is no earlier dose to measure against, there is nothing
+ * for the log to be confused with, and the plain tolerance stands.
+ */
+function earlyWindowMs(gapMs: number | null, capMs: number): number {
+  return gapMs == null ? capMs : Math.min(capMs, gapMs / 4);
+}
+
+/**
  * How a protocol's next dose should be presented.
  *
  * The most recent scheduled dose is only overdue when nothing has been logged
@@ -578,7 +719,9 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
   const grace = graceHours * 3_600_000;
   const tolerance = toleranceHours * 3_600_000;
   const prev = protocolPreviousDoseTime(protocol, nowMs);
-  const prevCovered = prev != null && lastLoggedAt != null && lastLoggedAt >= prev - tolerance;
+  const before = prev != null ? protocolPreviousDoseTime(protocol, prev - 1) : null;
+  const early = earlyWindowMs(prev != null && before != null ? prev - before : null, tolerance);
+  const prevCovered = prev != null && lastLoggedAt != null && lastLoggedAt >= prev - early;
 
   if (prev != null && !prevCovered && (protocol.endedAt == null || prev <= protocol.endedAt)) {
     const hoursAway = (prev - nowMs) / 3_600_000;

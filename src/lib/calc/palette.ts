@@ -18,15 +18,31 @@ import { decomposeDose, isBlend, modellableComponents } from "./blend";
 import { protocolDosesPerWeek, scheduledDoseMcg } from "./schedule";
 import type { Peptide, Protocol } from "../types";
 
-/** Chosen to stay apart on a dark background, and to survive a colour blind eye. */
-export const SERIES_COLORS = [
-  "var(--mint)",
-  "var(--grape)",
-  "var(--tangerine)",
-  "var(--sky)",
-  "var(--rose)",
-  "var(--leaf)",
-];
+/**
+ * Chosen to stay apart on a dark background, and to survive a colour blind eye.
+ *
+ * Kept as two arrays in step rather than one, because a line on a chart wants a
+ * colour and a chip in the interface wants the name of a tone, which carries a
+ * foreground and a soft background with it. A test holds them to the same order.
+ */
+export const SERIES_TONES = ["mint", "grape", "tangerine", "sky", "rose", "leaf"] as const;
+
+export const SERIES_COLORS = SERIES_TONES.map((t) => `var(--${t})`);
+
+export type SeriesTone = (typeof SERIES_TONES)[number];
+
+/**
+ * The tone that goes with a colour this module handed out.
+ *
+ * The Today page used to pick its card accents by counting through the same six
+ * names in protocol order, which agreed with the chart until the first blend
+ * took two lines, and then quietly stopped. Asking here instead means the chip,
+ * the line and the row cannot disagree.
+ */
+export function toneFor(color?: string): SeriesTone | undefined {
+  const i = color ? SERIES_COLORS.indexOf(color) : -1;
+  return i >= 0 ? SERIES_TONES[i] : undefined;
+}
 
 export interface ColorSubject {
   protocolId: string;

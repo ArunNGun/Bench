@@ -13,9 +13,12 @@ import {
   isOnCycle,
   nextDoseTime,
   previousDoseTime,
+  scheduleTimes,
+  scheduledDailyMcg,
   scheduledDoseMcg,
   startOfLocalDay,
   titrationStepAt,
+  unloggedDoseTimes,
   titrationStepStartWeeks,
   titrationTotalWeeks,
 } from "./schedule";
@@ -175,6 +178,31 @@ describe("doseTimesBetween", () => {
     expect(doseTimesBetween({ kind: "daily" }, start, addLocalDays(start, 5), start)).toEqual([]);
   });
 
+  it("lists every time a dose day carries, in order", () => {
+    const times = doseTimesBetween(
+      { kind: "daily", timesOfDay: ["22:00", "07:00"] },
+      start,
+      start,
+      endOfLocalDay(addLocalDays(start, 1)));
+    expect(times).toEqual([
+      local(2026, 6, 1, 7, 0),
+      local(2026, 6, 1, 22, 0),
+      local(2026, 6, 2, 7, 0),
+      local(2026, 6, 2, 22, 0),
+    ]);
+  });
+
+  it("keeps several times on the days a schedule actually doses", () => {
+    // Twice a day, every other day, is four injections across four days.
+    const times = doseTimesBetween(
+      { kind: "interval-days", intervalDays: 2, timesOfDay: ["08:00", "20:00"] },
+      start,
+      start,
+      endOfLocalDay(addLocalDays(start, 3)));
+    expect(times).toHaveLength(4);
+    expect(times.map((t) => new Date(t).getDate())).toEqual([1, 1, 3, 3]);
+  });
+
   it("gives exactly one dose per week for weekly dosing over a year", () => {
     const times = doseTimesBetween(
       { kind: "interval-days", intervalDays: 7 },
@@ -223,6 +251,21 @@ describe("nextDoseTime and previousDoseTime", () => {
     expect(previousDoseTime({ kind: "as-needed" }, start, start)).toBeNull();
   });
 
+  it("walks the times within a day before moving on to the next", () => {
+    const twice: Schedule = { kind: "daily", timesOfDay: ["07:00", "22:00"] };
+    const midday = local(2026, 6, 8, 12, 0);
+    expect(nextDoseTime(twice, start, midday)).toBe(local(2026, 6, 8, 22, 0));
+    expect(previousDoseTime(twice, start, midday)).toBe(local(2026, 6, 8, 7, 0));
+  });
+
+  it("crosses midnight in both directions", () => {
+    const twice: Schedule = { kind: "daily", timesOfDay: ["07:00", "22:00"] };
+    const night = local(2026, 6, 8, 23, 30);
+    expect(nextDoseTime(twice, start, night)).toBe(local(2026, 6, 9, 7, 0));
+    expect(previousDoseTime(twice, start, local(2026, 6, 9, 6, 0)))
+      .toBe(local(2026, 6, 8, 22, 0));
+  });
+
   it("skips over an off-cycle stretch to the next on week", () => {
     const s: Schedule = { kind: "daily", cycleWeeksOn: 1, cycleWeeksOff: 1, timeOfDay: "09:00" };
     // Day 8 is in the off week; the next dose is day 14.
@@ -255,6 +298,97 @@ describe("dosesPerWeek", () => {
   it("prorates for a cycled protocol", () => {
     // Five on, two off: five sevenths of the time dosing daily.
     expect(dosesPerWeek({ kind: "daily", cycleWeeksOn: 5, cycleWeeksOff: 2 })).toBeCloseTo(5, 10);
+  });
+
+  it("counts injections, not dose days", () => {
+    // Days of supply, cost per week and the burn rate all count what comes out
+    // of the vial, so twice a day is fourteen.
+    expect(dosesPerWeek({ kind: "daily", timesOfDay: ["07:00", "22:00"] })).toBe(14);
+    expect(dosesPerWeek({ kind: "days-of-week", daysOfWeek: [1, 4], timesOfDay: ["08:00", "20:00"] }))
+      .toBe(4);
+  });
+});
+
+describe("scheduleTimes", () => {
+  it("falls back to the single time, and to nine o'clock", () => {
+    expect(scheduleTimes({ kind: "daily", timeOfDay: "07:00" })).toEqual(["07:00"]);
+    expect(scheduleTimes({ kind: "daily" })).toEqual(["09:00"]);
+  });
+
+  it("prefers the list when it has anything in it", () => {
+    expect(scheduleTimes({ kind: "daily", timeOfDay: "07:00", timesOfDay: ["08:00", "20:00"] }))
+      .toEqual(["08:00", "20:00"]);
+    // An empty list is not an instruction to dose never.
+    expect(scheduleTimes({ kind: "daily", timeOfDay: "07:00", timesOfDay: [] })).toEqual(["07:00"]);
+  });
+
+  it("sorts, pads and drops repeats", () => {
+    expect(scheduleTimes({ kind: "daily", timesOfDay: ["22:00", "7:5", "07:05"] }))
+      .toEqual(["07:05", "22:00"]);
+  });
+
+  it("keeps an unreadable time out of the maths rather than making it NaN", () => {
+    expect(scheduleTimes({ kind: "daily", timesOfDay: ["nonsense"] })).toEqual(["09:00"]);
+  });
+});
+
+describe("splitting a day's dose across its times", () => {
+  const start = local(2026, 6, 1, 7, 0);
+  const base: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "bpc-157",
+    name: "BPC",
+    active: true,
+    startedAt: start,
+    doseMcg: 500,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timesOfDay: ["07:00", "22:00"] },
+    titrationAutoAdvance: false,
+  };
+
+  it("gives half the day's dose to each of two times", () => {
+    expect(scheduledDailyMcg(base, start)).toBe(500);
+    expect(scheduledDoseMcg(base, start)).toBe(250);
+  });
+
+  it("leaves a single time exactly as it was", () => {
+    const once = { ...base, schedule: { kind: "daily", timeOfDay: "07:00" } as Schedule };
+    expect(scheduledDoseMcg(once, start)).toBe(500);
+  });
+
+  it("splits the dose of whichever band is in force", () => {
+    const banded: Protocol = {
+      ...base,
+      phases: [
+        { step: 1, doseMcg: 250, weeks: 4 },
+        { step: 2, doseMcg: 500, weeks: 4 },
+      ],
+    };
+    expect(scheduledDoseMcg(banded, addLocalDays(start, 7))).toBe(125);
+    expect(scheduledDoseMcg(banded, addLocalDays(start, 28))).toBe(250);
+  });
+
+  it("splits by the band's own times when it carries its own frequency", () => {
+    const banded: Protocol = {
+      ...base,
+      schedule: { kind: "daily", timeOfDay: "07:00" },
+      phases: [
+        { step: 1, doseMcg: 500, weeks: 4, schedule: { kind: "daily", timesOfDay: ["07:00", "22:00"] } },
+        { step: 2, doseMcg: 500, weeks: 4 },
+      ],
+    };
+    expect(scheduledDoseMcg(banded, addLocalDays(start, 7))).toBe(250);
+    // The second band inherits the protocol's single time, so nothing is split.
+    expect(scheduledDoseMcg(banded, addLocalDays(start, 28))).toBe(500);
+  });
+
+  it("never divides an as-needed protocol by however many times it lists", () => {
+    const asNeeded = {
+      ...base,
+      schedule: { kind: "as-needed", timesOfDay: ["07:00", "22:00"] } as Schedule,
+    };
+    expect(scheduledDoseMcg(asNeeded, start)).toBe(500);
   });
 });
 
@@ -489,6 +623,68 @@ describe("dueStatus", () => {
     expect(s.at).toBe(local(2026, 9, 9, 7, 0));
   });
 
+  it("does not let last night's dose cover this morning's", () => {
+    // Reported from use: BPC-157 daily at seven, logged at 23:32, and the next
+    // morning the compound was absent from Today altogether. The old window
+    // reached a flat twelve hours back, which on a daily protocol is half the
+    // gap, so any evening dose swallowed the following morning's.
+    const s = dueStatus(morning, local(2026, 9, 9, 8, 0), {
+      lastLoggedAt: local(2026, 9, 8, 23, 32),
+    });
+    expect(s.state).toBe("due-now");
+    expect(s.at).toBe(local(2026, 9, 9, 7, 0));
+  });
+
+  it("still clears a dose taken a couple of hours early", () => {
+    // Five hours before seven, inside the quarter-gap window, which is the
+    // case the twelve hours was there for in the first place.
+    const s = dueStatus(morning, local(2026, 9, 9, 8, 0), {
+      lastLoggedAt: local(2026, 9, 9, 2, 0),
+    });
+    expect(s.state).toBe("scheduled");
+  });
+
+  it("keeps the full tolerance for a weekly protocol", () => {
+    // Eleven hours early on a weekly dose is nowhere near the dose before it,
+    // so narrowing the window for daily protocols must not narrow this one.
+    const s = dueStatus(p, local(2026, 9, 14, 10, 0), {
+      lastLoggedAt: local(2026, 9, 13, 22, 0),
+    });
+    expect(s.state).toBe("scheduled");
+    expect(s.at).toBe(loggedOn(14));
+  });
+
+  it("asks for both halves of a day taken twice", () => {
+    const twice = {
+      ...p,
+      schedule: { kind: "daily", timesOfDay: ["07:00", "22:00"] } as Schedule,
+    };
+    const evening = local(2026, 9, 8, 22, 30);
+
+    // The morning dose is logged, and the evening one is still asked for.
+    const s = dueStatus(twice, evening, { lastLoggedAt: local(2026, 9, 8, 7, 5) });
+    expect(s.state).toBe("due-now");
+    expect(s.at).toBe(local(2026, 9, 8, 22, 0));
+
+    // Once it is taken, attention moves to the morning, not to the day after.
+    const after = dueStatus(twice, evening, { lastLoggedAt: evening });
+    expect(after.at).toBe(local(2026, 9, 9, 7, 0));
+  });
+
+  it("does not read the morning dose as the evening one taken early", () => {
+    // Fifteen hours apart, so a quarter of the gap is under four hours and the
+    // morning log cannot reach the evening dose.
+    const twice = {
+      ...p,
+      schedule: { kind: "daily", timesOfDay: ["07:00", "22:00"] } as Schedule,
+    };
+    const s = dueStatus(twice, local(2026, 9, 8, 23, 0), {
+      lastLoggedAt: local(2026, 9, 8, 7, 0),
+    });
+    expect(s.state).toBe("due-now");
+    expect(s.at).toBe(local(2026, 9, 8, 22, 0));
+  });
+
   it("does not read a dose taken just after its time as the next one", () => {
     const s = dueStatus(morning, local(2026, 9, 8, 7, 20), {
       lastLoggedAt: local(2026, 9, 8, 7, 5),
@@ -510,6 +706,61 @@ describe("dueStatus", () => {
     const s = dueStatus({ ...p, schedule: { kind: "as-needed" } }, start);
     expect(s.state).toBe("none");
     expect(s.at).toBeNull();
+  });
+});
+
+describe("unloggedDoseTimes", () => {
+  const start = local(2026, 9, 7, 7, 0);
+  const twice: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "bpc-157",
+    name: "BPC",
+    active: true,
+    startedAt: start,
+    doseMcg: 500,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timesOfDay: ["07:00", "19:00"] },
+    titrationAutoAdvance: false,
+  };
+
+  const day = (h: number, min = 0) => local(2026, 9, 8, h, min);
+  const rest = (from: number) => unloggedDoseTimes(twice, logs, from, local(2026, 9, 8, 23, 59));
+  let logs: { at: number; skipped?: boolean }[] = [];
+
+  it("shows the evening dose while the morning one is still outstanding", () => {
+    // The whole reason for this function: asking only for the next dose hides
+    // the evening one for as long as the morning one goes unlogged.
+    logs = [];
+    expect(rest(day(8))).toEqual([day(19)]);
+  });
+
+  it("drops a dose once it has been logged", () => {
+    logs = [{ at: day(19, 4) }];
+    expect(rest(day(19, 30))).toEqual([]);
+  });
+
+  it("drops a dose taken a little early", () => {
+    logs = [{ at: day(17, 30) }];
+    expect(rest(day(17, 45))).toEqual([]);
+  });
+
+  it("does not let the morning dose answer for the evening", () => {
+    // Twelve hours apart, so the window that clears the evening dose is three
+    // hours, and a log at five past seven is nowhere near it.
+    logs = [{ at: day(7, 5) }];
+    expect(rest(day(8))).toEqual([day(19)]);
+  });
+
+  it("keeps asking for a dose that was marked skipped", () => {
+    // Consistent with dueStatus, which counts only doses actually taken.
+    logs = [{ at: day(19), skipped: true }];
+    expect(rest(day(12))).toEqual([day(19)]);
+  });
+
+  it("is empty once the day is out", () => {
+    logs = [];
+    expect(rest(day(20))).toEqual([]);
   });
 });
 
