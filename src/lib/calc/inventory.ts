@@ -42,6 +42,16 @@ export function vialRemainingMl(v: Pick<Vial, "strengthMg" | "diluentMl" | "draw
 
 const DEAD_STATES: VialState[] = ["finished", "discarded"];
 
+/**
+ * States that hold no drug you can reach today.
+ *
+ * "on-order" is here rather than in DEAD_STATES because the two mean different
+ * things: a finished vial is over, an ordered one has not started. They only
+ * agree on the question this list answers, which is whether a dose can come out
+ * of it now.
+ */
+const UNAVAILABLE_STATES: VialState[] = [...DEAD_STATES, "on-order"];
+
 /** Past its beyond-use date, or past the manufacturer's date while sealed. */
 export function vialExpired(v: Vial, nowMs: number) {
   if (v.budAt != null && v.budAt < nowMs) return true;
@@ -51,7 +61,7 @@ export function vialExpired(v: Vial, nowMs: number) {
 
 /** A vial that can still supply a dose. */
 export function vialUsable(v: Vial, nowMs: number) {
-  return !DEAD_STATES.includes(v.state) && !vialExpired(v, nowMs) && vialRemainingMcg(v) > 0;
+  return !UNAVAILABLE_STATES.includes(v.state) && !vialExpired(v, nowMs) && vialRemainingMcg(v) > 0;
 }
 
 /**

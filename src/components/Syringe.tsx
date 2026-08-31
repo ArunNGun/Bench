@@ -1,6 +1,7 @@
 "use client";
 
 import { capacityUnits, type SyringeSpec } from "@/lib/calc/reconstitution";
+import type { VialState } from "@/lib/types";
 
 /**
  * A syringe drawn to the real proportions of the selected barrel.
@@ -204,7 +205,7 @@ export function VialGlyph({
   className,
 }: {
   fraction: number;
-  state: "sealed" | "reconstituted" | "finished" | "discarded";
+  state: VialState;
   className?: string;
 }) {
   const f = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0));
@@ -212,17 +213,28 @@ export function VialGlyph({
   const bodyBottom = 60;
   const fluidH = (bodyBottom - bodyTop) * f;
   const empty = state === "finished" || state === "discarded";
+  // Not here yet, so it is drawn as an outline with nothing in it. A sealed
+  // vial's cake would claim there is something to draw from.
+  const onOrder = state === "on-order";
 
   return (
     <svg viewBox="0 0 32 68" className={className} role="img" aria-hidden="true" style={{ height: "100%" }}>
       {/* Crimp cap */}
-      <rect x={8} y={2} width={16} height={7} rx={1} fill={empty ? "var(--faint)" : "var(--tangerine)"} opacity={empty ? 0.5 : 1} />
+      <rect
+        x={8}
+        y={2}
+        width={16}
+        height={7}
+        rx={1}
+        fill={empty || onOrder ? "var(--faint)" : "var(--tangerine)"}
+        opacity={empty || onOrder ? 0.5 : 1}
+      />
       <rect x={10} y={9} width={12} height={4} fill="var(--line)" />
       {/* Neck and shoulder */}
       <path d="M 11 13 L 11 18 L 5 24 L 5 62 Q 5 65 8 65 L 24 65 Q 27 65 27 62 L 27 24 L 21 18 L 21 13 Z"
         fill="var(--glass)" stroke="var(--line)" strokeWidth={1.2} />
       {/* Contents */}
-      {state === "sealed" ? (
+      {onOrder ? null : state === "sealed" ? (
         // Lyophilised cake sits as a plug in the bottom of the vial.
         <rect x={6.2} y={52} width={19.6} height={11} fill="var(--ink)" opacity={0.55} rx={1} />
       ) : (

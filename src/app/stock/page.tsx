@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { PackageCheck, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -48,6 +48,12 @@ export default function StockPage() {
   const [reconstituting, setReconstituting] = useState<string | null>(null);
 
   const now = Date.now();
+  /*
+   * Paid for and not here. Kept out of every stock figure on purpose: the app
+   * must never say there are three weeks left when half of that is with a
+   * courier. It does count towards Spent, because the money has gone.
+   */
+  const onOrder = vials.filter((v) => v.state === "on-order");
   const sealed = vials.filter((v) => v.state === "sealed");
   // Off unless asked for, so nobody's Stock page rearranges itself after an update.
   const grouping = settings.groupIdenticalVials === true;
@@ -164,6 +170,32 @@ export default function StockPage() {
         </EmptyState>
       )}
 
+      {onOrder.length > 0 && (
+        <section>
+          <SectionLabel>On order</SectionLabel>
+          <div className="space-y-2.5">
+            {onOrder.map((v) => (
+              <VialRow
+                key={v.id}
+                vial={v}
+                now={now}
+                budWarningDays={settings.budWarningDays}
+                doseMcg={doseFor(v.peptideId)}
+                outlook={outlookFor(v.peptideId)}
+                currency={currency}
+                peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
+                onRemove={() => removeVial(v.id)}
+                onArrived={() =>
+                  // Arriving makes it an ordinary sealed vial, and dates it from
+                  // the day it turned up rather than the day it was ordered.
+                  updateVial(v.id, { state: "sealed", acquiredAt: Date.now() })
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {open.length > 0 && (
         <section>
           <SectionLabel>Open</SectionLabel>
@@ -267,6 +299,7 @@ function VialRow({
   currency,
   onRemove,
   onReconstitute,
+  onArrived,
   onFinish,
 }: {
   vial: Vial;
@@ -288,6 +321,8 @@ function VialRow({
   currency: string;
   onRemove: () => void;
   onReconstitute?: () => void;
+  /** Only for a vial on order. Turns it into an ordinary sealed one. */
+  onArrived?: () => void;
   onFinish?: () => void;
 }) {
   const st = vialStatus(vial, now);
@@ -315,7 +350,12 @@ function VialRow({
           {!st.expired && budSoon && <Badge tone="tangerine">use soon</Badge>}
         </div>
 
-        {vial.state === "reconstituted" && vial.diluentMl ? (
+        {vial.state === "on-order" ? (
+          <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
+            <span>Not here yet</span>
+            {vial.acquiredAt != null && <span>ordered {formatDate(vial.acquiredAt)}</span>}
+          </div>
+        ) : vial.state === "reconstituted" && vial.diluentMl ? (
           <div className="mt-1 flex flex-wrap gap-x-3.5 gap-y-0.5 text-[12.5px] text-[var(--muted)]">
             <span className="tnum font-mono">
               {formatConcentration(st.concentrationMcgPerMl)}
@@ -341,7 +381,7 @@ function VialRow({
           </div>
         )}
 
-        {doseMcg > 0 && (
+        {doseMcg > 0 && vial.state !== "on-order" && (
           <p className="mt-1 text-[12.5px]">
             <span className="tnum font-mono text-[var(--tangerine)]">
               {Math.floor(remainingMcg / doseMcg)}
@@ -402,6 +442,11 @@ function VialRow({
         )}
 
         <div className="mt-2.5 flex flex-wrap gap-2">
+          {onArrived && (
+            <Button variant="primary" onClick={onArrived} className="px-3 py-1.5 text-[13px]">
+              <PackageCheck size={13} /> It arrived
+            </Button>
+          )}
           {onReconstitute && (
             <Button onClick={onReconstitute} className="px-3 py-1.5 text-[13px]">
               Reconstitute{many ? " one" : ""}
@@ -454,6 +499,15 @@ function AddVialForm({
    */
   const [pricedAs, setPricedAs] = useState<"vial" | "kit">("vial");
 
+  /**
+   * Whether this is in the fridge or still on its way.
+   *
+   * Recorded at the point of ordering rather than on arrival, because the
+   * reason to record it early is to stop buying the same thing twice, and that
+   * is a decision made while it is in transit.
+   */
+  const [arrived, setArrived] = useState(true);
+
   const peptide = peptides.find((p) => p.id === peptideId);
   const addVial = useStore((s) => s.addVial);
 
@@ -493,7 +547,7 @@ function AddVialForm({
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field
           label="Strength"
           hint={peptide?.vialSizesMg.length ? `Common: ${peptide.vialSizesMg.join(", ")} mg` : undefined}
@@ -521,6 +575,19 @@ function AddVialForm({
             onChange={(e) => setSupplier(e.target.value)}
             placeholder="Optional"
           />
+        </Field>
+        <Field
+          label="Where is it"
+          hint={
+            arrived
+              ? undefined
+              : "Counts towards what you have spent, and towards nothing else until it lands."
+          }
+        >
+          <Select value={arrived ? "here" : "ordered"} onChange={(e) => setArrived(e.target.value === "here")}>
+            <option value="here">In the fridge</option>
+            <option value="ordered">On order</option>
+          </Select>
         </Field>
       </div>
 
@@ -567,7 +634,7 @@ function AddVialForm({
             const base: Omit<Vial, "id" | "profileId"> = {
               peptideId,
               strengthMg,
-              state: "sealed",
+              state: arrived ? "sealed" : "on-order",
               supplier: supplier.trim() || undefined,
               cost: perVial,
               currency: perVial == null ? undefined : currency,
@@ -580,7 +647,7 @@ function AddVialForm({
           }}
           disabled={!peptideId || !(strengthMg > 0)}
         >
-          Add {count > 1 ? `${count} vials` : "vial"}
+          {arrived ? "Add" : "Add on order"} {count > 1 ? `${count} vials` : "vial"}
         </Button>
       </div>
     </Card>
