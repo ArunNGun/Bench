@@ -3,6 +3,21 @@ import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
 
 /** Trim trailing zeros so 0.10 reads as 0.1 and 2.00 as 2. */
+/**
+ * A dose as a plan states it: the amount, and how many of them a dose day holds.
+ *
+ * "250 mcg" reads as the whole of a day to someone who typed 500 into the form,
+ * and on a plan split morning and evening that is half the truth. The multiplier
+ * is the shortest honest form: it names the amount that goes in the syringe and
+ * says there are two of them, without claiming which days, which "a day" would.
+ *
+ * Only for screens about a plan or a shelf. A row about one injection, on Today
+ * or in the Log, wants the plain amount, because one is all that is happening.
+ */
+export function formatDosePerDay(doseMcg: number, perDay: number) {
+  return perDay > 1 ? `${formatDose(doseMcg)} × ${perDay}` : formatDose(doseMcg);
+}
+
 export function trim(n: number, maxDp = 4) {
   if (!Number.isFinite(n)) return "n/a";
   return Number(n.toFixed(maxDp)).toString();
