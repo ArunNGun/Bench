@@ -8,16 +8,17 @@ import { SiteMap } from "@/components/SiteMap";
 import { findPeptide, useStore, useProfileData } from "@/lib/store";
 import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
+import { diaryDays } from "@/lib/calc/checkins";
 import { overusedSites } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
 import { FEELING_TONE } from "@/lib/calc/feeling";
-import { FEELING_LABELS, INJECTION_SITES } from "@/lib/types";
+import { FEELING_LABELS, INJECTION_SITES, SYMPTOMS, SYMPTOM_SCALE_MAX } from "@/lib/types";
 
 const DAY = 86_400_000;
 
 export default function LogPage() {
   const hydrated = useStore((s) => s.hydrated);
-  const { protocols, logs } = useProfileData();
+  const { protocols, logs, checkIns } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
 
   const [open, setOpen] = useState(false);
@@ -66,18 +67,21 @@ export default function LogPage() {
     };
   }, [logs, protocols, now]);
 
-  // Group by calendar day so the list reads as a diary.
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof shown>();
-    for (const l of shown) {
-      const d = new Date(l.at);
-      d.setHours(0, 0, 0, 0);
-      const key = String(d.getTime());
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(l);
-    }
-    return [...map.entries()].sort((a, b) => Number(b[0]) - Number(a[0]));
-  }, [shown]);
+  /*
+   * A day at a time: what was taken, and how the day went.
+   *
+   * The rating and its note belong here rather than on a screen of their own.
+   * Someone asking which night the side effects were is asking a question
+   * about a day, and the answer is more use beside the doses of that day than
+   * away from them.
+   *
+   * Filtering by compound leaves them out on purpose. A check-in belongs to a
+   * day and not to a compound, so repeating every one of them under a filtered
+   * list would be padding rather than an answer.
+   */
+  const grouped = useMemo(
+    () => diaryDays(shown, filter ? [] : checkIns),
+    [shown, checkIns, filter]);
 
   if (!hydrated) {
     return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
@@ -88,7 +92,7 @@ export default function LogPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Log</h1>
-          <p className="mt-1 text-[13.5px] text-[var(--muted)]">Every dose, in order.</p>
+          <p className="mt-1 text-[13.5px] text-[var(--muted)]">Every dose, and how each day went.</p>
         </div>
         <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
           <Plus size={16} /> Log a dose
@@ -142,7 +146,7 @@ export default function LogPage() {
         </Select>
       )}
 
-      {!shown.length ? (
+      {!grouped.length ? (
         <EmptyState
           title="No doses logged"
           action={
@@ -155,10 +159,10 @@ export default function LogPage() {
         </EmptyState>
       ) : (
         <div className="space-y-5">
-          {grouped.map(([day, entries]) => (
+          {grouped.map(({ day, entries, checkIn }) => (
             <section key={day}>
               <SectionLabel>
-                {Number(day) === startOfToday() ? "Today" : formatDate(Number(day))}
+                {day === startOfToday() ? "Today" : formatDate(day)}
               </SectionLabel>
               <div className="space-y-1.5">
                 {entries.map((l) => {
@@ -263,6 +267,34 @@ export default function LogPage() {
                     </Card>
                   );
                 })}
+
+                {/*
+                  How the day went, under what was taken that day.
+
+                  Quieter than a dose: this is not a record of something that
+                  entered the body, and a row that shouted would make the log
+                  harder to read for the sake of a line of text. Loud enough to
+                  find, which is the whole complaint it answers.
+                */}
+                {checkIn && (
+                  <div className="rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--faint)]">
+                        How the day went
+                      </span>
+                      {SYMPTOMS.filter((s) => checkIn.ratings[s.id] != null).map((s) => (
+                        <Badge key={s.id} tone="neutral">
+                          {s.label} {checkIn.ratings[s.id]}/{SYMPTOM_SCALE_MAX}
+                        </Badge>
+                      ))}
+                    </div>
+                    {checkIn.notes && (
+                      <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--ink)]">
+                        {checkIn.notes}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           ))}
