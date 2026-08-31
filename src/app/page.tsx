@@ -60,6 +60,7 @@ import { StackWarnings } from "@/components/StackWarnings";
 import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
+import { DoseMarks } from "@/components/DoseMarks";
 import {
   INJECTION_SITES,
   type DoseLog,
@@ -435,6 +436,12 @@ export default function NowPage() {
                   <span className="tnum font-mono text-[13px] text-[var(--ink)]">
                     {formatDose(t.targetMcg)}
                   </span>
+                  <DoseMarks
+                    peptideId={t.protocol.peptideId}
+                    doseMcg={t.targetMcg}
+                    nowMs={now}
+                    className="text-[12px] text-[var(--faint)]"
+                  />
                 </div>
                 <div className="text-[12px] text-[var(--muted)]">
                   {t.due.at != null &&
@@ -513,6 +520,12 @@ export default function NowPage() {
                       <span className="tnum font-mono text-[12.5px] text-[var(--ink)]">
                         {formatDose(t.targetMcg)}
                       </span>
+                      <DoseMarks
+                        peptideId={t.protocol.peptideId}
+                        doseMcg={t.targetMcg}
+                        nowMs={now}
+                        className="text-[12px] text-[var(--faint)]"
+                      />
                     </span>
                     {/*
                       Logging a dose hours before its time is nearly always a
@@ -693,8 +706,15 @@ export default function NowPage() {
                         </span>
                       )}
                   </div>
-                  <p className="mt-1 text-[12.5px] text-[var(--muted)]">
-                    {formatDose(t.targetMcg)} · {t.protocol.name}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-[var(--muted)]">
+                    <span>{formatDose(t.targetMcg)}</span>
+                    <DoseMarks
+                      peptideId={t.protocol.peptideId}
+                      doseMcg={t.targetMcg}
+                      nowMs={now}
+                      className="text-[12px] text-[var(--faint)]"
+                    />
+                    <span>· {t.protocol.name}</span>
                   </p>
                 </div>
 

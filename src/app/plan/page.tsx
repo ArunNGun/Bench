@@ -50,6 +50,7 @@ import {
 import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
 import { TimesOfDay } from "@/components/TimesOfDay";
+import { DoseMarks } from "@/components/DoseMarks";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
@@ -884,6 +885,7 @@ function Upcoming() {
         protocolDoseTimesBetween(p, now, to).map((at) => ({
           at,
           protocolId: p.id,
+          peptideId: p.peptideId,
           name: findPeptide(custom, p.peptideId)?.name ?? p.peptideId,
           doseMcg: scheduledDoseMcg(p, at),
         })))
@@ -936,6 +938,12 @@ function Upcoming() {
                     <span className="tnum font-mono text-[var(--ink)]">
                       {formatDose(r.doseMcg)}
                     </span>
+                    <DoseMarks
+                      peptideId={r.peptideId}
+                      doseMcg={r.doseMcg}
+                      nowMs={now}
+                      className="text-[12px] text-[var(--faint)]"
+                    />
                   </span>
                 );
               })}

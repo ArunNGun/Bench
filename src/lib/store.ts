@@ -24,12 +24,13 @@ import {
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged } from "./calc/document";
 import { PEPTIDES } from "./data/peptides";
-import { beyondUseDate } from "./calc/reconstitution";
+import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
 import { startOfLocalDay } from "./calc/schedule";
 import {
   diluentAfterTopUp,
   drawFromVial,
+  marksFromVial,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -293,8 +294,29 @@ export const useStore = create<StoreState>()(
           const vialId = l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at)?.id;
           if (!vialId) return { logs };
 
+          /*
+           * What the syringe read, recorded at the time rather than worked out
+           * later.
+           *
+           * A dose logged in one tap says only its mass, and the Log then had
+           * nothing to show in marks for it. The figure cannot honestly be
+           * derived afterwards either: it depends on the concentration, and
+           * topping a vial up changes that, so a number calculated next month
+           * would describe a syringe nobody drew.
+           *
+           * Only filled in when the caller left it out, so the log sheet, which
+           * asks, always wins.
+           */
+          const scale = (syringeById(s.settings.defaultSyringeId ?? "") ?? SYRINGES[2]).scale;
+          const drawn = marksFromVial(s.vials.find((v) => v.id === vialId), l.doseMcg, scale);
+
+          const measured =
+            l.units == null && drawn != null
+              ? { units: Number(drawn.toFixed(2)), syringeScale: l.syringeScale ?? scale }
+              : null;
+
           return {
-            logs: logs.map((x) => (x.id === id ? { ...x, vialId } : x)),
+            logs: logs.map((x) => (x.id === id ? { ...x, vialId, ...measured } : x)),
             vials: drawFromVial(s.vials, vialId, l.doseMcg),
           };
         });

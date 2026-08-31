@@ -3,6 +3,7 @@ import {
   daysOfSupply,
   daysOfSupplyForProtocol,
   diluentAfterTopUp,
+  marksForDose,
   drawFromVial,
   groupSealedVials,
   supplyOutlook,
@@ -290,6 +291,53 @@ describe("stockFor", () => {
 
   it("returns zero doses rather than dividing by zero", () => {
     expect(stockFor([vial({ id: "a" })], "klow", 0, NOW).dosesRemaining).toBe(0);
+  });
+});
+
+describe("marksForDose", () => {
+  // 5 mg in 2 mL is 2500 mcg/mL, so 250 mcg is 0.1 mL, which is 10 marks on a
+  // U-100 barrel and 4 on a U-40 one.
+  const open = vial({
+    id: "open",
+    peptideId: "bpc-157",
+    strengthMg: 5,
+    state: "reconstituted",
+    diluentMl: 2,
+  });
+
+  it("converts the dose at the open vial's concentration", () => {
+    expect(marksForDose([open], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+    expect(marksForDose([open], "bpc-157", 250, "U40", NOW)).toBeCloseTo(4, 9);
+  });
+
+  it("says nothing when the only vial is still sealed", () => {
+    const sealed = vial({ id: "sealed", peptideId: "bpc-157", strengthMg: 5 });
+    expect(marksForDose([sealed], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("says nothing when there is no vial of that compound at all", () => {
+    expect(marksForDose([open], "kpv", 250, "U100", NOW)).toBeNull();
+    expect(marksForDose([], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("says nothing for a vial opened without recording the water", () => {
+    const noWater = vial({ id: "x", peptideId: "bpc-157", strengthMg: 5, state: "reconstituted" });
+    expect(marksForDose([noWater], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("follows the vial the app would actually draw from", () => {
+    // Two open vials, made up differently. The one expiring soonest is the one
+    // a dose comes out of, so it is the one the marks have to describe.
+    const soon = vial({
+      id: "soon",
+      peptideId: "bpc-157",
+      strengthMg: 5,
+      state: "reconstituted",
+      diluentMl: 1,
+      budAt: NOW + 2 * DAY,
+    });
+    const later = { ...open, budAt: NOW + 20 * DAY };
+    expect(marksForDose([later, soon], "bpc-157", 250, "U100", NOW)).toBeCloseTo(5, 9);
   });
 });
 

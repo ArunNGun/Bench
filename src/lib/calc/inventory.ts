@@ -9,6 +9,7 @@
 
 import type { Protocol, Vial, VialState } from "../types";
 import { DAY_MS, protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
+import { unitsFromDose, type SyringeScale } from "./reconstitution";
 
 export const MCG_PER_MG = 1000;
 
@@ -299,6 +300,49 @@ export function stockFor(
 }
 
 /** Days of supply left, given how often the protocol doses. */
+/**
+ * The barrel reading for a dose, taken from the vial it would come out of.
+ *
+ * A dose in micrograms is the honest unit and the useless one at the moment of
+ * injecting: nobody measures micrograms, they count marks. The number depends
+ * on the concentration, so it can only be answered for a vial that has actually
+ * been made up, and the same 250 mcg is 25 marks or 12.5 depending on how much
+ * water went in.
+ *
+ * Null rather than a guess when there is no open vial, or when the vial that is
+ * open was never recorded as reconstituted. A made-up number here would be read
+ * standing over a syringe.
+ */
+export function marksForDose(
+  vials: Vial[],
+  peptideId: string,
+  doseMcg: number,
+  scale: SyringeScale,
+  nowMs: number): number | null {
+  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs), doseMcg, scale);
+}
+
+/**
+ * The same reading, for a vial already in hand.
+ *
+ * Separate because two callers know exactly which vial they mean: a row on the
+ * Stock page is about one vial, and a dose being logged has already been
+ * attributed to one. Neither should go back through the picker and risk being
+ * told about a different vial than the one on screen.
+ */
+export function marksFromVial(
+  vial: Vial | null | undefined,
+  doseMcg: number,
+  scale: SyringeScale): number | null {
+  if (!vial || vial.state !== "reconstituted") return null;
+
+  const conc = vialConcentration(vial);
+  if (!Number.isFinite(conc) || conc <= 0) return null;
+
+  const units = unitsFromDose(doseMcg, conc, scale);
+  return units > 0 ? units : null;
+}
+
 export function daysOfSupply(stock: Stock, dosesPerWeek: number) {
   if (dosesPerWeek <= 0) return null;
   return (stock.dosesRemaining / dosesPerWeek) * 7;
