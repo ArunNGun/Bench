@@ -2,7 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { Badge, Button, Callout, EmptyState, Card, SectionLabel, Select, Stat } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Callout,
+  EmptyState,
+  Card,
+  SectionLabel,
+  Select,
+  Stat,
+  TONE_FG,
+} from "@/components/ui";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
 import { SiteMap } from "@/components/SiteMap";
 import { findPeptide, useStore, useProfileData } from "@/lib/store";
@@ -11,10 +21,25 @@ import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { diaryDays } from "@/lib/calc/checkins";
 import { overusedSites } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
-import { FEELING_TONE } from "@/lib/calc/feeling";
-import { FEELING_LABELS, INJECTION_SITES, SYMPTOMS, SYMPTOM_SCALE_MAX } from "@/lib/types";
+import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
+import {
+  FEELING_LABELS,
+  INJECTION_SITES,
+  SYMPTOMS,
+  SYMPTOM_SCALE_MAX,
+  type CheckIn,
+} from "@/lib/types";
 
 const DAY = 86_400_000;
+
+/** The colour a day is marked with, from its worst rating that has a direction. */
+function dayTone(checkIn: CheckIn) {
+  return lowestRatedTone(
+    SYMPTOMS.filter((s) => checkIn.ratings[s.id] != null).map((s) => ({
+      rating: checkIn.ratings[s.id]!,
+      higherIsBetter: s.higherIsBetter,
+    })));
+}
 
 export default function LogPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -159,7 +184,15 @@ export default function LogPage() {
         </EmptyState>
       ) : (
         <div className="space-y-5">
-          {grouped.map(({ day, entries, checkIn }) => (
+          {grouped.map(({ day, entries, checkIn }) => {
+            /*
+              The worst rating of the day, on the edge of the row. "Which night
+              was it" is then answered by looking rather than by reading, which
+              is the complaint this whole section exists to answer.
+            */
+            const tone = checkIn ? dayTone(checkIn) : null;
+
+            return (
             <section key={day}>
               <SectionLabel>
                 {day === startOfToday() ? "Today" : formatDate(day)}
@@ -277,13 +310,16 @@ export default function LogPage() {
                   find, which is the whole complaint it answers.
                 */}
                 {checkIn && (
-                  <div className="rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2.5">
+                  <div
+                    className="rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2.5"
+                    style={tone ? { borderLeft: `3px solid ${TONE_FG[tone]}` } : undefined}
+                  >
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--faint)]">
                         How the day went
                       </span>
                       {SYMPTOMS.filter((s) => checkIn.ratings[s.id] != null).map((s) => (
-                        <Badge key={s.id} tone="neutral">
+                        <Badge key={s.id} tone={ratingTone(checkIn.ratings[s.id]!, s.higherIsBetter)}>
                           {s.label} {checkIn.ratings[s.id]}/{SYMPTOM_SCALE_MAX}
                         </Badge>
                       ))}
@@ -297,7 +333,8 @@ export default function LogPage() {
                 )}
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
 
