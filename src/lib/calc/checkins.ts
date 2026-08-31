@@ -173,3 +173,49 @@ export function series(
     .filter((p): p is { at: number; value: number } => typeof p.value === "number")
     .sort((a, b) => a.at - b.at);
 }
+
+export interface DiaryDay<T> {
+  /** Local midnight of the day. */
+  day: number;
+  /** That day's doses, in the order they were given. */
+  entries: T[];
+  /** How the day was rated, if it was. */
+  checkIn?: CheckIn;
+}
+
+/**
+ * A day at a time: what was taken, and how the day went.
+ *
+ * The Log has always grouped doses by day and shown nothing else, so a check-in
+ * note was written, saved, and readable exactly until midnight. Reported by
+ * someone who had a bad night, wrote it down at the time, and then could not
+ * find which night it had been.
+ *
+ * Days with a rating but no dose are included, and that is not a detail: a
+ * night of side effects on a rest day is precisely the entry worth keeping, and
+ * hiding it would leave the note as invisible as it was before.
+ *
+ * Newest first, matching the page it feeds, and within a day the entries are
+ * left in the order they arrive rather than re-sorted, because the caller has
+ * already decided what that order means.
+ */
+export function diaryDays<T extends { at: number }>(
+  entries: T[],
+  checkIns: CheckIn[]): DiaryDay<T>[] {
+  const days = new Map<number, DiaryDay<T>>();
+
+  const dayFor = (at: number) => {
+    const key = startOfLocalDay(at);
+    const hit = days.get(key);
+    if (hit) return hit;
+    const made: DiaryDay<T> = { day: key, entries: [] };
+    days.set(key, made);
+    return made;
+  };
+
+  for (const entry of entries) dayFor(entry.at).entries.push(entry);
+  // Last write wins, matching the store, which keeps at most one per day.
+  for (const c of checkIns) dayFor(c.at).checkIn = c;
+
+  return [...days.values()].sort((a, b) => b.day - a.day);
+}
