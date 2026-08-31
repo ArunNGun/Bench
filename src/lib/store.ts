@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged } from "./calc/document";
+import { withoutProfile } from "./calc/profiles";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
@@ -246,14 +247,17 @@ export const useStore = create<StoreState>()(
           const profiles = s.profiles.filter((x) => x.id !== id);
           return {
             profiles,
-            // Deleting a profile takes its data with it, leaving orphaned
-            // doses behind would quietly corrupt the other profile's totals.
-            protocols: s.protocols.filter((x) => x.profileId !== id),
-            logs: s.logs.filter((x) => x.profileId !== id),
-            vials: s.vials.filter((x) => x.profileId !== id),
-            measurements: s.measurements.filter((x) => x.profileId !== id),
-            labs: s.labs.filter((x) => x.profileId !== id),
-            checkIns: s.checkIns.filter((x) => x.profileId !== id),
+            /*
+             * Deleting a profile takes its data with it, since orphaned doses
+             * would quietly corrupt the other profile's totals.
+             *
+             * Through `withoutProfile` rather than by naming the collections
+             * here, because this list was written when there were six of them
+             * and orders and bottles of water arrived later without anyone
+             * adding them. One list, in profiles.ts, held to the document by a
+             * test.
+             */
+            ...withoutProfile(s, id),
             activeProfileId: s.activeProfileId === id ? profiles[0].id : s.activeProfileId,
           };
         }),
