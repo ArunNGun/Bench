@@ -1,19 +1,3 @@
-/**
- * Server-side stats for the landing page stat band.
- *
- * Fetches two numbers:
- *  - APK download count from GitHub releases API
- *  - Total page view count from Vercel Web Analytics API
- *
- * Both are best-effort: a failure returns null and the tile is hidden rather
- * than showing a broken placeholder. Results are cached for 1 hour.
- *
- * Required env vars (set in Vercel project settings):
- *  - VERCEL_TOKEN          — a Vercel API token (Account → Tokens)
- *  - VERCEL_PROJECT_ID     — found in Project → Settings → General
- *  - GITHUB_TOKEN          — optional, raises GitHub rate limit to 5000/hr
- */
-
 const GITHUB_REPO = "ArunNGun/Bench";
 
 export interface LandingStats {
@@ -48,39 +32,52 @@ async function fetchApkDownloads(): Promise<number | null> {
   }
 }
 
-async function fetchPageViews(): Promise<number | null> {
-  const token = process.env.VERCEL_TOKEN;
-  const projectId = process.env.VERCEL_PROJECT_ID;
-  if (!token || !projectId) return null;
+async function fetchNotionUserCount(): Promise<number | null> {
+  const token = process.env.BUILD_SYNC_TOKEN;
+  const dbId = process.env.BUILD_SYNC_TARGET;
+  if (!token || !dbId) return null;
 
   try {
-    const url = new URL("https://vercel.com/v1/query/web-analytics/visits/count");
-    url.searchParams.set("projectId", projectId);
+    let count = 0;
+    let cursor: string | undefined;
 
-    const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      next: { revalidate: 3600 },
-    });
+    do {
+      const body: Record<string, unknown> = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
 
-    if (!res.ok) return null;
+      const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Notion-Version": "2022-06-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        next: { revalidate: 3600 },
+      });
 
-    const body = await res.json();
-    // Response shape: { data: [{ count: number }], ... }
-    const count = body?.data?.[0]?.count ?? body?.data?.count ?? null;
-    return typeof count === "number" ? count : null;
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      count += data.results?.length ?? 0;
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return count;
   } catch {
     return null;
   }
 }
 
 export async function getLandingStats(): Promise<LandingStats> {
-  const [apkDownloads, pageViews] = await Promise.all([
+  const baseline = Number(process.env.USER_BASELINE ?? "0") || 0;
+
+  const [apkDownloads, notionCount] = await Promise.all([
     fetchApkDownloads(),
-    fetchPageViews(),
+    fetchNotionUserCount(),
   ]);
+
+  const pageViews = notionCount !== null ? baseline + notionCount : null;
 
   return { apkDownloads, pageViews };
 }
