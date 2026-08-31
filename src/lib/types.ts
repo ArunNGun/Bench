@@ -570,6 +570,17 @@ export interface Settings {
   backupKeep: number;
   /** When the last automatic or manual backup was written. */
   lastBackupAt?: number;
+  /**
+   * When the document last changed in a way that ends up in a backup file.
+   *
+   * Stored rather than held in memory because the question it answers, is there
+   * anything unsaved, has to survive a reload. A flag that resets when the tab
+   * is closed would go quiet at exactly the moment the work is most at risk.
+   *
+   * Written by the store itself, not by any screen, so it cannot be forgotten
+   * by a new one.
+   */
+  dataChangedAt?: number;
   /** When the "nothing is backed up" reminder was last dismissed. */
   backupNagDismissedAt?: number;
 }
