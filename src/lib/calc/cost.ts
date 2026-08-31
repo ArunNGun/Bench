@@ -6,8 +6,36 @@
  * a weekly rate falls out of that plus the schedule.
  */
 
-import type { Vial } from "../types";
+import type { Order, Vial } from "../types";
 import { vialCapacityMcg } from "./inventory";
+
+/**
+ * A vial's share of its order's shipping.
+ *
+ * Derived rather than stored, and that is the whole design. Sixty dollars of
+ * postage on a box of three is twenty each; throw one away and the remaining
+ * two carry thirty, without a single row being rewritten. Storing the share
+ * would mean rewriting every sibling on every deletion, and getting that wrong
+ * once would leave money attributed to a vial that no longer exists.
+ *
+ * Deliberately unrounded, for the reason `costPerVialInKit` is: three vials
+ * sharing sixty dollars each carry 19.999..., and rounding each to 20.00 would
+ * make the total on the page disagree with the receipt.
+ */
+export function shippingShare(vial: Vial, vials: Vial[], orders: Order[]): number {
+  if (!vial.orderId) return 0;
+  const order = orders.find((o) => o.id === vial.orderId);
+  if (!order || !(order.shippingCost > 0)) return 0;
+
+  const siblings = vials.filter((v) => v.orderId === vial.orderId).length;
+  return siblings > 0 ? order.shippingCost / siblings : 0;
+}
+
+/** What a vial cost in total: its price, plus its share of getting it here. */
+export function landedCost(vial: Vial, vials: Vial[], orders: Order[]): number | null {
+  if (vial.cost == null || !(vial.cost > 0)) return null;
+  return vial.cost + shippingShare(vial, vials, orders);
+}
 
 /** Cost of a milligram, from a vial's price and label strength. */
 export function costPerMg(vial: Pick<Vial, "cost" | "strengthMg">): number | null {
@@ -138,19 +166,48 @@ export function sumByCurrency(
 
 export interface SpendTotals {
   byCurrency: CurrencyTotal[];
+  /** Postage, kept apart from the goods. `vials` counts orders here. */
+  shippingByCurrency: CurrencyTotal[];
   pricedVials: number;
   unpricedVials: number;
   /** More than one currency is present, so no single figure can be shown. */
   mixed: boolean;
 }
 
-/** Total spend across every priced vial, whatever the peptide. */
-export function totalSpend(vials: Vial[], fallbackCurrency: string): SpendTotals {
+/**
+ * Total spend across every priced vial, whatever the peptide.
+ *
+ * Goods and shipping are reported apart as well as together, because they are
+ * different questions: what the compounds cost, and what it cost to get them
+ * here. Folding postage into the price would also make one vial dearer than an
+ * identical one bought a month earlier, with nothing on the page to explain it.
+ */
+export function totalSpend(
+  vials: Vial[],
+  fallbackCurrency: string,
+  orders: Order[] = []): SpendTotals {
   const byCurrency = sumByCurrency(vials, (v) => v.cost ?? null, fallbackCurrency);
   const pricedVials = byCurrency.reduce((n, c) => n + c.vials, 0);
 
+  /*
+   * Straight off the orders rather than by summing each vial's share. The
+   * shares are a division of exactly this figure, so adding them back up
+   * reintroduces the rounding the division was written to avoid.
+   */
+  const live = new Set(vials.map((v) => v.orderId).filter(Boolean));
+  const shipping = new Map<string, CurrencyTotal>();
+  for (const order of orders) {
+    if (!live.has(order.id) || !(order.shippingCost > 0)) continue;
+    const currency = order.currency ?? fallbackCurrency;
+    const row = shipping.get(currency) ?? { currency, total: 0, vials: 0 };
+    row.total += order.shippingCost;
+    row.vials += 1;
+    shipping.set(currency, row);
+  }
+
   return {
     byCurrency,
+    shippingByCurrency: [...shipping.values()].sort((a, b) => b.total - a.total),
     pricedVials,
     unpricedVials: vials.length - pricedVials,
     mixed: byCurrency.length > 1,

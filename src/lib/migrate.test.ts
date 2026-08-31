@@ -373,3 +373,41 @@ describe("v6 to v7: half-lives you supplied yourself", () => {
     expect(migrateAppData(once)).toEqual(once);
   });
 });
+
+describe("v6 to v7: orders, for shipping", () => {
+  it("gives older data an empty list rather than nothing", () => {
+    expect(migrateAppData({ version: 6, logs: [] }).orders).toEqual([]);
+  });
+
+  it("adopts an order that arrived without an owner", () => {
+    // Same rule as every other record: a row with no profileId is invisible
+    // once the UI filters by it, which is indistinguishable from lost.
+    const out = migrateAppData({
+      version: 7,
+      // @ts-expect-error deliberately missing profileId, as a v6 hand edit would be
+      orders: [{ id: "o1", shippingCost: 60, placedAt: 1 }],
+    });
+    expect(out.orders[0].profileId).toBe(out.activeProfileId);
+  });
+
+  it("drops an order that could not carry a share", () => {
+    const out = migrateAppData({
+      version: 7,
+      orders: [
+        { id: "good", profileId: "me", shippingCost: 60, placedAt: 1 },
+        { id: "zero", profileId: "me", shippingCost: 0, placedAt: 1 },
+        // @ts-expect-error deliberately malformed, as an edited export would be
+        { id: "text", profileId: "me", shippingCost: "sixty", placedAt: 1 },
+      ],
+    });
+    expect(out.orders.map((o) => o.id)).toEqual(["good"]);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({
+      version: 7,
+      orders: [{ id: "o1", profileId: "me", shippingCost: 60, placedAt: 1 }],
+    });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});

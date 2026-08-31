@@ -5,12 +5,14 @@ import {
   costPerVialInKit,
   formatMoney,
   formatTotals,
+  landedCost,
   remainingValue,
+  shippingShare,
   spendFor,
   sumByCurrency,
   totalSpend,
 } from "./cost";
-import type { Vial } from "../types";
+import type { Order, Vial } from "../types";
 
 const vial = (over: Partial<Vial> & { id: string }): Vial =>
   ({ profileId: "me", peptideId: "klow", strengthMg: 80, state: "sealed", ...over }) as Vial;
@@ -158,6 +160,7 @@ describe("totalSpend", () => {
   it("is empty for an empty inventory", () => {
     expect(totalSpend([], "USD")).toEqual({
       byCurrency: [],
+      shippingByCurrency: [],
       pricedVials: 0,
       unpricedVials: 0,
       mixed: false,
@@ -299,5 +302,116 @@ describe("costPerVialInKit", () => {
     expect(costPerVialInKit(200, 0)).toBeNull();
     expect(costPerVialInKit(200, -3)).toBeNull();
     expect(costPerVialInKit(200, 2.5)).toBeNull();
+  });
+});
+
+describe("shippingShare", () => {
+  const order = (over: Partial<Order> = {}): Order => ({
+    id: "o1",
+    profileId: "me",
+    shippingCost: 60,
+    placedAt: 0,
+    ...over,
+  });
+
+  it("splits postage across the vials of its order", () => {
+    const vials = [
+      vial({ id: "a", orderId: "o1" }),
+      vial({ id: "b", orderId: "o1" }),
+      vial({ id: "c", orderId: "o1" }),
+    ];
+    expect(shippingShare(vials[0], vials, [order()])).toBe(20);
+  });
+
+  it("redistributes when one of them is thrown away", () => {
+    // The reason the share is derived rather than stored: nothing has to be
+    // rewritten for this to be true.
+    const all = [
+      vial({ id: "a", orderId: "o1" }),
+      vial({ id: "b", orderId: "o1" }),
+      vial({ id: "c", orderId: "o1" }),
+    ];
+    const afterDeletion = all.slice(0, 2);
+    expect(shippingShare(afterDeletion[0], afterDeletion, [order()])).toBe(30);
+  });
+
+  it("gives the whole postage to a single vial ordered alone", () => {
+    const vials = [vial({ id: "a", orderId: "o1" })];
+    expect(shippingShare(vials[0], vials, [order()])).toBe(60);
+  });
+
+  it("is nothing for a vial bought without a recorded order", () => {
+    const vials = [vial({ id: "a" })];
+    expect(shippingShare(vials[0], vials, [order()])).toBe(0);
+  });
+
+  it("is nothing when the order has gone", () => {
+    const vials = [vial({ id: "a", orderId: "missing" })];
+    expect(shippingShare(vials[0], vials, [order()])).toBe(0);
+  });
+
+  it("leaves the shares unrounded, so they still add up to the receipt", () => {
+    const vials = [
+      vial({ id: "a", orderId: "o1" }),
+      vial({ id: "b", orderId: "o1" }),
+      vial({ id: "c", orderId: "o1" }),
+    ];
+    const each = shippingShare(vials[0], vials, [order({ shippingCost: 10 })]);
+    expect(each * 3).toBeCloseTo(10, 12);
+  });
+
+  it("ignores vials from another order", () => {
+    const vials = [
+      vial({ id: "a", orderId: "o1" }),
+      vial({ id: "b", orderId: "o2" }),
+    ];
+    expect(shippingShare(vials[0], vials, [order()])).toBe(60);
+  });
+});
+
+describe("landedCost", () => {
+  const orders: Order[] = [
+    { id: "o1", profileId: "me", shippingCost: 60, placedAt: 0 },
+  ];
+
+  it("is the price plus the share of getting it here", () => {
+    const vials = [vial({ id: "a", cost: 200, orderId: "o1" }), vial({ id: "b", orderId: "o1" })];
+    expect(landedCost(vials[0], vials, orders)).toBe(230);
+  });
+
+  it("is null for a vial with no price, rather than the shipping alone", () => {
+    // Postage without a price is not what the vial cost, and reporting it as
+    // such would make an unpriced vial look cheap rather than unknown.
+    const vials = [vial({ id: "a", orderId: "o1" })];
+    expect(landedCost(vials[0], vials, orders)).toBeNull();
+  });
+});
+
+describe("totalSpend with shipping", () => {
+  it("keeps postage apart from the goods", () => {
+    const vials = [
+      vial({ id: "a", cost: 200, currency: "USD", orderId: "o1" }),
+      vial({ id: "b", cost: 100, currency: "USD", orderId: "o1" }),
+    ];
+    const orders: Order[] = [{ id: "o1", profileId: "me", shippingCost: 60, currency: "USD", placedAt: 0 }];
+    const t = totalSpend(vials, "USD", orders);
+
+    expect(t.byCurrency).toEqual([{ currency: "USD", total: 300, vials: 2 }]);
+    expect(t.shippingByCurrency).toEqual([{ currency: "USD", total: 60, vials: 1 }]);
+  });
+
+  it("counts an order once, not once per vial", () => {
+    const vials = [
+      vial({ id: "a", cost: 10, orderId: "o1" }),
+      vial({ id: "b", cost: 10, orderId: "o1" }),
+      vial({ id: "c", cost: 10, orderId: "o1" }),
+    ];
+    const orders: Order[] = [{ id: "o1", profileId: "me", shippingCost: 9, placedAt: 0 }];
+    expect(totalSpend(vials, "USD", orders).shippingByCurrency[0].total).toBe(9);
+  });
+
+  it("forgets an order whose vials have all gone", () => {
+    const orders: Order[] = [{ id: "o1", profileId: "me", shippingCost: 60, placedAt: 0 }];
+    expect(totalSpend([], "USD", orders).shippingByCurrency).toEqual([]);
   });
 });

@@ -31,22 +31,24 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { scheduledDoseMcg } from "@/lib/calc/schedule";
+import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
   costPerVialInKit,
   formatMoney,
   formatTotals,
   remainingValue,
+  shippingShare,
   sumByCurrency,
   totalSpend,
 } from "@/lib/calc/cost";
-import { DEFAULT_SETTINGS, type Vial } from "@/lib/types";
+import { CURRENCIES, DEFAULT_SETTINGS, type Vial } from "@/lib/types";
 
 export default function StockPage() {
   const hydrated = useStore((s) => s.hydrated);
-  const { protocols, vials } = useProfileData();
+  const { protocols, vials, orders } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
-  const addVial = useStore((s) => s.addVial);
+  const addOrder = useStore((s) => s.addOrder);
   const updateVial = useStore((s) => s.updateVial);
   const removeVial = useStore((s) => s.removeVial);
   const reconstituteVial = useStore((s) => s.reconstituteVial);
@@ -82,8 +84,18 @@ export default function StockPage() {
    * one bought in euros and one in dollars, and the old totals added them and
    * printed the result in whichever currency the settings happened to name.
    */
-  const spend = totalSpend(vials, currency);
+  const spend = totalSpend(vials, currency, orders);
   const unusedValue = sumByCurrency([...sealed, ...open], remainingValue, currency);
+  const hasShipping = spend.shippingByCurrency.length > 0;
+
+  /**
+   * A vial's share of its order's postage.
+   *
+   * Passed down rather than read inside the row, because a component that
+   * reaches into the store for the whole inventory to answer a question about
+   * one line is a component that recomputes on every unrelated change.
+   */
+  const shippingOf = (v: Vial) => shippingShare(v, vials, orders);
 
   /** The dose this peptide is actually being run at, for a per-vial count. */
   const doseFor = (peptideId: string) => {
@@ -158,6 +170,16 @@ export default function StockPage() {
             tone="mint"
             hint="Value of what you have not used yet."
           />
+          {hasShipping && (
+            <Stat
+              label="Shipping"
+              value={formatTotals(spend.shippingByCurrency)}
+              tone="sky"
+              hint={`Across ${spend.shippingByCurrency.reduce((n, c) => n + c.vials, 0)} order${
+                spend.shippingByCurrency.reduce((n, c) => n + c.vials, 0) === 1 ? "" : "s"
+              }. Counted in what each vial really cost.`}
+            />
+          )}
         </Card>
       )}
 
@@ -166,8 +188,8 @@ export default function StockPage() {
           peptides={peptides}
           currency={currency}
           onCancel={() => setAdding(false)}
-          onSave={(v) => {
-            addVial(v);
+          onSave={(vialsToAdd, shipping) => {
+            addOrder(vialsToAdd, shipping);
             setAdding(false);
           }}
         />
@@ -199,6 +221,7 @@ export default function StockPage() {
                 budWarningDays={settings.budWarningDays}
                 doseMcg={doseFor(v.peptideId)}
                 outlook={outlookFor(v.peptideId)}
+                shippingOf={shippingOf}
                 currency={currency}
                 peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                 onRemove={() => removeVial(v.id)}
@@ -225,6 +248,7 @@ export default function StockPage() {
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
+                  shippingOf={shippingOf}
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
@@ -263,6 +287,7 @@ export default function StockPage() {
                   budWarningDays={settings.budWarningDays}
                   doseMcg={doseFor(v.peptideId)}
                   outlook={outlookFor(v.peptideId)}
+                  shippingOf={shippingOf}
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
@@ -326,6 +351,7 @@ function VialRow({
   doseMcg,
   outlook,
   currency,
+  shippingOf,
   onRemove,
   onReconstitute,
   onArrived,
@@ -349,6 +375,8 @@ function VialRow({
    */
   outlook: SupplyOutlook;
   currency: string;
+  /** This vial's share of its order's postage, or zero. */
+  shippingOf: (v: Vial) => number;
   onRemove: () => void;
   onReconstitute?: () => void;
   /** Only for a vial on order. Turns it into an ordinary sealed one. */
@@ -365,6 +393,15 @@ function VialRow({
   const remainingMcg = group ? group.remainingMcg : st.remainingMcg;
   const rowCost = group ? group.cost : vial.cost;
   const rowCurrency = (group ? group.currency : vial.currency) ?? currency;
+  /*
+   * Postage, shared. Shown beside the price rather than added into it, because
+   * two identical vials bought in different orders would otherwise appear to
+   * have cost different amounts with nothing on the page to say why. The cost
+   * per dose does include it, since that is the figure the request was about.
+   */
+  const rowShipping = group
+    ? group.vials.reduce((sum, v) => sum + shippingOf(v), 0)
+    : shippingOf(vial);
   const strengthMgTotal = group ? group.strengthMg * group.count : vial.strengthMg;
 
   return (
@@ -457,8 +494,12 @@ function VialRow({
                 ? `${formatMoney(rowCost, rowCurrency)}${
                     many ? " in total" : ""
                   }${
+                    rowShipping > 0 ? ` + ${formatMoney(rowShipping, rowCurrency)} shipping` : ""
+                  }${
                     doseMcg > 0
-                      ? ` · ${formatMoney((rowCost / strengthMgTotal) * (doseMcg / 1000), rowCurrency)} a dose`
+                      ? ` · ${formatMoney(
+                          ((rowCost + rowShipping) / strengthMgTotal) * (doseMcg / 1000),
+                          rowCurrency)} a dose`
                       : ""
                   }`
                 : null,
@@ -519,11 +560,28 @@ function AddVialForm({
   currency: string;
   peptides: ReturnType<typeof allPeptides>;
   onCancel: () => void;
-  onSave: (v: Omit<Vial, "id" | "profileId">) => void;
+  onSave: (
+    vials: Omit<Vial, "id" | "profileId">[],
+    shipping: { cost: number; currency: string } | null) => void;
 }) {
   const [peptideId, setPeptideId] = useState(peptides[0]?.id ?? "");
   const [strengthMg, setStrengthMg] = useState(10);
   const [count, setCount] = useState(1);
+  /**
+   * Postage for the whole order, not for each vial.
+   *
+   * Sixty dollars of shipping on a single kit changes what that kit actually
+   * cost, and typing it into every vial by hand is the work this removes.
+   */
+  const [shipping, setShipping] = useState<number | "">("");
+  /**
+   * What you actually paid in, which is not always what the app reports in.
+   *
+   * Without this the vial silently took the app's currency, so a purchase in
+   * euros was recorded as the same number of rupees. The field that made the
+   * totals wrong was the one that was never offered.
+   */
+  const [payCurrency, setPayCurrency] = useState(currency);
   const [supplier, setSupplier] = useState("");
   const [cost, setCost] = useState<number | "">("");
   /**
@@ -546,7 +604,6 @@ function AddVialForm({
   const [arrived, setArrived] = useState(true);
 
   const peptide = peptides.find((p) => p.id === peptideId);
-  const addVial = useStore((s) => s.addVial);
 
   // Storage is always per vial, whichever way it was entered, so nothing
   // downstream has to know a kit was involved.
@@ -661,6 +718,61 @@ function AddVialForm({
         </Field>
       </div>
 
+      {/*
+        Offered only when the price is in a currency other than the one every
+        total is shown in, since that is the only moment a conversion is worth
+        doing. Automatic rates were declined: they would need a network call on
+        every open, and this app makes exactly one in its life.
+      */}
+      <Field label="Paid in" hint="Kept with the vial, so totals never add unlike currencies.">
+        <Select value={payCurrency} onChange={(e) => setPayCurrency(e.target.value)}>
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} · {c.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {/*
+        Offered only when what you paid in differs from what the app reports in,
+        since that is the only moment a conversion is worth doing. Fetched rates
+        were declined for a reason worth keeping: the app makes exactly one
+        network request in its life, and a link is not a request.
+      */}
+      {cost !== "" && Number(cost) > 0 && payCurrency !== currency && (
+        <p className="text-[12px] leading-relaxed text-[var(--muted)]">
+          <a
+            href={converterUrl(Number(cost), payCurrency, currency) ?? "#"}
+            target="_blank"
+            // No referrer: the converter needs the amount to answer, and has no
+            // business knowing which app sent it.
+            rel="noopener noreferrer"
+            className="underline decoration-dotted"
+          >
+            Convert {formatMoney(Number(cost), payCurrency)} to {currency}
+          </a>
+          , if you would rather record it in {currency}. Whichever you choose is
+          stored as typed and never looked up again.
+        </p>
+      )}
+
+      <Field
+        label="Shipping for this order"
+        hint={
+          shipping === "" || !(Number(shipping) > 0)
+            ? "Optional. Shared across the vials added here, and included in what each one really cost."
+            : `${formatMoney(Number(shipping) / Math.max(1, count), currency)} per vial, across ${count} ${count === 1 ? "vial" : "vials"}.`
+        }
+      >
+        <NumberInput
+          value={shipping}
+          min={0}
+          step={0.01}
+          onChange={(e) => setShipping(e.target.value === "" ? "" : Number(e.target.value))}
+        />
+      </Field>
+
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
@@ -674,13 +786,20 @@ function AddVialForm({
               state: arrived ? "sealed" : "on-order",
               supplier: supplier.trim() || undefined,
               cost: perVial,
-              currency: perVial == null ? undefined : currency,
+              currency: perVial == null ? undefined : payCurrency,
               acquiredAt: Date.now(),
             };
-            // The first one goes through the parent so the form can close;
-            // any extras are added directly.
-            for (let i = 1; i < count; i++) addVial(base);
-            onSave(base);
+            /*
+             * All of them in one call, because an order is exactly the set of
+             * vials that arrived together and that is only knowable here. Added
+             * one at a time they would be indistinguishable afterwards, and
+             * there would be nothing to share the postage across.
+             */
+            onSave(
+              Array.from({ length: Math.max(1, count) }, () => base),
+              shipping === "" || !(Number(shipping) > 0)
+                ? null
+                : { cost: Number(shipping), currency: payCurrency });
           }}
           disabled={!peptideId || !(strengthMg > 0)}
         >
