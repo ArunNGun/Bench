@@ -17,8 +17,9 @@
  * someone mid-session is how you get a half-old, half-new app and a bug report
  * nobody can reproduce.
  *
- * /version.json is the one thing never cached, since it is the question being
- * asked rather than part of the app.
+ * /version.json is never cached, since it is the question being asked rather
+ * than part of the app. Neither is anything under /api/, for the same reason
+ * and because those replies depend on a session cookie this cache cannot see.
  */
 
 /**
@@ -156,6 +157,29 @@ self.addEventListener("fetch", (event) => {
   // it from cache would guarantee the answer is always no.
   if (url.pathname === "/sw.js" || url.pathname === "/version.json") return;
   if (request.headers.has("range")) return;
+
+  /*
+   * Nor the sync server, for the same reason and then some.
+   *
+   * GET /api/data is the question "what does the server hold now". It is not
+   * part of the app, it is the thing the app is asking about, and a cached
+   * answer is a wrong answer by construction. Without this the stale-while-
+   * revalidate branch below caught it: the first reply was stored and every
+   * pull after it was served from the cache, so a device would push its own
+   * changes happily and never see anybody else's. Worse if that first reply was
+   * the 204 that means "nothing stored yet", which is `response.ok` and would
+   * be cached as the permanent truth, leaving the device convinced forever that
+   * the server was empty.
+   *
+   * There is a second reason that would be enough on its own. These replies are
+   * answered only because of a session cookie, and a cache keyed on the URL
+   * knows nothing about that. Signed-out is not a state in which the previous
+   * occupant's data should still be sitting in a cache.
+   *
+   * /login is excluded for the same class of reason. It is served to whoever
+   * has no session, and caching it would let it be shown to someone who does.
+   */
+  if (url.pathname.startsWith("/api/") || url.pathname === "/login") return;
 
   if (request.mode === "navigate") {
     event.respondWith(cacheFirstNavigation(request));

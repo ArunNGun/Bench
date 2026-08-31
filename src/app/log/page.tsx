@@ -6,10 +6,12 @@ import { Badge, Button, Callout, EmptyState, Card, SectionLabel, Select, Stat } 
 import { LogDoseSheet } from "@/components/LogDoseSheet";
 import { SiteMap } from "@/components/SiteMap";
 import { findPeptide, useStore, useProfileData } from "@/lib/store";
+import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { overusedSites } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
-import { INJECTION_SITES } from "@/lib/types";
+import { FEELING_TONE } from "@/lib/calc/feeling";
+import { FEELING_LABELS, INJECTION_SITES } from "@/lib/types";
 
 const DAY = 86_400_000;
 
@@ -30,6 +32,20 @@ export default function LogPage() {
   const overused = useMemo(() => overusedSites(shown, now), [shown, now]);
 
   const peptideIds = useMemo(() => [...new Set(logs.map((l) => l.peptideId))], [logs]);
+
+  /**
+   * The same colours as the chart on Today and the plan on Plan.
+   *
+   * Built from the active protocols, which is what those two screens colour,
+   * so a compound is one colour wherever it appears. The Log is history and
+   * reaches back further than any of them: a dose taken before a protocol
+   * existed, or after it was deleted, simply gets no colour. That is the point
+   * rather than a gap, since a colour here is a claim that this is the same
+   * compound as the mint line on Today.
+   */
+  const palette = useMemo(
+    () => assignColors(colorSubjects(protocols.filter((p) => p.active), (id) => findPeptide(custom, id), now)),
+    [protocols, custom, now]);
 
   const stats = useMemo(() => {
     const thirtyDays = logs.filter((l) => l.at > now - 30 * DAY);
@@ -85,7 +101,7 @@ export default function LogPage() {
           <Stat label="Skipped" value={stats.skipped} tone={stats.skipped > 0 ? "rose" : "neutral"} />
           <Stat
             label="Adherence"
-            value={stats.adherenceRate == null ? ", " : percent(stats.adherenceRate)}
+            value={stats.adherenceRate == null ? "n/a" : percent(stats.adherenceRate)}
             tone={
               stats.adherenceRate == null
                 ? "neutral"
@@ -147,6 +163,7 @@ export default function LogPage() {
               <div className="space-y-1.5">
                 {entries.map((l) => {
                   const p = findPeptide(custom, l.peptideId);
+                  const color = doseColor(palette, l);
                   const siteLabel = INJECTION_SITES.find((s) => s.id === l.site)?.label;
                   return (
                     <Card
@@ -172,13 +189,32 @@ export default function LogPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[14px] text-[var(--ink)]">
-                            {p?.name ?? l.peptideId}
+                          <span className="flex items-center gap-1.5">
+                            {color && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ background: color }}
+                              />
+                            )}
+                            <span
+                              className="text-[14px] font-medium"
+                              style={color ? { color } : { color: "var(--ink)" }}
+                            >
+                              {p?.name ?? l.peptideId}
+                            </span>
                           </span>
                           {l.skipped ? (
                             <Badge tone="rose">skipped</Badge>
                           ) : (
-                            <span className="tnum font-mono text-[13.5px] text-[var(--tangerine)]">
+                            /*
+                              Neutral, not tangerine. Tangerine is one of the six
+                              compound colours, so an amount painted with it sat
+                              next to a compound wearing the same colour for a
+                              different reason. The colour says which compound,
+                              the figure says how much, the same division the
+                              plan on Plan settled on.
+                            */
+                            <span className="tnum font-mono text-[13.5px] text-[var(--ink)]">
                               {formatDose(l.doseMcg)}
                             </span>
                           )}
@@ -194,6 +230,29 @@ export default function LogPage() {
                             <span className="font-medium text-[var(--ink)]">{siteLabel}</span>
                           )}
                         </div>
+                        {/*
+                          What was tapped, not only what was typed.
+
+                          The log sheet offers a row of common side effects and
+                          a feeling rating, stored them faithfully, and showed
+                          them nowhere afterwards. That is worse than not
+                          offering them: someone recording nausea by tapping it
+                          reasonably believes they have recorded it.
+                        */}
+                        {(l.feeling != null || l.sideEffects?.length) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {l.feeling != null && (
+                              <Badge tone={FEELING_TONE[l.feeling] ?? "neutral"}>
+                                {FEELING_LABELS[l.feeling] ?? `Feeling ${l.feeling}`}
+                              </Badge>
+                            )}
+                            {l.sideEffects?.map((effect) => (
+                              <Badge key={effect} tone="neutral">
+                                {effect}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         {l.notes && (
                           <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--muted)]">
                             {l.notes}

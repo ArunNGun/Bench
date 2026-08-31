@@ -39,7 +39,7 @@ import {
 export const metadata: Metadata = {
   title: "Bench, a private peptide, HGH and anabolic tracker",
   description:
-    "Track protocols, doses, stock and bloodwork with arithmetic you can trust. No account, no server, and everything stays on your device.",
+    "Track protocols, doses, stock and bloodwork with arithmetic you can trust. No account, no server, and everything stays on your device unless you choose to run your own.",
 };
 
 /** Read from the library itself, so the page cannot overstate what is in it. */
@@ -373,9 +373,14 @@ export default async function LandingPage() {
               There is no backend to leak.
             </h2>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-white/85">
-              The application code makes no network requests at all. Nothing is uploaded, nothing is
-              synced, and there is no account to create. Everything you enter lives in your browser,
-              on your device.
+              There is no account to create and nothing is uploaded. Everything you enter lives in
+              your browser, on your device. We run no server, so there is none of yours on ours.
+            </p>
+            <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-white/85">
+              If you want the same data on a phone and a laptop, you can point the app at a sync
+              server you host yourself. It is off until you set it up, it takes a server address you
+              own, and what goes up is encrypted in your browser first, so even that machine holds
+              something it cannot read.
             </p>
             <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-white/85">
               That is a real guarantee and a real risk in the same breath. Nobody can read your data,

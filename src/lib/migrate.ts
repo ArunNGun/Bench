@@ -26,9 +26,12 @@ import {
   DEFAULT_SETTINGS,
   type AppData,
   type CheckIn,
+  type DiluentBottle,
+  type Order,
   type Vial,
 } from "./types";
 import { vialCapacityMcg } from "./calc/inventory";
+import { isOrphaned } from "./calc/profiles";
 import { startOfLocalDay } from "./calc/schedule";
 
 // Defined in types.ts so EMPTY_DATA can use it too; re-exported here because
@@ -66,8 +69,20 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
       ? data.activeProfileId
       : profiles[0].id;
 
+  /*
+   * A row with no owner, or with an owner who no longer exists, is adopted.
+   *
+   * The second half was missing and it cost real data to find out. Deleting a
+   * profile used to leave its orders and its bottles of water behind, pointing
+   * at an id nothing answers to, and every screen filters by profile, so they
+   * were still in the file and nowhere on screen. Whatever put a row in that
+   * state, throwing it away is the one thing that cannot be undone, and a
+   * bottle that outlived the profile it was bought under is still a bottle in
+   * the fridge.
+   */
+  const live = new Set(profiles.map((p) => p.id));
   const own = <T extends { profileId?: string }>(rows: T[] | undefined): T[] =>
-    (rows ?? []).map((r) => (r.profileId ? r : { ...r, profileId: ownerId }));
+    (rows ?? []).map((r) => (isOrphaned(r, live) ? { ...r, profileId: ownerId } : r));
 
   // --- v2: vial consumption measured as mass, not volume -----------------
   // v1 tracked a volume, which only exists once a vial has been reconstituted,
@@ -91,6 +106,17 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
   });
 
   return {
+    /*
+     * Anything this build does not recognise travels through untouched.
+     *
+     * The fields below are rebuilt and override this spread, so nothing here
+     * escapes the repairs. What it buys is the case that has no other defence:
+     * a document written by a newer build, read by an older one. Naming the
+     * fields dropped the rest on the way in, and saving named them again on the
+     * way out, so opening yesterday's build once deleted today's records. A
+     * field nobody here can interpret is still somebody's data.
+     */
+    ...(data as object),
     version: DATA_VERSION,
     profiles,
     activeProfileId: ownerId,
@@ -106,7 +132,62 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     // them undefined keeps the UI from having to guess at every read site.
     settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
     customPeptides: data.customPeptides ?? [],
+    // v7. Absent in every older payload, and an empty map behaves exactly as
+    // the field not existing did, so nothing has to be backfilled.
+    halfLifeOverrides: saneOverrides(data.halfLifeOverrides),
+    // v7. Absent in every older payload, and a vial with no order behaves
+    // exactly as it always did, so nothing has to be backfilled.
+    orders: saneOrders(own(data.orders)),
+    // v8. Bottles of water, counted apart from vials because they are not one.
+    diluents: saneBottles(own(data.diluents)),
   };
+}
+
+/**
+ * Keep only overrides that could produce a curve.
+ *
+ * An imported file is not under our control, and a zero, a negative or a string
+ * that survived JSON would reach the model and draw a flat line or nothing at
+ * all, with no clue why. Dropping them is quieter than the alternative and the
+ * compound simply goes back to having no curve.
+ */
+function saneOverrides(raw: AppData["halfLifeOverrides"]): AppData["halfLifeOverrides"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: NonNullable<AppData["halfLifeOverrides"]> = {};
+  for (const [id, value] of Object.entries(raw)) {
+    if (!value || typeof value !== "object") continue;
+    const hours = Number(value.hours);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+    out[id] = {
+      hours,
+      setAt: Number.isFinite(Number(value.setAt)) ? Number(value.setAt) : Date.now(),
+      note: typeof value.note === "string" ? value.note : undefined,
+    };
+  }
+  return out;
+}
+
+/**
+ * Keep only bottles that could hold anything.
+ *
+ * A bottle with no volume would divide into a concentration of infinity and
+ * show as permanently empty, which is worse than not being there: it would sit
+ * on the shelf claiming to be stock while supplying nothing.
+ */
+function saneBottles(rows: DiluentBottle[]): DiluentBottle[] {
+  return rows.filter((b) => b && b.id && Number.isFinite(Number(b.volumeMl)) && b.volumeMl > 0);
+}
+
+/**
+ * Keep only orders that could carry a share.
+ *
+ * An imported file is not under our control, and a zero or a missing cost would
+ * put a shipping line on the Stock page that adds nothing, or divide by
+ * something that is not a number. A dropped order leaves its vials priced at
+ * what they cost, which is what they were before shipping was recorded at all.
+ */
+function saneOrders(rows: Order[]): Order[] {
+  return rows.filter((o) => o && o.id && Number.isFinite(Number(o.shippingCost)) && o.shippingCost > 0);
 }
 
 /** A valid empty store, for when there is nothing readable to migrate. */
@@ -123,6 +204,9 @@ function emptyLike(): AppData {
     settings: { ...DEFAULT_SETTINGS },
     customPeptides: [],
     checkIns: [],
+    halfLifeOverrides: {},
+    orders: [],
+    diluents: [],
   };
 }
 

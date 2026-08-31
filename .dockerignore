@@ -1,0 +1,49 @@
+# Build context excludes. Everything here is either regenerated inside the
+# image or has nothing to do with the web build.
+
+# Installed per platform inside the image, never copied from the host.
+node_modules/
+
+# Build outputs. The image builds its own.
+.next/
+out/
+build/
+
+# Android. The web image has no use for it.
+android/
+release/
+*.apk
+*.jks
+
+# Git metadata and CI config.
+.git/
+.github/
+.gitignore
+
+# Local environment files. Nothing secret should reach the image.
+.env
+.env.*
+
+# Editor and OS noise.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docs and project context. Not needed to build or serve.
+document/
+.documents/
+CONTRIBUTING.md
+CLAUDE.md
+
+# Docker files themselves.
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Misc
+*.tsbuildinfo
+.vercel
+npm-debug.log*

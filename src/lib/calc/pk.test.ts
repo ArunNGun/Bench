@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   absorptionRate,
   accumulationRatio,
+  breakdownAt,
+  curveFor,
+  isMeasuredInPeople,
   eliminationRate,
   fractionRemaining,
   hoursUntilFraction,
@@ -302,5 +305,110 @@ describe("curve constant caching", () => {
     const before = singleDoseLevel(72, probe);
     for (let i = 0; i < 400; i++) singleDoseLevel(10, { halfLifeHours: 10 + i * 0.5, tmaxHours: 3 });
     expect(singleDoseLevel(72, probe)).toBe(before);
+  });
+});
+
+describe("breakdownAt", () => {
+  const params = { halfLifeHours: 24, tmaxHours: 2 };
+  const t0 = 1_700_000_000_000;
+
+  it("adds up to the level the curve already reports", () => {
+    const doses = [
+      { at: t0, amountMcg: 1000 },
+      { at: t0 + 24 * HOUR, amountMcg: 1000 },
+      { at: t0 + 48 * HOUR, amountMcg: 1000 },
+    ];
+    const at = t0 + 50 * HOUR;
+    const { total } = breakdownAt(at, doses, params, 1000);
+    expect(total).toBeCloseTo(levelAt(at, doses, params, 1000), 12);
+  });
+
+  it("names the doses largest first", () => {
+    const doses = [
+      { at: t0, amountMcg: 1000 },
+      { at: t0 + 24 * HOUR, amountMcg: 1000 },
+    ];
+    const { contributions } = breakdownAt(t0 + 26 * HOUR, doses, params, 1000);
+    expect(contributions).toHaveLength(2);
+    expect(contributions[0].dose.at).toBe(t0 + 24 * HOUR);
+    expect(contributions[0].level).toBeGreaterThan(contributions[1].level);
+  });
+
+  it("gives a lone dose the whole share", () => {
+    const doses = [{ at: t0, amountMcg: 500 }];
+    const { contributions } = breakdownAt(t0 + 6 * HOUR, doses, params, 500);
+    expect(contributions).toHaveLength(1);
+    expect(contributions[0].share).toBeCloseTo(1, 12);
+  });
+
+  it("drops the tail without dropping it from the total", () => {
+    // Five days on, at a 24 h half-life, the first dose is worth about 3%.
+    const doses = [
+      { at: t0, amountMcg: 1000 },
+      { at: t0 + 120 * HOUR, amountMcg: 1000 },
+    ];
+    const at = t0 + 122 * HOUR;
+    const { total, contributions } = breakdownAt(at, doses, params, 1000);
+    expect(contributions).toHaveLength(1);
+    const listed = contributions.reduce((sum, c) => sum + c.level, 0);
+    expect(listed).toBeLessThan(total);
+    expect(total).toBeCloseTo(levelAt(at, doses, params, 1000), 12);
+  });
+
+  it("ignores doses in the future", () => {
+    const doses = [{ at: t0 + HOUR, amountMcg: 1000 }];
+    expect(breakdownAt(t0, doses, params, 1000)).toEqual({ total: 0, contributions: [] });
+  });
+
+  it("carries the vial through untouched", () => {
+    const doses = [{ at: t0, amountMcg: 1000, vialId: "v1" }];
+    const { contributions } = breakdownAt(t0 + 3 * HOUR, doses, params, 1000);
+    expect(contributions[0].dose.vialId).toBe("v1");
+  });
+
+  it("refuses a reference dose that is not a dose", () => {
+    const doses = [{ at: t0, amountMcg: 1000 }];
+    expect(breakdownAt(t0 + HOUR, doses, params, 0)).toEqual({ total: 0, contributions: [] });
+  });
+});
+
+describe("curveFor", () => {
+  it("prefers the published human figure over everything", () => {
+    const c = curveFor(
+      { halfLifeHours: 12, tmaxHours: 2, halfLifeEstimate: { hours: 4 } },
+      { hours: 99 });
+    expect(c).toEqual({ params: { halfLifeHours: 12, tmaxHours: 2 }, basis: "published" });
+  });
+
+  it("takes your figure over a measurement in another species", () => {
+    const c = curveFor({ halfLifeHours: null, halfLifeEstimate: { hours: 4 } }, { hours: 2 });
+    expect(c).toEqual({ params: { halfLifeHours: 2, tmaxHours: undefined }, basis: "yours" });
+  });
+
+  it("falls back to a measurement from elsewhere when you have not set one", () => {
+    const c = curveFor({ halfLifeHours: null, tmaxHours: 1, halfLifeEstimate: { hours: 4 } });
+    expect(c).toEqual({ params: { halfLifeHours: 4, tmaxHours: 1 }, basis: "elsewhere" });
+  });
+
+  it("draws your figure for a compound with nothing else at all", () => {
+    const c = curveFor({ halfLifeHours: null }, { hours: 1.5 });
+    expect(c?.basis).toBe("yours");
+    expect(c?.params.halfLifeHours).toBe(1.5);
+  });
+
+  it("ignores a figure that is not a duration", () => {
+    expect(curveFor({ halfLifeHours: null }, { hours: 0 })).toBeNull();
+    expect(curveFor({ halfLifeHours: null }, { hours: -3 })).toBeNull();
+    expect(curveFor({ halfLifeHours: null }, null)).toBeNull();
+  });
+
+  it("draws nothing when there is nothing measured and nothing given", () => {
+    expect(curveFor({ halfLifeHours: null })).toBeNull();
+  });
+
+  it("only lets a published figure carry the derived numbers", () => {
+    expect(isMeasuredInPeople("published")).toBe(true);
+    expect(isMeasuredInPeople("yours")).toBe(false);
+    expect(isMeasuredInPeople("elsewhere")).toBe(false);
   });
 });

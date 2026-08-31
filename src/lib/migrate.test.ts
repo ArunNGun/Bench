@@ -332,3 +332,152 @@ describe("v6: daily check-ins", () => {
     expect(migrateAppData(once)).toEqual(once);
   });
 });
+
+describe("v6 to v7: half-lives you supplied yourself", () => {
+  it("gives older data an empty map rather than nothing", () => {
+    const out = migrateAppData({ version: 6, logs: [] });
+    expect(out.halfLifeOverrides).toEqual({});
+  });
+
+  it("carries your own figures through untouched", () => {
+    const mine = { hours: 2, setAt: 1_700_000_000_000, note: "vendor sheet" };
+    const out = migrateAppData({ version: 7, halfLifeOverrides: { kpv: mine } });
+    expect(out.halfLifeOverrides).toEqual({ kpv: mine });
+  });
+
+  it("drops a figure that could not draw a curve", () => {
+    // An imported file is not under our control. A zero or a negative would
+    // reach the model and produce a flat line with no explanation.
+    const out = migrateAppData({
+      version: 7,
+      halfLifeOverrides: {
+        good: { hours: 4, setAt: 1 },
+        zero: { hours: 0, setAt: 1 },
+        negative: { hours: -2, setAt: 1 },
+        // @ts-expect-error deliberately malformed, as an edited export would be
+        text: { hours: "soon", setAt: 1 },
+      },
+    });
+    expect(Object.keys(out.halfLifeOverrides ?? {})).toEqual(["good"]);
+  });
+
+  it("repairs a missing timestamp rather than dropping the figure", () => {
+    // @ts-expect-error setAt absent, as in a hand-written file
+    const out = migrateAppData({ version: 7, halfLifeOverrides: { kpv: { hours: 2 } } });
+    expect(out.halfLifeOverrides?.kpv.hours).toBe(2);
+    expect(out.halfLifeOverrides?.kpv.setAt).toBeGreaterThan(0);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({ version: 6, halfLifeOverrides: { kpv: { hours: 2, setAt: 5 } } });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});
+
+describe("v6 to v7: orders, for shipping", () => {
+  it("gives older data an empty list rather than nothing", () => {
+    expect(migrateAppData({ version: 6, logs: [] }).orders).toEqual([]);
+  });
+
+  it("adopts an order that arrived without an owner", () => {
+    // Same rule as every other record: a row with no profileId is invisible
+    // once the UI filters by it, which is indistinguishable from lost.
+    const out = migrateAppData({
+      version: 7,
+      // @ts-expect-error deliberately missing profileId, as a v6 hand edit would be
+      orders: [{ id: "o1", shippingCost: 60, placedAt: 1 }],
+    });
+    expect(out.orders[0].profileId).toBe(out.activeProfileId);
+  });
+
+  it("drops an order that could not carry a share", () => {
+    const out = migrateAppData({
+      version: 7,
+      orders: [
+        { id: "good", profileId: "me", shippingCost: 60, placedAt: 1 },
+        { id: "zero", profileId: "me", shippingCost: 0, placedAt: 1 },
+        // @ts-expect-error deliberately malformed, as an edited export would be
+        { id: "text", profileId: "me", shippingCost: "sixty", placedAt: 1 },
+      ],
+    });
+    expect(out.orders.map((o) => o.id)).toEqual(["good"]);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({
+      version: 7,
+      orders: [{ id: "o1", profileId: "me", shippingCost: 60, placedAt: 1 }],
+    });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});
+
+describe("v7 to v8: bottles of water", () => {
+  it("gives older data an empty shelf rather than nothing", () => {
+    expect(migrateAppData({ version: 7, logs: [] }).diluents).toEqual([]);
+  });
+
+  it("adopts a bottle that arrived without an owner", () => {
+    const out = migrateAppData({
+      version: 8,
+      // @ts-expect-error deliberately missing profileId
+      diluents: [{ id: "b1", kind: "bacteriostatic", volumeMl: 30, state: "sealed" }],
+    });
+    expect(out.diluents[0].profileId).toBe(out.activeProfileId);
+  });
+
+  it("drops a bottle that could hold nothing", () => {
+    const out = migrateAppData({
+      version: 8,
+      diluents: [
+        { id: "good", profileId: "me", kind: "bacteriostatic", volumeMl: 30, state: "sealed" },
+        { id: "empty", profileId: "me", kind: "bacteriostatic", volumeMl: 0, state: "sealed" },
+      ],
+    });
+    expect(out.diluents.map((b) => b.id)).toEqual(["good"]);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({
+      version: 8,
+      diluents: [
+        { id: "b1", profileId: "me", kind: "bacteriostatic", volumeMl: 30, state: "sealed" },
+      ],
+    });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});
+
+describe("a document written by a newer build", () => {
+  /*
+   * The direction the guarantee never covered. Someone tracking bottles of
+   * water opened a build from before bottles existed, once, and the field was
+   * dropped on the way in and left out on the way out. Data lost by opening an
+   * older version of the app.
+   */
+  it("carries a field this build does not know about", () => {
+    const out = migrateAppData({
+      version: 99,
+      logs: [],
+      somethingAddedLater: [{ id: "x" }],
+    } as unknown as Parameters<typeof migrateAppData>[0]) as unknown as Record<string, unknown>;
+
+    expect(out.somethingAddedLater).toEqual([{ id: "x" }]);
+  });
+
+  it("still stamps it with the version this build writes", () => {
+    const out = migrateAppData({ version: 99, logs: [] } as unknown as Parameters<typeof migrateAppData>[0]);
+    expect(out.version).toBe(DATA_VERSION);
+  });
+
+  it("still repairs the fields it does understand", () => {
+    const out = migrateAppData({
+      version: 99,
+      logs: [{ id: "l1", peptideId: "kpv", at: 1, doseMcg: 100, route: "subcutaneous" }],
+      unknownThing: true,
+    } as unknown as Parameters<typeof migrateAppData>[0]) as unknown as Record<string, unknown>;
+
+    expect((out.logs as { profileId?: string }[])[0].profileId).toBeTruthy();
+    expect(out.unknownThing).toBe(true);
+  });
+});

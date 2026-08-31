@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
   daysOfSupplyForProtocol,
+  diluentAfterTopUp,
+  marksForDose,
   drawFromVial,
   groupSealedVials,
+  supplyOutlook,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -16,6 +19,7 @@ import {
   vialRemainingMl,
   vialUsable,
 } from "./inventory";
+import { totalSpend } from "./cost";
 import type { Protocol, ProtocolPhase, Vial } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
@@ -290,6 +294,53 @@ describe("stockFor", () => {
   });
 });
 
+describe("marksForDose", () => {
+  // 5 mg in 2 mL is 2500 mcg/mL, so 250 mcg is 0.1 mL, which is 10 marks on a
+  // U-100 barrel and 4 on a U-40 one.
+  const open = vial({
+    id: "open",
+    peptideId: "bpc-157",
+    strengthMg: 5,
+    state: "reconstituted",
+    diluentMl: 2,
+  });
+
+  it("converts the dose at the open vial's concentration", () => {
+    expect(marksForDose([open], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+    expect(marksForDose([open], "bpc-157", 250, "U40", NOW)).toBeCloseTo(4, 9);
+  });
+
+  it("says nothing when the only vial is still sealed", () => {
+    const sealed = vial({ id: "sealed", peptideId: "bpc-157", strengthMg: 5 });
+    expect(marksForDose([sealed], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("says nothing when there is no vial of that compound at all", () => {
+    expect(marksForDose([open], "kpv", 250, "U100", NOW)).toBeNull();
+    expect(marksForDose([], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("says nothing for a vial opened without recording the water", () => {
+    const noWater = vial({ id: "x", peptideId: "bpc-157", strengthMg: 5, state: "reconstituted" });
+    expect(marksForDose([noWater], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  it("follows the vial the app would actually draw from", () => {
+    // Two open vials, made up differently. The one expiring soonest is the one
+    // a dose comes out of, so it is the one the marks have to describe.
+    const soon = vial({
+      id: "soon",
+      peptideId: "bpc-157",
+      strengthMg: 5,
+      state: "reconstituted",
+      diluentMl: 1,
+      budAt: NOW + 2 * DAY,
+    });
+    const later = { ...open, budAt: NOW + 20 * DAY };
+    expect(marksForDose([later, soon], "bpc-157", 250, "U100", NOW)).toBeCloseTo(5, 9);
+  });
+});
+
 describe("daysOfSupply", () => {
   it("converts doses into days at the protocol's rate", () => {
     const s = stockFor([vial({ id: "a", strengthMg: 80 })], "klow", 4000, NOW);
@@ -477,5 +528,203 @@ describe("daysOfSupplyForProtocol", () => {
 
   it("caps rather than walking to the end of time on a deep stock", () => {
     expect(daysOfSupplyForProtocol(stockOf(10_000_000), protocol(), start, 365)).toBe(365);
+  });
+});
+
+describe("supplyOutlook", () => {
+  /** A Monday, so weekly dosing lands on the same weekday throughout. */
+  const start = new Date(2026, 0, 5, 9, 0, 0, 0).getTime();
+
+  const protocol = (over: Partial<Protocol> = {}): Protocol => ({
+    id: "p1",
+    profileId: "me",
+    peptideId: "klow",
+    name: "Test",
+    active: true,
+    startedAt: start,
+    doseMcg: 1000,
+    route: "subcutaneous",
+    schedule: { kind: "interval-days", intervalDays: 7, timeOfDay: "09:00" },
+    titrationAutoAdvance: false, ...over,
+  });
+
+  const stockOf = (availableMcg: number) => ({
+    availableMcg,
+    sealedCount: 1,
+    openCount: 0,
+    dosesRemaining: 0,
+    dosesInOpenVials: 0,
+    needsReconstitution: false,
+  });
+
+  it("gives the date the stock is spent", () => {
+    // The same ten weekly doses as above, so the answer is the same instant the
+    // day count describes, seventy days out.
+    const out = supplyOutlook(stockOf(10_000), protocol(), start);
+    expect(out.kind).toBe("runs-out");
+    if (out.kind !== "runs-out") return;
+    expect(Math.round((out.at - start) / 86_400_000)).toBe(70);
+  });
+
+  it("agrees exactly with the day count it is derived from", () => {
+    // A date that disagreed with the figure on the Today screen would be worse
+    // than no date at all.
+    const days = daysOfSupplyForProtocol(stockOf(10_000), protocol(), start, 365)!;
+    const out = supplyOutlook(stockOf(10_000), protocol(), start);
+    if (out.kind !== "runs-out") throw new Error("expected a date");
+    expect(out.at).toBeCloseTo(start + days * 86_400_000, 3);
+  });
+
+  it("says beyond the horizon rather than inventing a distant date", () => {
+    // The dangerous case: the walk returns the horizon itself, which reads as a
+    // real answer and is not one.
+    expect(supplyOutlook(stockOf(10_000_000), protocol(), start).kind).toBe("beyond-horizon");
+  });
+
+  it("knows nothing when there is no schedule to spend against", () => {
+    const p = protocol({ schedule: { kind: "as-needed" } });
+    expect(supplyOutlook(stockOf(10_000), p, start).kind).toBe("unknown");
+  });
+
+  it("knows nothing when there is no stock", () => {
+    // Distinct from running out today. There is nothing to make a claim about,
+    // and "runs out now" on an empty shelf is noise on every empty compound.
+    expect(supplyOutlook(stockOf(0), protocol(), start).kind).toBe("unknown");
+  });
+
+  it("brings the date forward when the plan steps up", () => {
+    const ladder: ProtocolPhase[] = [
+      { step: 1, doseMcg: 1000, weeks: 4 },
+      { step: 2, doseMcg: 2000, weeks: 4 },
+    ];
+    const flat = supplyOutlook(stockOf(10_000), protocol(), start);
+    const stepped = supplyOutlook(stockOf(10_000), protocol({ phases: ladder }), start);
+    if (flat.kind !== "runs-out" || stepped.kind !== "runs-out") throw new Error("expected dates");
+    expect(stepped.at).toBeLessThan(flat.at);
+  });
+});
+
+describe("vials on order", () => {
+  /*
+   * The rule this whole state exists for: paid for, not here, and therefore
+   * counted in what you have spent and in nothing else. An app that says three
+   * weeks of stock remain when half of it is with a courier is worse than one
+   * that says nothing.
+   */
+  const ordered = vial({ id: "post", state: "on-order", strengthMg: 10, cost: 40 });
+  const here = vial({ id: "fridge", state: "sealed", strengthMg: 10, cost: 40 });
+
+  it("cannot supply a dose", () => {
+    expect(vialUsable(ordered, NOW)).toBe(false);
+    expect(vialUsable(here, NOW)).toBe(true);
+  });
+
+  it("is never reached for by pickVialForDose", () => {
+    expect(pickVialForDose([ordered], "klow", 1000, NOW)).toBeNull();
+    expect(pickVialForDose([ordered, here], "klow", 1000, NOW)?.id).toBe("fridge");
+  });
+
+  it("adds nothing to available mass or dose count", () => {
+    const withoutIt = stockFor([here], "klow", 1000, NOW);
+    const withIt = stockFor([here, ordered], "klow", 1000, NOW);
+    expect(withIt.availableMcg).toBe(withoutIt.availableMcg);
+    expect(withIt.dosesRemaining).toBe(withoutIt.dosesRemaining);
+    expect(withIt.sealedCount).toBe(withoutIt.sealedCount);
+  });
+
+  it("does not make an empty shelf look stocked", () => {
+    const stock = stockFor([ordered], "klow", 1000, NOW);
+    expect(stock.availableMcg).toBe(0);
+    expect(stock.dosesRemaining).toBe(0);
+    // Nothing to reconstitute either, so the prompt to do so must stay away.
+    expect(stock.needsReconstitution).toBe(false);
+  });
+
+  it("still counts towards what has been spent", () => {
+    // The money has gone, whatever the courier is doing.
+    const spend = totalSpend([here, ordered], "EUR");
+    expect(spend.byCurrency).toEqual([{ currency: "EUR", total: 80, vials: 2 }]);
+    expect(spend.pricedVials).toBe(2);
+  });
+
+  it("is not grouped with the sealed vials on the shelf", () => {
+    // Same compound and strength, different question. One you can open today.
+    const groups = groupSealedVials([here, ordered]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(1);
+    expect(groups[0].vials[0].id).toBe("fridge");
+  });
+
+  it("becomes ordinary stock the moment it is marked arrived", () => {
+    const arrived = { ...ordered, state: "sealed" as const };
+    expect(vialUsable(arrived, NOW)).toBe(true);
+    expect(stockFor([arrived], "klow", 1000, NOW).availableMcg).toBe(10_000);
+  });
+});
+
+describe("diluentAfterTopUp", () => {
+  /** The vial from the report: 50 mg in 2.5 mL, 46 mg left, so 2.3 mL left. */
+  const ghk = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 4_000 };
+
+  const concentrationAfter = (v: typeof ghk, added: number) => {
+    const diluentMl = diluentAfterTopUp(v, added)!;
+    return vialConcentration({ strengthMg: v.strengthMg, diluentMl });
+  };
+
+  it("gives mass over volume, not label over total diluent", () => {
+    // 46 mg in 2.3 + 0.5 mL is 16.43 mg/mL. Dividing the label by the new total
+    // would say 16.67, and that is the number this function exists to avoid.
+    expect(concentrationAfter(ghk, 0.5)).toBeCloseTo(16_428.57, 1);
+    expect(concentrationAfter(ghk, 0.5)).not.toBeCloseTo(16_666.67, 1);
+  });
+
+  it("leaves the mass in the vial alone", () => {
+    const diluentMl = diluentAfterTopUp(ghk, 0.5)!;
+    const after = { ...ghk, diluentMl };
+    expect(vialRemainingMcg(after)).toBe(vialRemainingMcg(ghk));
+  });
+
+  it("adds exactly the volume that went in", () => {
+    const before = vialRemainingMl(ghk);
+    const diluentMl = diluentAfterTopUp(ghk, 0.5)!;
+    expect(vialRemainingMl({ ...ghk, diluentMl })).toBeCloseTo(before + 0.5, 9);
+  });
+
+  it("agrees with the simple answer on an untouched vial", () => {
+    // Nothing drawn yet, so mass over volume and label over total diluent are
+    // the same statement. This is the case that hides the bug.
+    const fresh = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 0 };
+    expect(diluentAfterTopUp(fresh, 0.5)).toBeCloseTo(3, 9);
+    expect(concentrationAfter(fresh, 0.5)).toBeCloseTo(16_666.67, 1);
+  });
+
+  it("diverges further the emptier the vial is", () => {
+    // With 10 mg of 50 left, the naive figure is out by two thirds, which would
+    // be a real instruction to draw the wrong number of units.
+    const nearlyEmpty = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 40_000 };
+    expect(concentrationAfter(nearlyEmpty, 0.5)).toBeCloseTo(10_000, 6);
+    expect(50_000 / (2.5 + 0.5)).toBeCloseTo(16_666.67, 1);
+  });
+
+  it("can be applied twice and still add up", () => {
+    const once = { ...ghk, diluentMl: diluentAfterTopUp(ghk, 0.5)! };
+    const twice = { ...once, diluentMl: diluentAfterTopUp(once, 0.5)! };
+    expect(vialRemainingMl(twice)).toBeCloseTo(vialRemainingMl(ghk) + 1, 9);
+    expect(vialRemainingMcg(twice)).toBe(vialRemainingMcg(ghk));
+  });
+
+  it("has no answer for a vial that is not open", () => {
+    expect(diluentAfterTopUp({ strengthMg: 50, drawnMcg: 0 }, 0.5)).toBeNull();
+  });
+
+  it("has no answer for an empty vial", () => {
+    // No mass to spread over the new volume, so no concentration to state.
+    expect(diluentAfterTopUp({ strengthMg: 50, diluentMl: 2.5, drawnMcg: 50_000 }, 0.5)).toBeNull();
+  });
+
+  it("refuses an amount that is not a volume", () => {
+    expect(diluentAfterTopUp(ghk, 0)).toBeNull();
+    expect(diluentAfterTopUp(ghk, -1)).toBeNull();
+    expect(diluentAfterTopUp(ghk, Number.NaN)).toBeNull();
   });
 });

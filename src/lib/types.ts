@@ -72,6 +72,46 @@ export type MechanismClass =
   /** Acts at the LH receptor to drive testicular output directly. */
   | "gonadotropin";
 
+/**
+ * A half-life the library will draw a curve from, but will not state as fact.
+ *
+ * Graded on the same ladder the dose ranges already use, because the question
+ * is identical: how much does anyone actually know. Three of the five levels
+ * apply, and they are three different kinds of claim.
+ *
+ *   preclinical  measured, in animals. SS-31 is 4 hours in dogs, intravenously.
+ *   preliminary  measured in people, but thinly: a preprint, a conference
+ *                abstract, a study too small or too early to have settled.
+ *   anecdotal    nobody measured anything. A vendor's page, a community
+ *                consensus, a number that has been repeated until it sounds
+ *                like a fact.
+ *
+ * The last of those is the dangerous one and the reason `source` and `url` are
+ * required on all three. An anecdotal half-life is not a weak measurement, it
+ * is an attribution: the app is not saying the figure is right, it is saying
+ * who says it, and showing you where to go and check. A figure that cannot name
+ * anyone claiming it cannot be entered at all, which is what keeps this field
+ * from becoming the place inventions get laundered.
+ *
+ * Nothing is ever calculated from any of them. No percentage of peak, no steady
+ * state, no accumulation ratio, on any level. The curve shows a shape.
+ */
+export interface HalfLifeEstimate {
+  hours: number;
+  /** How much anyone actually knows. Drives how loudly the app says so. */
+  evidence: Extract<EvidenceLevel, "preclinical" | "preliminary" | "anecdotal">;
+  /**
+   * Who measured it and by what route. Required for the two measured levels and
+   * meaningless for the third, since an anecdotal figure has no experiment
+   * behind it to describe.
+   */
+  species?: string;
+  route?: Route;
+  /** Who states it. Printed next to the number, never abbreviated away. */
+  source: string;
+  url: string;
+}
+
 export type PeptideCategory =
   | "metabolic"
   | "repair"
@@ -106,6 +146,14 @@ export interface Peptide {
   halfLifeHours: number | null;
   /** Uncertainty or species caveat around the half-life figure. */
   halfLifeNote?: string;
+  /**
+   * A half-life the app will draw but will not assert: see `HalfLifeEstimate`
+   * for what the three levels mean and why each one has to name a source.
+   *
+   * Only ever set alongside `halfLifeHours: null`. Where a published human
+   * figure exists, that is the figure, and this has nothing to add.
+   */
+  halfLifeEstimate?: HalfLifeEstimate;
   /** Time to peak plasma concentration in hours, for subcutaneous dosing. */
   tmaxHours?: number;
 
@@ -239,8 +287,22 @@ export interface Schedule {
   intervalDays?: number;
   /** For days-of-week: 0 = Sunday .. 6 = Saturday. */
   daysOfWeek?: number[];
-  /** Local time of day, "HH:MM". */
+  /**
+   * Local time of day, "HH:MM". The first of `timesOfDay` when there are
+   * several, kept in step so that anything reading a single time still reads
+   * the right one.
+   */
   timeOfDay?: string;
+  /**
+   * Every time a dose day carries, "HH:MM" each, for a compound taken more
+   * than once a day. Absent means the single `timeOfDay`, which is what every
+   * protocol made before this held and why nothing needed migrating.
+   *
+   * The dose is for the day and is split evenly across these, so two times
+   * turn 500 mcg into 250 mcg morning and 250 mcg evening. Read through
+   * `scheduleTimes` rather than directly.
+   */
+  timesOfDay?: string[];
   /** Weeks on, then weeks off. Zero means continuous. */
   cycleWeeksOn?: number;
   cycleWeeksOff?: number;
@@ -463,7 +525,15 @@ export type InjectionSite =
   | "glute-l"
   | "glute-r";
 
-export type VialState = "sealed" | "reconstituted" | "finished" | "discarded";
+/**
+ * Where a vial is in its life.
+ *
+ * "on-order" is paid for and not here. It exists so that stock in the post is
+ * visible without being counted: the app must never say you have three weeks
+ * left when half of that is with a courier. Everything that asks "can I draw a
+ * dose from this" goes through `vialUsable`, which excludes it.
+ */
+export type VialState = "on-order" | "sealed" | "reconstituted" | "finished" | "discarded";
 
 export interface Vial {
   id: string;
@@ -480,6 +550,14 @@ export interface Vial {
   cost?: number;
   /** ISO currency code, e.g. "INR". Falls back to the app setting. */
   currency?: string;
+  /**
+   * The order this vial arrived in, if its shipping was recorded.
+   *
+   * Only ever set when there is shipping to share. A vial bought on its own
+   * carries no order, because an order with nothing to say about it would be a
+   * record kept for its own sake.
+   */
+  orderId?: string;
   acquiredAt?: number;
   /** Manufacturer expiry of the sealed vial. */
   expiresAt?: number;
@@ -493,7 +571,15 @@ export interface Vial {
    * both and no separate field is needed.
    */
   diluentMl?: number;
-  diluent?: "bacteriostatic" | "sterile" | "saline" | "oil";
+  diluent?: DiluentKind;
+  /**
+   * The bottle the water came from, when it was drawn from tracked stock.
+   *
+   * Absent means the water was not tracked, which is the honest state for every
+   * vial made up before bottles existed and for anyone who does not want to
+   * count millilitres.
+   */
+  diluentBottleId?: string;
   /**
    * Cumulative mass withdrawn, in micrograms. Mass rather than volume, because
    * a dose has a mass whatever state the vial is in, volume only becomes
@@ -525,6 +611,30 @@ export interface Settings {
   weightUnit: WeightUnit;
 
   /**
+   * Self-hosted sync, web only. Absent means off, which is what every install
+   * has until someone deliberately turns it on.
+   *
+   * The password is deliberately not here. It never leaves the login form: the
+   * key derived from it lives in memory for the session and nowhere else, so
+   * an exported backup cannot hand someone the means to read the server copy.
+   */
+  sync?: {
+    /** Base address of the sync server, for example https://bench.example.com */
+    url: string;
+    username: string;
+    /**
+     * The server version this device last agreed with, not a clock reading of
+     * its own. Two devices disagree about the time and never disagree about
+     * which copy they last saw, which is why the decision in `decide.ts` is
+     * made from this and not from a timestamp comparison.
+     *
+     * Absent means this device has never synced with this server, which is
+     * treated as a question to ask rather than a race to win.
+     */
+    remoteSeenAt?: number;
+  };
+
+  /**
    * Collapse sealed vials of the same compound and strength into one row on the
    * Stock page, with their doses and value added up.
    *
@@ -546,6 +656,17 @@ export interface Settings {
   backupKeep: number;
   /** When the last automatic or manual backup was written. */
   lastBackupAt?: number;
+  /**
+   * When the document last changed in a way that ends up in a backup file.
+   *
+   * Stored rather than held in memory because the question it answers, is there
+   * anything unsaved, has to survive a reload. A flag that resets when the tab
+   * is closed would go quiet at exactly the moment the work is most at risk.
+   *
+   * Written by the store itself, not by any screen, so it cannot be forgotten
+   * by a new one.
+   */
+  dataChangedAt?: number;
   /** When the "nothing is backed up" reminder was last dismissed. */
   backupNagDismissedAt?: number;
 }
@@ -617,6 +738,89 @@ export interface LabResult {
   notes?: string;
 }
 
+/**
+ * A half-life you supplied yourself, for a library compound that has none.
+ *
+ * Deliberately not in the library. A number nobody measured does not belong in
+ * something every install downloads, and the difference between "the library
+ * says 2 hours" and "you decided on 2 hours" is exactly the difference this
+ * whole app is careful about. Yours lives in your data, travels in your backup,
+ * and is labelled as yours everywhere it has an effect.
+ *
+ * Only ever consulted where the library has no published human figure. If one
+ * is added later, the published figure wins and the app says so, because a
+ * measurement in people beats an assumption whoever made it.
+ */
+export interface HalfLifeOverride {
+  hours: number;
+  /** When you set it, so the app can say how old your own figure is. */
+  setAt: number;
+  /** Optional: where you got it. Free text, shown as written. */
+  note?: string;
+}
+
+/**
+ * One purchase, and the only thing the app knows about it: what the postage
+ * cost.
+ *
+ * A shelf of vials is not a shelf of orders, and this deliberately stops short
+ * of becoming one. There is no supplier, no tracking number and no date beyond
+ * when it was recorded, because the request was about cost per vial and every
+ * extra field would be a field to maintain, migrate and eventually disagree
+ * with reality.
+ *
+ * The share each vial carries is not stored. It is derived from how many vials
+ * still point at the order, so deleting one redistributes its share across the
+ * rest without rewriting a single row. Sixty dollars of postage on a box of
+ * three is twenty each; throw one away and the remaining two carry thirty.
+ */
+/** What a vial was made up with. Bottles on the shelf are one of these too. */
+export type DiluentKind = "bacteriostatic" | "sterile" | "saline" | "oil";
+
+/**
+ * A bottle of water on the shelf, measured in millilitres.
+ *
+ * Deliberately not a `Vial`. Everything about a vial is mass: a label strength
+ * in milligrams, a concentration derived from it, a cost per milligram, a date
+ * the doses run out. Water has none of those, so a bottle wearing that type
+ * would be a wrong answer in every one of those figures rather than a missing
+ * one, and each of them would have to remember to exclude it.
+ *
+ * Two inventories is the price. It buys the guarantee that nothing which
+ * reasons about doses can ever be handed a bottle of water.
+ */
+export interface DiluentBottle {
+  id: string;
+  profileId: string;
+  kind: DiluentKind;
+  /** What the label says, in millilitres. */
+  volumeMl: number;
+  /** Cumulative millilitres drawn out. */
+  drawnMl?: number;
+  state: "sealed" | "open" | "finished" | "discarded";
+  /** When it was first punctured, which is when its own clock starts. */
+  openedAt?: number;
+  /** The manufacturer's date, which only binds while it is sealed. */
+  expiresAt?: number;
+  /** Beyond-use date, from first puncture. */
+  budAt?: number;
+  supplier?: string;
+  cost?: number;
+  currency?: string;
+  /** The order it arrived in, so it shares postage like anything else. */
+  orderId?: string;
+}
+
+export interface Order {
+  id: string;
+  profileId: string;
+  /** Postage and handling for the whole order, in whole currency units. */
+  shippingCost: number;
+  /** Matches the vials it covers. Falls back to the app setting. */
+  currency?: string;
+  placedAt: number;
+}
+
 export interface AppData {
   version: number;
   profiles: Profile[];
@@ -632,6 +836,16 @@ export interface AppData {
   customPeptides: Peptide[];
   /** Daily subjective ratings, at most one per local day. */
   checkIns: CheckIn[];
+  /**
+   * Your own half-lives, keyed by peptide id. Not per profile: it is a belief
+   * about a compound rather than a fact about a person, and the same belief
+   * would otherwise have to be retyped for every profile on the device.
+   */
+  halfLifeOverrides?: Record<string, HalfLifeOverride>;
+  /** Purchases whose shipping was recorded, referenced by their vials. */
+  orders: Order[];
+  /** Bottles of water and saline, counted in millilitres rather than mass. */
+  diluents: DiluentBottle[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -664,7 +878,7 @@ export const DEFAULT_PROFILE: Profile = {
  * stamped "version 1" holding version 5 data: EMPTY_DATA hard-coded 1, resetAll
  * restored it, and exportData faithfully wrote the lie into the file.
  */
-export const DATA_VERSION = 6;
+export const DATA_VERSION = 8;
 
 export const EMPTY_DATA: AppData = {
   version: DATA_VERSION,
@@ -678,6 +892,9 @@ export const EMPTY_DATA: AppData = {
   settings: DEFAULT_SETTINGS,
   customPeptides: [],
   checkIns: [],
+  halfLifeOverrides: {},
+  orders: [],
+  diluents: [],
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */

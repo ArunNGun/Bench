@@ -16,9 +16,13 @@ the list of bugs that have already cost hours.
 - **Do not touch GitHub or Vercel.** Write code. Arun pushes and deploys.
 - **Do not drive the phone's UI.** adb install, logcat, push and pull are fine.
   Tapping through the launcher is not.
-- **No new network calls.** The app makes exactly one, a startup fetch of
-  `/version.json` on web. "No server, no analytics" is a published claim that
-  `grep -r "fetch(" src/` is meant to prove.
+- **No new network calls.** `grep -r "fetch(" src/` is meant to stay short
+  enough to read, and every hit has to be accounted for in the Privacy section
+  of the README. Today: `/version.json` at startup on web, the landing page's
+  own server-side stats fetch, and `src/lib/sync/client.ts`, which is inert
+  until someone enters a server address in Settings. Nothing new goes in without
+  a line in that section explaining it and a reason it cannot be done on the
+  device.
 - **Health Connect is read only.** Enforced by a test.
 - **No reminders or notifications.** Declined explicitly.
 - **No invented pharmacology.** A number without a source does not go in the

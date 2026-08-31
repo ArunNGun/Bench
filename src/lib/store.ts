@@ -19,13 +19,19 @@ import {
   type Profile,
   type Settings,
   type Vial,
+  type DiluentBottle,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
+import { documentChanged, documentFrom } from "./calc/document";
+import { withoutProfile } from "./calc/profiles";
 import { PEPTIDES } from "./data/peptides";
-import { beyondUseDate } from "./calc/reconstitution";
+import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
+import { drawFromBottle, openBottle } from "./calc/diluent";
 import { startOfLocalDay } from "./calc/schedule";
 import {
+  diluentAfterTopUp,
   drawFromVial,
+  marksFromVial,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -38,9 +44,13 @@ import {
 } from "./calc/inventory";
 
 /**
- * Everything lives on this device. There is one user, no account, and no
- * server: the data is held in IndexedDB and can be exported to a file at any
- * time. Nothing here is transmitted anywhere.
+ * Everything lives on this device. There is one user and no account: the data
+ * is held in IndexedDB and can be exported to a file at any time.
+ *
+ * Nothing here transmits anything. That remains true with sync switched on:
+ * this is still the store, and `src/lib/sync` reads from it and writes to it
+ * from the outside like any other caller. The server is a copy, never the
+ * source, which is why the app works identically with the network unplugged.
  */
 
 /**
@@ -112,14 +122,81 @@ interface StoreState extends AppData {
   ) => void;
 
   addVial: (v: Omit<Vial, "id" | "profileId">) => string;
+  /**
+   * Add several vials as one order, so their shipping can be shared.
+   *
+   * One call rather than several, because an order is exactly the set of vials
+   * that arrived together, and that fact is only knowable at the moment they
+   * are entered. No shipping means no order record, since an order that says
+   * nothing is a row kept for its own sake.
+   */
+  addOrder: (
+    vials: Omit<Vial, "id" | "profileId">[],
+    shipping: { cost: number; currency?: string } | null) => void;
   updateVial: (id: string, patch: Partial<Vial>) => void;
   removeVial: (id: string) => void;
-  reconstituteVial: (id: string, diluentMl: number, diluent: Vial["diluent"], atMs?: number) => void;
+  /**
+   * Add more solvent to a vial that is already open.
+   *
+   * Mass is untouched and the beyond-use date is left where it is: it runs from
+   * the first puncture, not the last top up, and quietly extending it would be
+   * the app encouraging something it has no business encouraging.
+   *
+   * A no-op when there is nothing sensible to compute, rather than writing a
+   * concentration nobody can act on.
+   */
+  topUpVial: (id: string, addedMl: number, fromBottleId?: string) => void;
+  /**
+   * Make up a vial, and take the water out of a bottle if it came from one.
+   *
+   * `fromBottleId` is optional because it has to be: nobody tracked bottles
+   * before this existed, and a required argument would have made the app
+   * unusable on the day it shipped for everyone who does not want to count
+   * millilitres.
+   */
+  reconstituteVial: (
+    id: string,
+    diluentMl: number,
+    diluent: Vial["diluent"],
+    atMs?: number,
+    fromBottleId?: string) => void;
+
+  addDiluent: (b: Omit<DiluentBottle, "id" | "profileId">) => string;
+  updateDiluent: (id: string, patch: Partial<DiluentBottle>) => void;
+  removeDiluent: (id: string) => void;
+  /** Break the seal without drawing anything yet. */
+  openDiluent: (id: string) => void;
+  /**
+   * Water used for something this app does not track.
+   *
+   * Every manual correction is also a way for a figure to drift away from
+   * reality, so this is deliberately the only one: it takes water out, and
+   * there is no way to put an arbitrary amount back in.
+   */
+  /*
+   * Named "draw" rather than "use" because a store action beginning with `use`
+   * reads as a React hook to both the linter and the next person.
+   */
+  drawDiluent: (id: string, ml: number) => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
 
   addCustomPeptide: (p: Peptide) => void;
   removeCustomPeptide: (id: string) => void;
+  /**
+   * Change one of your own compounds in place.
+   *
+   * The id is kept whatever the name becomes, because protocols, logged
+   * doses and vials all point at it. Renaming a compound must not orphan a
+   * year of history, so the slug is fixed at creation and never rederived.
+   */
+  updateCustomPeptide: (id: string, next: Peptide) => void;
+  /**
+   * Your own half-life for a library compound that has none, or null to drop it
+   * again. Stored per compound rather than per profile: it is a belief about
+   * the compound, not a fact about a person.
+   */
+  setHalfLifeOverride: (peptideId: string, hours: number | null, note?: string) => void;
 
   importData: (data: AppData) => void;
   /**
@@ -170,14 +247,17 @@ export const useStore = create<StoreState>()(
           const profiles = s.profiles.filter((x) => x.id !== id);
           return {
             profiles,
-            // Deleting a profile takes its data with it, leaving orphaned
-            // doses behind would quietly corrupt the other profile's totals.
-            protocols: s.protocols.filter((x) => x.profileId !== id),
-            logs: s.logs.filter((x) => x.profileId !== id),
-            vials: s.vials.filter((x) => x.profileId !== id),
-            measurements: s.measurements.filter((x) => x.profileId !== id),
-            labs: s.labs.filter((x) => x.profileId !== id),
-            checkIns: s.checkIns.filter((x) => x.profileId !== id),
+            /*
+             * Deleting a profile takes its data with it, since orphaned doses
+             * would quietly corrupt the other profile's totals.
+             *
+             * Through `withoutProfile` rather than by naming the collections
+             * here, because this list was written when there were six of them
+             * and orders and bottles of water arrived later without anyone
+             * adding them. One list, in profiles.ts, held to the document by a
+             * test.
+             */
+            ...withoutProfile(s, id),
             activeProfileId: s.activeProfileId === id ? profiles[0].id : s.activeProfileId,
           };
         }),
@@ -218,8 +298,29 @@ export const useStore = create<StoreState>()(
           const vialId = l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at)?.id;
           if (!vialId) return { logs };
 
+          /*
+           * What the syringe read, recorded at the time rather than worked out
+           * later.
+           *
+           * A dose logged in one tap says only its mass, and the Log then had
+           * nothing to show in marks for it. The figure cannot honestly be
+           * derived afterwards either: it depends on the concentration, and
+           * topping a vial up changes that, so a number calculated next month
+           * would describe a syringe nobody drew.
+           *
+           * Only filled in when the caller left it out, so the log sheet, which
+           * asks, always wins.
+           */
+          const scale = (syringeById(s.settings.defaultSyringeId ?? "") ?? SYRINGES[2]).scale;
+          const drawn = marksFromVial(s.vials.find((v) => v.id === vialId), l.doseMcg, scale);
+
+          const measured =
+            l.units == null && drawn != null
+              ? { units: Number(drawn.toFixed(2)), syringeScale: l.syringeScale ?? scale }
+              : null;
+
           return {
-            logs: logs.map((x) => (x.id === id ? { ...x, vialId } : x)),
+            logs: logs.map((x) => (x.id === id ? { ...x, vialId, ...measured } : x)),
             vials: drawFromVial(s.vials, vialId, l.doseMcg),
           };
         });
@@ -336,28 +437,128 @@ export const useStore = create<StoreState>()(
       },
       updateVial: (id, patch) =>
         set((s) => ({ vials: s.vials.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
-      removeVial: (id) => set((s) => ({ vials: s.vials.filter((v) => v.id !== id) })),
-      reconstituteVial: (id, diluentMl, diluent, atMs) =>
+      addOrder: (vials, shipping) =>
+        set((s) => {
+          const orderId = shipping && shipping.cost > 0 ? nanoid(10) : undefined;
+          const added = vials.map((v) => ({
+            ...v,
+            id: nanoid(10),
+            profileId: s.activeProfileId,
+            orderId,
+          }));
+
+          return {
+            vials: [...s.vials, ...added],
+            orders:
+              orderId && shipping
+                ? [
+                    ...s.orders,
+                    {
+                      id: orderId,
+                      profileId: s.activeProfileId,
+                      shippingCost: shipping.cost,
+                      currency: shipping.currency,
+                      placedAt: Date.now(),
+                    },
+                  ]
+                : s.orders,
+          };
+        }),
+      /*
+       * Removing the last vial of an order removes the order with it. Left
+       * behind it would keep a shipping figure on the Stock page for a delivery
+       * with nothing in it, which is a number about nothing.
+       */
+      removeVial: (id) =>
+        set((s) => {
+          const gone = s.vials.find((v) => v.id === id);
+          const vials = s.vials.filter((v) => v.id !== id);
+          const orphaned =
+            gone?.orderId && !vials.some((v) => v.orderId === gone.orderId) ? gone.orderId : null;
+
+          return {
+            vials,
+            orders: orphaned ? s.orders.filter((o) => o.id !== orphaned) : s.orders,
+          };
+        }),
+      addDiluent: (b) => {
+        const id = nanoid(10);
+        set((s) => ({ diluents: [...s.diluents, { ...b, id, profileId: s.activeProfileId }] }));
+        return id;
+      },
+      updateDiluent: (id, patch) =>
         set((s) => ({
-          vials: s.vials.map((v) =>
-            v.id === id
-              ? {
-                  ...v,
-                  state: "reconstituted" as const,
-                  reconstitutedAt: atMs ?? Date.now(),
-                  diluentMl,
-                  diluent,
-                  drawnMcg: v.drawnMcg ?? 0,
-                  budAt: beyondUseDate(atMs ?? Date.now()),
-                }
-              : v),
+          diluents: s.diluents.map((b) => (b.id === id ? { ...b, ...patch } : b)),
         })),
+      removeDiluent: (id) => set((s) => ({ diluents: s.diluents.filter((b) => b.id !== id) })),
+      openDiluent: (id) => set((s) => ({ diluents: openBottle(s.diluents, id, Date.now()) })),
+      drawDiluent: (id, ml) =>
+        set((s) => ({ diluents: drawFromBottle(s.diluents, id, ml, Date.now()) })),
+
+      reconstituteVial: (id, diluentMl, diluent, atMs, fromBottleId) =>
+        set((s) => {
+          const at = atMs ?? Date.now();
+          return {
+            vials: s.vials.map((v) =>
+              v.id === id
+                ? {
+                    ...v,
+                    state: "reconstituted" as const,
+                    reconstitutedAt: at,
+                    diluentMl,
+                    diluent,
+                    diluentBottleId: fromBottleId,
+                    drawnMcg: v.drawnMcg ?? 0,
+                    budAt: beyondUseDate(at),
+                  }
+                : v),
+            // The water leaves the bottle at the same moment it enters the
+            // vial, in one write, so the two can never disagree about how much
+            // was used.
+            diluents: fromBottleId
+              ? drawFromBottle(s.diluents, fromBottleId, diluentMl, at)
+              : s.diluents,
+          };
+        }),
+
+      topUpVial: (id, addedMl, fromBottleId) =>
+        set((s) => {
+          const target = s.vials.find((v) => v.id === id);
+          const diluentMl = target ? diluentAfterTopUp(target, addedMl) : null;
+          // Nothing sensible to compute means nothing happens, and in
+          // particular no water leaves a bottle for a top up that was refused.
+          if (diluentMl == null) return {};
+
+          return {
+            vials: s.vials.map((v) => (v.id === id ? { ...v, diluentMl } : v)),
+            /*
+             * The same water, drawn the same way as at reconstitution. These
+             * two actions were built on separate branches and only met here,
+             * which is how the app came to count the water for one and not the
+             * other while both were doing the identical thing.
+             */
+            diluents: fromBottleId
+              ? drawFromBottle(s.diluents, fromBottleId, addedMl, Date.now())
+              : s.diluents,
+          };
+        }),
 
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
       addCustomPeptide: (p) =>
         set((s) => ({
           customPeptides: [...s.customPeptides.filter((x) => x.id !== p.id), p],
+        })),
+      setHalfLifeOverride: (peptideId, hours, note) =>
+        set((st) => {
+          const next = { ...(st.halfLifeOverrides ?? {}) };
+          if (hours == null || !(hours > 0)) delete next[peptideId];
+          else next[peptideId] = { hours, setAt: Date.now(), note };
+          return { halfLifeOverrides: next };
+        }),
+      updateCustomPeptide: (id, next) =>
+        set((st) => ({
+          customPeptides: st.customPeptides.map((p) => (p.id === id ? { ...next, id } : p)),
         })),
       removeCustomPeptide: (id) =>
         set((s) => ({ customPeptides: s.customPeptides.filter((p) => p.id !== id) })),
@@ -369,7 +570,7 @@ export const useStore = create<StoreState>()(
         // in the store, filtered out of every screen, indistinguishable from
         // having been lost.
         const migrated = migrateAppData(data);
-        set({
+        set((s) => ({
           version: migrated.version,
           profiles: migrated.profiles,
           activeProfileId: migrated.activeProfileId,
@@ -378,10 +579,17 @@ export const useStore = create<StoreState>()(
           protocols: migrated.protocols,
           logs: migrated.logs,
           vials: migrated.vials,
-          settings: migrated.settings,
+          // Whose server this device talks to is this device's business and
+          // survives an import. Pulling from the server would otherwise be able
+          // to switch off the very connection that did the pulling, and
+          // restoring a backup would silently drop the setting.
+          settings: { ...migrated.settings, sync: s.settings.sync },
           customPeptides: migrated.customPeptides,
           checkIns: migrated.checkIns,
-        });
+          halfLifeOverrides: migrated.halfLifeOverrides ?? {},
+          orders: migrated.orders,
+          diluents: migrated.diluents,
+        }));
       },
       importHistory: ({ logs, measurements }) => {
         set((s) => ({
@@ -394,21 +602,25 @@ export const useStore = create<StoreState>()(
         }));
         return { logs: logs.length, measurements: measurements.length };
       },
+      /**
+       * The document that goes to a backup file and to the sync server.
+       *
+       * `settings.sync` is deliberately left out. It is not data about the
+       * person, it is this device's note of where its server is and what it
+       * last sent, and including it caused two distinct problems. It travelled
+       * into a backup file, so restoring one on a second machine pointed that
+       * machine at a server it had no key for. Worse, it made automatic sync
+       * chase its own tail: a push writes `updatedAt` into settings, settings
+       * are part of the payload, so the payload changes and asks to be pushed
+       * again, forever.
+       */
       exportData: () => {
         const s = get();
-        return {
-          version: s.version,
-          profiles: s.profiles,
-          activeProfileId: s.activeProfileId,
-          measurements: s.measurements,
-          labs: s.labs,
-          protocols: s.protocols,
-          logs: s.logs,
-          vials: s.vials,
-          settings: s.settings,
-          customPeptides: s.customPeptides,
-          checkIns: s.checkIns,
-        };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { sync, ...settings } = s.settings;
+        // Everything the store holds, minus the parts that are not data, so a
+        // field this build has never heard of still reaches the file.
+        return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
     }),
@@ -416,19 +628,14 @@ export const useStore = create<StoreState>()(
       name: STORAGE_KEY,
       storage: createJSONStorage(() => idbStorage),
       version: DATA_VERSION,
-      partialize: (s) => ({
-        version: s.version,
-        profiles: s.profiles,
-        activeProfileId: s.activeProfileId,
-        measurements: s.measurements,
-        labs: s.labs,
-        protocols: s.protocols,
-        logs: s.logs,
-        vials: s.vials,
-        settings: s.settings,
-        customPeptides: s.customPeptides,
-        checkIns: s.checkIns,
-      }),
+      /*
+       * What gets written, as an exclusion rather than a list.
+       *
+       * A list only works while the app that reads the file is never older
+       * than the app that wrote it. Opening an older build once, with a list,
+       * deletes whatever that build does not know about. See `documentFrom`.
+       */
+      partialize: (s) => documentFrom(s),
       /**
        * Shared with importData, so a backup restored from a file and this
        * device's own stored data are brought forward by exactly the same code.
@@ -442,6 +649,26 @@ export const useStore = create<StoreState>()(
         useStore.getState().setHydrated();
       },
     }));
+
+/**
+ * Stamp when the document last changed.
+ *
+ * Subscribed here rather than in a component on purpose. A screen can be
+ * unmounted, and the one moment this must not miss is a change made on a screen
+ * that nobody thought about. The store is always there.
+ *
+ * Guarded on `hydrated` because rehydration replaces every array in the state,
+ * which is not a person changing anything and would otherwise mark a document
+ * unsaved on every reload.
+ *
+ * `dataChangedAt` is itself part of settings, so it has to be excluded from
+ * what counts as a change. `documentChanged` does that, and its test says so.
+ */
+useStore.subscribe((next, prev) => {
+  if (!next.hydrated || !prev.hydrated) return;
+  if (!documentChanged(next, prev)) return;
+  useStore.setState((s) => ({ settings: { ...s.settings, dataChangedAt: Date.now() } }));
+});
 
 // ---------------------------------------------------------------------------
 // Selectors and derived data
@@ -467,6 +694,8 @@ export function useProfileData() {
   const measurements = useStore((s) => s.measurements);
   const labs = useStore((s) => s.labs);
   const checkIns = useStore((s) => s.checkIns);
+  const orders = useStore((s) => s.orders);
+  const diluents = useStore((s) => s.diluents);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -477,8 +706,10 @@ export function useProfileData() {
       measurements: measurements.filter((x) => x.profileId === activeId),
       labs: labs.filter((x) => x.profileId === activeId),
       checkIns: checkIns.filter((x) => x.profileId === activeId),
+      orders: orders.filter((x) => x.profileId === activeId),
+      diluents: diluents.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, checkIns, activeId]);
+    [protocols, logs, vials, measurements, labs, checkIns, orders, diluents, activeId]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */

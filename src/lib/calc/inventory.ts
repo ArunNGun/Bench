@@ -8,7 +8,8 @@
  */
 
 import type { Protocol, Vial, VialState } from "../types";
-import { protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
+import { DAY_MS, protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
+import { unitsFromDose, type SyringeScale } from "./reconstitution";
 
 export const MCG_PER_MG = 1000;
 
@@ -42,6 +43,16 @@ export function vialRemainingMl(v: Pick<Vial, "strengthMg" | "diluentMl" | "draw
 
 const DEAD_STATES: VialState[] = ["finished", "discarded"];
 
+/**
+ * States that hold no drug you can reach today.
+ *
+ * "on-order" is here rather than in DEAD_STATES because the two mean different
+ * things: a finished vial is over, an ordered one has not started. They only
+ * agree on the question this list answers, which is whether a dose can come out
+ * of it now.
+ */
+const UNAVAILABLE_STATES: VialState[] = [...DEAD_STATES, "on-order"];
+
 /** Past its beyond-use date, or past the manufacturer's date while sealed. */
 export function vialExpired(v: Vial, nowMs: number) {
   if (v.budAt != null && v.budAt < nowMs) return true;
@@ -51,7 +62,7 @@ export function vialExpired(v: Vial, nowMs: number) {
 
 /** A vial that can still supply a dose. */
 export function vialUsable(v: Vial, nowMs: number) {
-  return !DEAD_STATES.includes(v.state) && !vialExpired(v, nowMs) && vialRemainingMcg(v) > 0;
+  return !UNAVAILABLE_STATES.includes(v.state) && !vialExpired(v, nowMs) && vialRemainingMcg(v) > 0;
 }
 
 /**
@@ -289,6 +300,49 @@ export function stockFor(
 }
 
 /** Days of supply left, given how often the protocol doses. */
+/**
+ * The barrel reading for a dose, taken from the vial it would come out of.
+ *
+ * A dose in micrograms is the honest unit and the useless one at the moment of
+ * injecting: nobody measures micrograms, they count marks. The number depends
+ * on the concentration, so it can only be answered for a vial that has actually
+ * been made up, and the same 250 mcg is 25 marks or 12.5 depending on how much
+ * water went in.
+ *
+ * Null rather than a guess when there is no open vial, or when the vial that is
+ * open was never recorded as reconstituted. A made-up number here would be read
+ * standing over a syringe.
+ */
+export function marksForDose(
+  vials: Vial[],
+  peptideId: string,
+  doseMcg: number,
+  scale: SyringeScale,
+  nowMs: number): number | null {
+  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs), doseMcg, scale);
+}
+
+/**
+ * The same reading, for a vial already in hand.
+ *
+ * Separate because two callers know exactly which vial they mean: a row on the
+ * Stock page is about one vial, and a dose being logged has already been
+ * attributed to one. Neither should go back through the picker and risk being
+ * told about a different vial than the one on screen.
+ */
+export function marksFromVial(
+  vial: Vial | null | undefined,
+  doseMcg: number,
+  scale: SyringeScale): number | null {
+  if (!vial || vial.state !== "reconstituted") return null;
+
+  const conc = vialConcentration(vial);
+  if (!Number.isFinite(conc) || conc <= 0) return null;
+
+  const units = unitsFromDose(doseMcg, conc, scale);
+  return units > 0 ? units : null;
+}
+
 export function daysOfSupply(stock: Stock, dosesPerWeek: number) {
   if (dosesPerWeek <= 0) return null;
   return (stock.dosesRemaining / dosesPerWeek) * 7;
@@ -329,4 +383,94 @@ export function daysOfSupplyForProtocol(
   }
 
   return horizonDays;
+}
+
+/**
+ * When the stock runs out, and whether that is a question worth answering.
+ *
+ * `daysOfSupplyForProtocol` returns a number, and a number cannot say which of
+ * three quite different situations produced it. Nothing is scheduled, so there
+ * is no burn rate and no answer. Or there is enough stock that the walk hit its
+ * horizon, in which case the figure is the horizon rather than a prediction. Or
+ * there is a real answer. A caller that cannot tell those apart ends up
+ * printing "runs out in 2 years" for a stock that runs out in ten.
+ */
+export type SupplyOutlook =
+  /** The stock is spent on this date. */
+  | { kind: "runs-out"; at: number }
+  /** More stock than the walk looked ahead. No date, and none needed. */
+  | { kind: "beyond-horizon" }
+  /** No schedule to spend it against, or no stock at all. */
+  | { kind: "unknown" };
+
+/**
+ * The same walk, reported as a date.
+ *
+ * A date rather than a duration on purpose. "Lasts 40 days" invites the reader
+ * to work out whether that covers the rest of the plan, and the answer changes
+ * every morning. A date is the same fact tomorrow, and is what someone deciding
+ * when to reorder actually wants.
+ *
+ * The horizon is deliberately shorter than the one used for the running total
+ * on the Today screen. A date two years out is arithmetic, not information.
+ */
+export function supplyOutlook(
+  stock: Stock,
+  protocol: Protocol,
+  nowMs: number,
+  horizonDays = 365): SupplyOutlook {
+  if (stock.availableMcg <= 0) return { kind: "unknown" };
+
+  const days = daysOfSupplyForProtocol(stock, protocol, nowMs, horizonDays);
+  if (days == null) return { kind: "unknown" };
+  if (days >= horizonDays) return { kind: "beyond-horizon" };
+
+  // Recovering the instant from the day count is exact: the walk produced it by
+  // dividing that same difference.
+  return { kind: "runs-out", at: nowMs + days * DAY_MS };
+}
+
+/**
+ * The diluent basis after adding more solvent to a vial that is already open.
+ *
+ * People reconstitute too concentrated and find out at the injection site. The
+ * fix in the room is to draw up more bacteriostatic water and add it, and the
+ * app has to be able to record that or every figure it shows afterwards is
+ * wrong: concentration, syringe units, millilitres left.
+ *
+ * The arithmetic is not "add it to the original diluent". Concentration here is
+ * derived as label strength over total diluent, which is only true for an
+ * untouched vial. On a part-used one the honest figure is the mass still in the
+ * vial over the volume still in the vial:
+ *
+ *     new concentration = remaining mcg / (remaining mL + added mL)
+ *
+ * For a 50 mg vial at 20 mg/mL with 46 mg left, adding 0.5 mL gives 16.43
+ * mg/mL, not the 16.67 that dividing the label by the new total would suggest.
+ * The gap widens as the vial empties: with 10 mg left the naive figure is out
+ * by two thirds, and the app would be telling someone to draw the wrong number
+ * of units.
+ *
+ * Rather than add a field and teach every reader about it, this returns the
+ * `diluentMl` that makes the existing formula produce the right answer. Mass is
+ * untouched, `vialRemainingMl` comes out as the real new volume, and nothing
+ * downstream needs to know a top up happened. The cost is that `diluentMl`
+ * stops being "how much water went in first" and becomes the basis the
+ * concentration is derived from, which is what it was always used as.
+ *
+ * Null when there is nothing sensible to compute: an unopened vial has no
+ * concentration, and an empty one has no mass to spread over the new volume.
+ */
+export function diluentAfterTopUp(
+  v: Pick<Vial, "strengthMg" | "diluentMl" | "drawnMcg">,
+  addedMl: number): number | null {
+  if (!Number.isFinite(addedMl) || addedMl <= 0) return null;
+
+  const remainingMcg = vialRemainingMcg(v);
+  if (!(remainingMcg > 0)) return null;
+
+  const remainingMl = vialRemainingMl(v);
+  if (!(remainingMl > 0)) return null;
+
+  return vialCapacityMcg(v) * ((remainingMl + addedMl) / remainingMcg);
 }

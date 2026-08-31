@@ -128,6 +128,26 @@ Related: a reveal condition that requires the element to still be **in** view
 will strand anything the reader flew past between two events, via a fast flick,
 the End key, or an anchor jump. Test the top edge only.
 
+## Cascade layers
+
+**An unlayered rule in `globals.css` beats every Tailwind utility, whatever the
+specificity.** `@import "tailwindcss"` puts utilities in `@layer utilities`, and
+in the cascade unlayered CSS wins over layered CSS before specificity is even
+considered. So a plain `button { font: inherit }` written in `globals.css`
+overruled `text-[14px]` and `font-medium` on every button in the app.
+
+It looked harmless and was a duplicate: Tailwind's own preflight already sets
+`font: inherit` on form controls, in `@layer base`, exactly so that a utility
+can override it. Repeating it outside a layer inverted that.
+
+The symptom was a button in the header not matching the links beside it. The
+diagnosis came from measuring rather than reading: an anchor and a button
+carrying the same two classes computed to 14px/500 and 16px/400.
+
+If a utility class is being ignored and the markup looks right, check whether
+something unlayered is setting the same property. Put project CSS in
+`@layer base` if it needs to be overridable, or leave it to preflight.
+
 ## Contrast
 
 White text on the dark palette's mint (`#2dd4bf`) is **1.86:1**. Every accent in

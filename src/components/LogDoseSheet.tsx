@@ -14,6 +14,9 @@ import {
   Textarea,
   TONE_SOLID,
 } from "./ui";
+import Link from "next/link";
+import { HelpNote } from "./HelpNote";
+import { FEELING_TONE } from "@/lib/calc/feeling";
 import { Syringe } from "./Syringe";
 import { SiteMap } from "./SiteMap";
 import { BlendBreakdown } from "./BlendBreakdown";
@@ -44,14 +47,6 @@ import {
   type Route,
 } from "@/lib/types";
 
-/** Rough reads red, great reads green. */
-const FEELING_TONE: Record<number, "rose" | "tangerine" | "sky" | "mint" | "leaf"> = {
-  1: "rose",
-  2: "tangerine",
-  3: "sky",
-  4: "mint",
-  5: "leaf",
-};
 import { formatDose, fromDateTimeLocal, toDateTimeLocal, trim } from "@/lib/format";
 
 /**
@@ -707,15 +702,44 @@ export function LogDoseSheet({
             />
           </Field>
 
-          <label className="flex items-center gap-2.5 text-[13.5px] text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={skipped}
-              onChange={(e) => setSkipped(e.target.checked)}
-              className="h-4 w-4 accent-[var(--tangerine)]"
-            />
-            Record this as a skipped dose
-          </label>
+          {/*
+            Asked for because the phrase is not self-explanatory, and it is
+            not: a skip is a record rather than the absence of one, which is
+            the opposite of what "skipped" suggests.
+
+            Short on purpose. The full account belongs on the About page, which
+            this links to. Two sentences is what fits before the note becomes
+            the thing you have to scroll past to reach Save.
+          */}
+          <HelpNote
+            label="A skipped dose"
+            control={
+              <label className="flex items-center gap-2.5 text-[13.5px] text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={skipped}
+                  onChange={(e) => setSkipped(e.target.checked)}
+                  className="h-4 w-4 accent-[var(--tangerine)]"
+                />
+                Record this as a skipped dose
+              </label>
+            }
+          >
+            <p>
+              It is a record, not a gap. The app can tell a dose you decided against from one nobody
+              ever logged, and your adherence figure counts them separately.
+            </p>
+            <p>
+              Nothing is drawn from a vial and no drug is modelled in your body, so the curve and the
+              projection are untouched.
+            </p>
+            <Link
+              href="/about#skipped"
+              className="block font-semibold text-[var(--mint-ink)] underline decoration-dotted"
+            >
+              What else it affects
+            </Link>
+          </HelpNote>
         </div>
 
         <div className="sticky bottom-0 space-y-2.5 border-t border-[var(--line)] bg-[var(--card)] px-4 py-3">

@@ -40,10 +40,12 @@ import type { BackupFile } from "@/lib/backup/plan";
 import { formatMoney } from "@/lib/calc/cost";
 import { fromDisplayWeight, toDisplayWeight } from "@/lib/calc/outcomes";
 import { formatDate, relativeTime, trim } from "@/lib/format";
-import { CURRENCIES, DEFAULT_SETTINGS, INJECTION_SITES, PROFILE_TONES } from "@/lib/types";
+import { CURRENCIES, DEFAULT_SETTINGS, PROFILE_TONES } from "@/lib/types";
+import { doseCsv } from "@/lib/calc/dosecsv";
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
+import { SyncPanel } from "@/components/SyncPanel";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
@@ -70,47 +72,9 @@ export default function SettingsPage() {
 
   /** CSV of the dose history, for a spreadsheet or to hand to a clinician. */
   function downloadCsv() {
-    const esc = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const header = [
-      "date",
-      "time",
-      "peptide",
-      "dose_mcg",
-      "dose_mg",
-      "route",
-      "site",
-      "units",
-      "syringe_scale",
-      "volume_ml",
-      "skipped",
-      "notes",
-    ];
-    const rows = [...logs]
-      .sort((a, b) => a.at - b.at)
-      .map((l) => {
-        const d = new Date(l.at);
-        return [
-          d.toLocaleDateString("en-CA"),
-          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          findPeptide(custom, l.peptideId)?.name ?? l.peptideId,
-          l.doseMcg,
-          l.doseMcg / 1000,
-          l.route,
-          INJECTION_SITES.find((s) => s.id === l.site)?.label ?? "",
-          l.units ?? "",
-          l.syringeScale ?? "",
-          l.volumeMl ?? "",
-          l.skipped ? "yes" : "no",
-          l.notes ?? "",
-        ].map(esc).join(",");
-      });
+    const { rows, text } = doseCsv(logs, (id) => findPeptide(custom, id)?.name ?? id);
 
-    const blob = new Blob([[header.join(","), ...rows].join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -139,6 +103,8 @@ export default function SettingsPage() {
       <Backups />
 
       <ImportPanel />
+
+      <SyncPanel />
 
       <Card className="space-y-4 p-4">
         <SectionLabel>Defaults</SectionLabel>
@@ -228,10 +194,15 @@ export default function SettingsPage() {
       <Card className="space-y-4 p-4">
         <SectionLabel>Your data</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
-          Everything lives in this browser on this device. There is no account and no server, so
-          nothing is uploaded and nothing is backed up for you. Clearing your browser data will erase
-          it, export regularly if you want to keep it. The JSON file restores everything; the CSV is
-          just the dose history, for a spreadsheet or to hand to a clinician.
+          Everything lives in this browser on this device. Unless you set up sync below, there is no
+          account and no server, so nothing is uploaded and nothing is backed up for you. Clearing
+          your browser data will erase it, export regularly if you want to keep it. The JSON file
+          restores everything; the CSV is just the dose history, for a spreadsheet or to hand to a
+          clinician.
+        </p>
+        <p className="text-[13px] leading-relaxed text-[var(--faint)]">
+          The same JSON export is on the Backup button in the header, from any screen, so you do not
+          have to come here for it.
         </p>
 
         <div className="flex flex-wrap gap-2.5">
@@ -567,8 +538,9 @@ function Backups() {
 
       {available === false && (
         <Callout tone="info">
-          A web page cannot write to a folder on its own, so this runs in the Android app. Use
-          <strong> Export to a file</strong> below to save a copy from here.
+          A web page cannot write to a folder on its own, so this runs in the Android app. On the web
+          the copy has to be saved by hand: the <strong>Backup</strong> button in the header does it
+          from any screen, and <strong>Export to a file</strong> below does the same.
         </Callout>
       )}
 

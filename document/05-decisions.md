@@ -3,18 +3,39 @@
 Each of these was a real choice with a real alternative. Changing one is fine,
 but know what you are giving up.
 
-## No backend, ever
+## No backend of ours
 
-There is no server, no account, no analytics, no error reporting. The
-application code makes no network requests of its own except a single fetch of
-`/version.json` at startup on web.
+There is no server, no account, no analytics, no error reporting. Nothing the
+project operates ever receives a user's data, and there is nowhere for it to
+leak from, because there is nowhere for it to be.
 
-This is stated on the landing page and in About as an absolute claim, and it is
-verifiable: `grep -r "fetch(" src/` is the evidence. Adding a second network
-call, however innocuous, makes a published promise false.
+This was originally stated as an absolute: the application code makes no network
+requests except a single fetch of `/version.json` at startup on web, and
+`grep -r "fetch(" src/` was the evidence.
+
+The absolute form did not survive contact with the most-asked feature request,
+which was the same data on a phone and a laptop. The compromise:
+
+- The default is unchanged. A fresh install has no account, talks to nothing,
+  and still makes exactly one call.
+- Sync exists, is off, and stays off until someone types in the address of a
+  server they host themselves. There is no hosted option and no default server,
+  deliberately, because offering one would make this project the custodian of
+  other people's dose histories.
+- What goes up is sealed in the browser first, with a key derived from a
+  password that never leaves it. The machine holding the data cannot read it.
+
+So the claim is no longer "the code cannot reach a network" but "we operate
+nothing, and anything you switch on is yours and encrypted". Weaker, and still
+true, which the first one would no longer have been.
+
+`grep -r "fetch(" src/` is still the evidence and still short. Two hits, both
+accounted for above. A third needs an argument.
 
 The cost is accepted and stated plainly in the app: nobody can read the user's
-data, and nobody can recover it either.
+data, and nobody can recover it either. Sync does not change that. A forgotten
+password makes the server's copy unreadable to everyone, including whoever runs
+it.
 
 ## Health Connect is read only
 

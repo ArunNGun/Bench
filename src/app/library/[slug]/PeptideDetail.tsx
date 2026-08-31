@@ -5,10 +5,11 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Badge, Callout, Card, NumberInput, SectionLabel, Stat, type Tone } from "@/components/ui";
 import { PkChart } from "@/components/PkChart";
+import { YourHalfLife } from "@/components/YourHalfLife";
 import { findPeptide, useStore } from "@/lib/store";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import { isBlend } from "@/lib/calc/blend";
-import { accumulationRatio, hoursUntilFraction, timeToSteadyState } from "@/lib/calc/pk";
+import { accumulationRatio, curveFor, hoursUntilFraction, timeToSteadyState } from "@/lib/calc/pk";
 import { titrationStepStartWeeks, titrationTotalWeeks } from "@/lib/calc/schedule";
 import {
   CATEGORY_LABEL,
@@ -18,7 +19,14 @@ import {
   type EvidenceLevel,
   type Peptide,
 } from "@/lib/types";
-import { formatDose, formatDuration, formatHalfLife, trim } from "@/lib/format";
+import {
+  describeHalfLifeEstimate,
+  ESTIMATE_LABEL,
+  formatDose,
+  formatDuration,
+  formatHalfLife,
+  trim,
+} from "@/lib/format";
 
 const HOUR = 3_600_000;
 
@@ -34,26 +42,32 @@ export function PeptideDetail({ slug }: { slug: string }) {
   const custom = useStore((s) => s.customPeptides);
   const p = findPeptide(custom, slug);
 
+  /** Your own half-life for this compound, if you gave one. */
+  const mine = useStore((s) => s.halfLifeOverrides)?.[p?.id ?? ""];
+
   // A single illustrative dose, so the curve shape is visible.
   const demo = useMemo(() => {
-    if (!p?.halfLifeHours) return null;
+    const curve = p ? curveFor(p, mine) : null;
+    if (!p || !curve) return null;
     const now = Date.now();
-    const span = Math.min(p.halfLifeHours * 5, 24 * 21);
+    const span = Math.min(curve.params.halfLifeHours * 5, 24 * 21);
     return {
       from: now,
       to: now + span * HOUR,
+      basis: curve.basis,
       series: [
         {
           id: p.id,
           label: p.name,
           color: "var(--tangerine)",
           doses: [{ at: now, amountMcg: 1000 }],
-          params: { halfLifeHours: p.halfLifeHours, tmaxHours: p.tmaxHours },
+          params: curve.params,
           referenceMcg: 1000,
+          basis: curve.basis,
         },
       ],
     };
-  }, [p]);
+  }, [p, mine]);
 
   if (!p) {
     return (
@@ -150,6 +164,65 @@ export function PeptideDetail({ slug }: { slug: string }) {
               published for most of these compounds.
             </p>
           </>
+        ) : demo?.basis === "elsewhere" && p.halfLifeEstimate ? (
+          <>
+            {/*
+              A shape without any of the figures. Every Stat above is a claim
+              about a level in a person, and the only measurement here was made
+              in another species or by another route, so the curve is drawn and
+              nothing is counted from it.
+            */}
+            <div className="px-2 pb-2 pt-3">
+              <PkChart
+                series={demo.series}
+                fromMs={demo.from}
+                toMs={demo.to}
+                nowMs={demo.from}
+                animate={false}
+              />
+            </div>
+            <p
+              className={`border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed ${
+                p.halfLifeEstimate.evidence === "anecdotal"
+                  ? "text-[var(--tangerine)]"
+                  : "text-[var(--muted)]"
+              }`}
+            >
+              <strong className="font-semibold">
+                {ESTIMATE_LABEL[p.halfLifeEstimate.evidence]}.
+              </strong>{" "}
+              {describeHalfLifeEstimate(p.halfLifeEstimate)}{" "}
+              <a
+                href={p.halfLifeEstimate.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-dotted"
+              >
+                Check it yourself
+              </a>
+              . The dashed curve shows how the shape behaves, not how much is in you, and nothing is
+              calculated from it: no time to clear, no build-up, no steady state.
+            </p>
+          </>
+        ) : demo?.basis === "yours" && mine ? (
+          <>
+            <div className="px-2 pb-2 pt-3">
+              <PkChart
+                series={demo.series}
+                fromMs={demo.from}
+                toMs={demo.to}
+                nowMs={demo.from}
+                animate={false}
+              />
+            </div>
+            <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--tangerine)]">
+              <strong className="font-semibold">Your own figure.</strong> Drawn from the{" "}
+              {formatHalfLife(mine.hours)} you entered
+              {mine.note ? `, ${mine.note}` : ""}. Nothing here has been checked against a published
+              source, and nothing is calculated from it: no time to clear, no build-up, no steady
+              state. The shape is as good as the number you gave it.
+            </p>
+          </>
         ) : (
           <div className="px-4 py-5">
             <p className="text-[14px] leading-relaxed text-[var(--muted)]">
@@ -157,6 +230,13 @@ export function PeptideDetail({ slug }: { slug: string }) {
             </p>
           </div>
         )}
+
+        {/*
+          Offered only where the library has nothing published for a person.
+          Where it does, the published figure is the figure, and a text box
+          beside it would be an invitation to overwrite a label with a rumour.
+        */}
+        {p.halfLifeHours == null && <YourHalfLife peptideId={p.id} name={p.name} />}
 
         {p.halfLifeNote && (
           <p className="border-t border-[var(--line)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--muted)]">

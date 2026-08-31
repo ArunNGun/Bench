@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, Flame, Plus, Sparkles, Syringe as SyringeIcon, Undo2 } from "lucide-react";
 import { PkChart, type PkSeries } from "@/components/PkChart";
+import { PkReadout } from "@/components/PkReadout";
 import {
   Badge,
   Button,
@@ -18,9 +19,19 @@ import {
   type Tone,
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
-import { snapshot, type DoseEvent } from "@/lib/calc/pk";
-import { protocolDosesPerWeek, dueStatus, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { daysOfSupplyForProtocol } from "@/lib/calc/inventory";
+import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import {
+  dosesPerDoseDay,
+  dueStatus,
+  endOfLocalDay,
+  phaseSpanAt,
+  logsForProtocol,
+  protocolDosesPerWeek,
+  scheduledDoseMcg,
+  startOfLocalDay,
+  unloggedDoseTimes,
+} from "@/lib/calc/schedule";
+import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
@@ -30,13 +41,18 @@ import {
   weeklyExposure,
 } from "@/lib/calc/progress";
 import { decomposeDose, isBlend, modellableComponents } from "@/lib/calc/blend";
+import { assignColors, colorSubjects, toneFor } from "@/lib/calc/palette";
 import { hoursSince, timelinePhaseAt } from "@/lib/calc/phase";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import {
+  describeHalfLifeEstimate,
+  formatConcentration,
   formatDate,
   formatDose,
+  formatDosePerDay,
   formatDuration,
   formatHalfLife,
+  formatTime,
   formatWeekday,
   relativeTime,
 } from "@/lib/format";
@@ -47,24 +63,13 @@ import { StackWarnings } from "@/components/StackWarnings";
 import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
-import { INJECTION_SITES, type DoseLog, type Protocol } from "@/lib/types";
-
-
-/**
- * Chart line colours, assigned in order across every series on the chart,
- * including blend components, so two lines can never share a colour.
- */
-const SERIES_COLORS = [
-  "var(--mint)",
-  "var(--grape)",
-  "var(--tangerine)",
-  "var(--sky)",
-  "var(--rose)",
-  "var(--leaf)",
-];
-
-/** Card accents, kept in step with the chart colours. */
-const TRACK_TONES: Tone[] = ["mint", "grape", "tangerine", "sky", "rose", "leaf"];
+import { DoseMarks } from "@/components/DoseMarks";
+import {
+  INJECTION_SITES,
+  type DoseLog,
+  type HalfLifeEstimate,
+  type Protocol,
+} from "@/lib/types";
 
 const DAY = 86_400_000;
 
@@ -72,6 +77,7 @@ export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { protocols, logs, vials } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
+  const overrides = useStore((s) => s.halfLifeOverrides);
   const settings = useStore((s) => s.settings);
   const addLog = useStore((s) => s.addLog);
   const removeLog = useStore((s) => s.removeLog);
@@ -86,17 +92,70 @@ export default function NowPage() {
     return () => clearInterval(t);
   }, []);
 
+  /**
+   * The moment the chart is being asked about, or null for none.
+   *
+   * Null rather than "now" so that letting go of the chart returns the
+   * readout to the present instead of leaving it stuck wherever the pointer
+   * happened to stop.
+   */
+  const [pickedMs, setPickedMs] = useState<number | null>(null);
+
+  /**
+   * Names the vial behind a dose, for the chart readout.
+   *
+   * Lives here rather than in the chart because components render and do not
+   * read the store. Returns null rather than a guess when the vial has since
+   * been deleted, or when the dose was logged without one, which is true of
+   * anything recorded before vials were tracked at all.
+   *
+   * The strength reported is the vial's basis as it stands today. Topping one
+   * up with more diluent rewrites that basis, so a dose drawn before a top up
+   * reads at the concentration the vial has now, not the one it had in the
+   * syringe. The note under the chart says so.
+   */
+  const describeVial = useCallback(
+    (vialId: string) => {
+      const vial = vials.find((v) => v.id === vialId);
+      if (!vial) return null;
+
+      const conc = vialConcentration(vial);
+      const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
+      return {
+        label: `${name} vial`,
+        concentration: Number.isFinite(conc) ? formatConcentration(conc) : "not reconstituted",
+      };
+    },
+    [vials, custom]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
+  /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
+  const [confirmEarly, setConfirmEarly] = useState<string | null>(null);
 
   const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
 
+  /**
+   * One colour per line, and per protocol, agreed with the Plan screen.
+   *
+   * Built from every active protocol rather than only the ones that can be
+   * drawn: a compound with no half-life still appears in a plan, and if it took
+   * no colour here the two screens would count differently from the first one
+   * you owned.
+   */
+  const palette = useMemo(
+    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
+    [active, custom, now]);
+
   const tracks = useMemo(() => {
-    return active.map((protocol, i) => {
+    return active.map((protocol) => {
       const peptide = findPeptide(custom, protocol.peptideId);
       const protocolLogs = logs.filter(
         (l) => !l.skipped && (l.protocolId === protocol.id || l.peptideId === protocol.peptideId));
-      const doses: DoseEvent[] = protocolLogs.map((l) => ({ at: l.at, amountMcg: l.doseMcg }));
+      const doses: DoseEvent[] = protocolLogs.map((l) => ({
+        at: l.at,
+        amountMcg: l.doseMcg,
+        vialId: l.vialId,
+      }));
       const lastLog = protocolLogs.length
         ? protocolLogs.reduce((a, b) => (b.at > a.at ? b : a))
         : null;
@@ -130,14 +189,22 @@ export default function NowPage() {
               protocolDosesPerWeek(protocol, now))
           : [];
 
-      const modellable = peptide?.halfLifeHours != null;
-      const snap = modellable
-        ? snapshot(
-            now,
-            doses,
-            { halfLifeHours: peptide!.halfLifeHours!, tmaxHours: peptide!.tmaxHours },
-            referenceMcg)
-        : null;
+      const curve = peptide ? curveFor(peptide, overrides?.[peptide.id]) : null;
+
+      /**
+       * The reading, withheld from an estimated curve on purpose.
+       *
+       * A snapshot is a set of claims about a level: what percentage of a peak
+       * is on board, which phase that puts you in, how long until it clears. A
+       * curve fitted to four hours measured in dogs given it intravenously
+       * cannot support any of that about a person injecting it under the skin.
+       * The shape is worth drawing and the numbers are not worth stating, so
+       * the card shows nothing rather than something precise and unfounded.
+       */
+      const snap =
+        curve && isMeasuredInPeople(curve.basis)
+          ? snapshot(now, doses, curve.params, referenceMcg)
+          : null;
 
       return {
         protocol,
@@ -149,15 +216,23 @@ export default function NowPage() {
         stock,
         snap,
         blendParts,
+        curve,
         lastLog,
         lastLoggedAt,
         // What the compound is doing right now, in words.
         phase: peptide ? timelinePhaseAt(peptide, hoursSince(lastLoggedAt, now) ?? -1) : null,
         supplyDays: daysOfSupplyForProtocol(stock, protocol, now),
-        tone: TRACK_TONES[i % TRACK_TONES.length],
+        // Injections a dose day holds, for the screens that describe the plan
+        // rather than the next dose.
+        perDay: dosesPerDoseDay(phaseSpanAt(protocol, now)?.schedule ?? protocol.schedule),
+        color: palette.byProtocol.get(protocol.id),
+        // The card accent is the compound's colour, not a sixth name counted
+        // out separately. Counting separately is what let a chip and its own
+        // line disagree as soon as a blend took two colours.
+        tone: (toneFor(palette.byProtocol.get(protocol.id)) ?? "neutral") as Tone,
       };
     });
-  }, [active, logs, vials, custom, now]);
+  }, [active, logs, vials, custom, overrides, palette, now]);
 
   const series: PkSeries[] = useMemo(() => {
     const out: Omit<PkSeries, "color">[] = [];
@@ -184,20 +259,26 @@ export default function NowPage() {
         continue;
       }
 
-      if (t.peptide?.halfLifeHours != null) {
+      if (t.curve) {
         out.push({
           id: t.protocol.id,
-          label: t.peptide.name,
+          label: t.peptide!.name,
           doses: t.doses,
-          params: { halfLifeHours: t.peptide.halfLifeHours, tmaxHours: t.peptide.tmaxHours },
+          params: t.curve.params,
           referenceMcg: t.referenceMcg,
+          basis: t.curve.basis,
         });
       }
     }
 
-    // Colour once, across the whole chart, so no two lines ever collide.
-    return out.map((s, i) => ({ ...s, color: SERIES_COLORS[i % SERIES_COLORS.length] }));
-  }, [tracks]);
+    /*
+     * Coloured from the shared assignment rather than by position here, so the
+     * plan on the other screen names the same compound in the same colour. A
+     * line whose key is missing cannot happen, since the assignment is built
+     * from the same tracks, but a visible fallback beats an invisible line.
+     */
+    return out.map((s) => ({ ...s, color: palette.byKey.get(s.id) ?? "var(--faint)" }));
+  }, [tracks, palette]);
 
   /**
    * Components that are genuinely in you but cannot be drawn, because no
@@ -208,17 +289,80 @@ export default function NowPage() {
     const names = new Set<string>();
     for (const t of tracks) {
       for (const part of t.blendParts) {
-        if (part.peptide?.halfLifeHours == null) names.add(part.name);
+        if (!part.peptide || !curveFor(part.peptide, overrides?.[part.peptide.id])) {
+          names.add(part.name);
+        }
       }
-      if (!t.blendParts.length && t.peptide && t.peptide.halfLifeHours == null) {
+      if (!t.blendParts.length && t.peptide && !t.curve) {
         names.add(t.peptide.name);
       }
     }
     return [...names];
-  }, [tracks]);
+  }, [tracks, overrides]);
+
+  /**
+   * The lines that are drawn from a measurement made elsewhere, and what that
+   * measurement was. Stated on the card next to the chart rather than left for
+   * the library page, since the person reading the curve is here.
+   */
+  const estimatedFrom = useMemo(() => {
+    const out: { id: string; text: string; evidence: HalfLifeEstimate["evidence"] }[] = [];
+    for (const t of tracks) {
+      const e = t.peptide?.halfLifeEstimate;
+      if (!t.curve || isMeasuredInPeople(t.curve.basis)) continue;
+
+      if (t.curve.basis === "yours") {
+        const mine = overrides?.[t.peptide!.id];
+        if (!mine) continue;
+        out.push({
+          id: t.protocol.id,
+          text: `${t.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
+            mine.note ? ` (${mine.note})` : ""
+          }. The library has no published figure for it.`,
+          evidence: "anecdotal" as const,
+        });
+        continue;
+      }
+
+      if (!e) continue;
+      out.push({
+        id: t.protocol.id,
+        text: `${t.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
+        evidence: e.evidence,
+      });
+    }
+    return out;
+  }, [tracks, overrides]);
 
   const needsAttention = tracks.filter(
     (t) => t.due.state === "overdue" || t.due.state === "due-now");
+
+  /**
+   * The rest of today, in order.
+   *
+   * Built from the day's remaining scheduled times rather than from `due`,
+   * which knows only the next dose per protocol. A compound taken morning and
+   * evening has an evening dose whether or not the morning one is still
+   * outstanding, and that is exactly the morning this was written on.
+   *
+   * A dose already shown above is left out rather than listed twice: as its
+   * hour arrives it stops appearing here and appears there, which is the same
+   * row moving up the page rather than two rows disagreeing.
+   */
+  const laterToday = useMemo(() => {
+    const end = endOfLocalDay(now);
+    const shownAbove = new Set(
+      tracks
+        .filter((t) => t.due.state === "overdue" || t.due.state === "due-now")
+        .map((t) => `${t.protocol.id}:${t.due.at}`));
+
+    return tracks
+      .flatMap((t) =>
+        unloggedDoseTimes(t.protocol, logsForProtocol(t.protocol, logs), now, end)
+          .filter((at) => !shownAbove.has(`${t.protocol.id}:${at}`))
+          .map((at) => ({ track: t, at })))
+      .sort((a, b) => a.at - b.at);
+  }, [tracks, logs, now]);
   const lowStock = tracks.filter(
     (t) => t.stock.dosesRemaining <= settings.lowStockDoses && t.targetMcg > 0);
   const expiringVials = vials.filter(
@@ -285,8 +429,25 @@ export default function NowPage() {
             >
               <Badge tone={t.due.state === "overdue" ? "rose" : "tangerine"}>{t.due.label}</Badge>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] text-[var(--ink)]">
-                  {t.peptide?.name ?? t.protocol.peptideId} · {formatDose(t.targetMcg)}
+                <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
+                  {t.color && (
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: t.color }}
+                    />
+                  )}
+                  <span className="truncate font-medium" style={{ color: t.color ?? "var(--ink)" }}>
+                    {t.peptide?.name ?? t.protocol.peptideId}
+                  </span>
+                  <span className="tnum font-mono text-[13px] text-[var(--ink)]">
+                    {formatDose(t.targetMcg)}
+                  </span>
+                  <DoseMarks
+                    peptideId={t.protocol.peptideId}
+                    doseMcg={t.targetMcg}
+                    nowMs={now}
+                    className="text-[12px] text-[var(--faint)]"
+                  />
                 </div>
                 <div className="text-[12px] text-[var(--muted)]">
                   {t.due.at != null &&
@@ -333,6 +494,105 @@ export default function NowPage() {
         </div>
       )}
 
+      {/*
+        The rest of the day, quieter than the band above on purpose. Same
+        rows, one step earlier in their life, so the eye reads down the page
+        in the order the day happens.
+      */}
+      {laterToday.length > 0 && (
+        <div>
+          <SectionLabel>Later today</SectionLabel>
+          <div className="divide-y divide-[var(--line)] rounded-[var(--r-card)] border border-[var(--line)]">
+            {laterToday.map(({ track: t, at }) => {
+              const key = `${t.protocol.id}:${at}`;
+              const asking = confirmEarly === key;
+
+              return (
+                <div key={key} className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
+                  <span className="tnum w-12 shrink-0 font-mono text-[12.5px] text-[var(--faint)]">
+                    {formatTime(at)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
+                      {t.color && (
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ background: t.color }}
+                        />
+                      )}
+                      <span className="font-medium" style={{ color: t.color ?? "var(--ink)" }}>
+                        {t.peptide?.name ?? t.protocol.peptideId}
+                      </span>
+                      <span className="tnum font-mono text-[12.5px] text-[var(--ink)]">
+                        {formatDose(t.targetMcg)}
+                      </span>
+                      <DoseMarks
+                        peptideId={t.protocol.peptideId}
+                        doseMcg={t.targetMcg}
+                        nowMs={now}
+                        className="text-[12px] text-[var(--faint)]"
+                      />
+                    </span>
+                    {/*
+                      Logging a dose hours before its time is nearly always a
+                      misread row rather than an early injection, and it is not
+                      a harmless mistake: it takes the dose off the vial, moves
+                      the curve, and leaves the real dose looking taken. So the
+                      button asks, and says which dose it is asking about.
+                    */}
+                    {asking && (
+                      <p className="mt-0.5 text-[12px] text-[var(--muted)]">
+                        Not due until {formatTime(at)}, {relativeTime(at, now)}. Log it now?
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {asking ? (
+                      <>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            const id = addLog({
+                              peptideId: t.protocol.peptideId,
+                              protocolId: t.protocol.id,
+                              at: Date.now(),
+                              doseMcg: t.targetMcg,
+                              route: t.protocol.route,
+                              site: suggestSite(
+                                logs.filter((l) => l.peptideId === t.protocol.peptideId),
+                                Date.now(),
+                                14,
+                                t.protocol.sites),
+                            });
+                            setConfirmEarly(null);
+                            setLastQuickLog({
+                              id,
+                              name: t.peptide?.name ?? t.protocol.peptideId,
+                            });
+                          }}
+                        >
+                          <Check size={15} /> Yes, log it
+                        </Button>
+                        <Button variant="ghost" onClick={() => setConfirmEarly(null)}>
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        title={`Log this ${formatTime(at)} dose ahead of time`}
+                        onClick={() => setConfirmEarly(key)}
+                      >
+                        <Check size={15} /> Taken
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {series.length > 0 && (
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-4 py-3">
@@ -340,20 +600,67 @@ export default function NowPage() {
             <div className="ml-auto flex flex-wrap gap-x-3.5 gap-y-1">
               {series.map((s) => (
                 <span key={s.id} className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-                  <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                  {/* Hollow for an estimate, matching the dashed line it labels. */}
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={
+                      s.basis && s.basis !== "published"
+                        ? { border: `1.5px solid ${s.color}` }
+                        : { background: s.color }
+                    }
+                  />
                   {s.label}
+                  {s.basis === "elsewhere" && (
+                    <span className="text-[var(--faint)]">estimated</span>
+                  )}
+                  {s.basis === "yours" && <span className="text-[var(--faint)]">your figure</span>}
                 </span>
               ))}
             </div>
           </div>
           <div className="px-2 pb-2 pt-3">
-            <PkChart series={series} fromMs={now - 14 * DAY} toMs={now + 7 * DAY} nowMs={now} />
+            <PkChart
+              series={series}
+              fromMs={now - 14 * DAY}
+              toMs={now + 7 * DAY}
+              nowMs={now}
+              pickedMs={pickedMs}
+              onPick={setPickedMs}
+            />
           </div>
+          <PkReadout
+            series={series}
+            atMs={pickedMs ?? now}
+            nowMs={now}
+            describeVial={describeVial}
+          />
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
             Relative levels, not concentrations. One normal dose peaks at 100%, so the line says how
             much is on board compared with a single dose, bioavailability is unpublished for most of
             these compounds, so a real ng/mL figure is not available. Triangles mark logged doses.
+            Where a reading names a vial, that vial&apos;s strength is read as it stands today:
+            adding diluent to an open vial rewrites the basis, so a dose drawn before a top up shows
+            the strength the vial has now rather than the one that was in the syringe.
           </p>
+
+          {estimatedFrom.length > 0 && (
+            <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
+              A dashed line is a shape, not a level.{" "}
+              {estimatedFrom.map((e) => (
+                <span
+                  key={e.id}
+                  className={
+                    e.evidence === "anecdotal" ? "text-[var(--tangerine)]" : undefined
+                  }
+                >
+                  {e.text}{" "}
+                </span>
+              ))}
+              No percentage of peak, steady state or accumulation figure is shown for{" "}
+              {estimatedFrom.length === 1 ? "it" : "them"}, because none of those follow from a
+              half-life nobody has measured in a person taking it this way.
+            </p>
+          )}
 
           {unplotted.length > 0 && (
             <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
@@ -391,14 +698,34 @@ export default function NowPage() {
                         {t.snap.phase.label}
                       </Badge>
                     )}
-                    {t.due.state === "scheduled" && t.due.at != null && (
-                      <span className="text-[12px] text-[var(--faint)]">
-                        next {relativeTime(t.due.at, now)}
-                      </span>
-                    )}
+                    {/*
+                      "Due today" used to say nothing here, because with one
+                      dose a day it was a state you passed through in the four
+                      hours before it. A compound taken twice sits in it for
+                      most of the day, and a card that shows nothing reads as a
+                      card with nothing to do.
+                    */}
+                    {(t.due.state === "scheduled" || t.due.state === "upcoming") &&
+                      t.due.at != null && (
+                        <span className="text-[12px] text-[var(--faint)]">
+                          next {relativeTime(t.due.at, now)}
+                        </span>
+                      )}
                   </div>
-                  <p className="mt-1 text-[12.5px] text-[var(--muted)]">
-                    {formatDose(t.targetMcg)} · {t.protocol.name}
+                  {/*
+                    This card is the protocol, not the next injection, so it
+                    names the amount and how many of them a day holds. The rows
+                    above, which are each about one dose, stay plain.
+                  */}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-[var(--muted)]">
+                    <span>{formatDosePerDay(t.targetMcg, t.perDay)}</span>
+                    <DoseMarks
+                      peptideId={t.protocol.peptideId}
+                      doseMcg={t.targetMcg}
+                      nowMs={now}
+                      className="text-[12px] text-[var(--faint)]"
+                    />
+                    <span>· {t.protocol.name}</span>
                   </p>
                 </div>
 
@@ -634,33 +961,62 @@ function TodayCard({
         </div>
       </div>
 
-      {/* Seven dots, oldest to today. */}
+      {/*
+        Seven days, oldest to today.
+
+        Today is drawn differently on purpose. Orange means a day that ended
+        with doses missing, and until midnight today is not that day: it is a
+        day in progress, and colouring it as a miss at nine in the morning
+        reads as a telling off for something you have all day to do. So today
+        fills from the bottom as it goes, in the same green a finished day
+        wears, and reaches that green by being finished rather than by being
+        recoloured.
+      */}
       <div className="mt-5 flex items-end justify-between gap-1.5">
-        {week.map((d) => (
-          <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
-            <span
-              className="h-9 w-full rounded-[8px]"
-              style={{
-                background: d.restDay
-                  ? "var(--line)"
-                  : d.complete
-                    ? "var(--leaf)"
-                    : d.taken > 0
-                      ? "var(--tangerine)"
-                      : "var(--line)",
-                opacity: d.restDay ? 0.5 : 1,
-              }}
-              title={
-                d.restDay
-                  ? "Nothing scheduled"
-                  : `${d.taken} of ${d.expected} logged`
-              }
-            />
-            <span className="text-[10px] font-semibold text-[var(--faint)]">
-              {formatWeekday(d.day).slice(0, 2)}
-            </span>
-          </div>
-        ))}
+        {week.map((d) => {
+          const isToday = d.day === startOfLocalDay(now);
+          const filled = d.restDay ? 0 : Math.round(d.fraction * 100);
+
+          return (
+            <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
+              <span
+                className="relative h-9 w-full overflow-hidden rounded-[8px]"
+                style={{
+                  background: d.restDay
+                    ? "var(--line)"
+                    : isToday || d.complete
+                      ? "var(--line)"
+                      : d.taken > 0
+                        ? "var(--tangerine)"
+                        : "var(--line)",
+                  opacity: d.restDay ? 0.5 : 1,
+                  boxShadow: isToday ? "inset 0 0 0 1.5px var(--faint)" : undefined,
+                }}
+                title={
+                  d.restDay
+                    ? "Nothing scheduled"
+                    : isToday
+                      ? `${d.taken} of ${d.expected} logged, the day is not over`
+                      : `${d.taken} of ${d.expected} logged`
+                }
+              >
+                {(isToday || d.complete) && !d.restDay && filled > 0 && (
+                  <span
+                    className="absolute inset-x-0 bottom-0 block"
+                    style={{ height: `${filled}%`, background: "var(--leaf)" }}
+                  />
+                )}
+              </span>
+              <span
+                className={`text-[10px] font-semibold ${
+                  isToday ? "text-[var(--ink)]" : "text-[var(--faint)]"
+                }`}
+              >
+                {formatWeekday(d.day).slice(0, 2)}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

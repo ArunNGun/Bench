@@ -1,6 +1,23 @@
+import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
+
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
 
 /** Trim trailing zeros so 0.10 reads as 0.1 and 2.00 as 2. */
+/**
+ * A dose as a plan states it: the amount, and how many of them a dose day holds.
+ *
+ * "250 mcg" reads as the whole of a day to someone who typed 500 into the form,
+ * and on a plan split morning and evening that is half the truth. The multiplier
+ * is the shortest honest form: it names the amount that goes in the syringe and
+ * says there are two of them, without claiming which days, which "a day" would.
+ *
+ * Only for screens about a plan or a shelf. A row about one injection, on Today
+ * or in the Log, wants the plain amount, because one is all that is happening.
+ */
+export function formatDosePerDay(doseMcg: number, perDay: number) {
+  return perDay > 1 ? `${formatDose(doseMcg)} × ${perDay}` : formatDose(doseMcg);
+}
+
 export function trim(n: number, maxDp = 4) {
   if (!Number.isFinite(n)) return "n/a";
   return Number(n.toFixed(maxDp)).toString();
@@ -82,13 +99,32 @@ const dateYearFmt = new Intl.DateTimeFormat(undefined, {
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
-export const formatDate = (ms: number) => dateFmt.format(ms);
+/**
+ * A date, carrying the year only when it is not the current one.
+ *
+ * "Mar 13" read in August is not a date, it is a guess. The reader has to
+ * decide whether it means seven months ahead or five behind, and on the Stock
+ * page, where the question is when to reorder, guessing wrong in either
+ * direction is expensive.
+ *
+ * Not a new idea in this file: `formatDateTime` has always worked this way, and
+ * now shares the implementation. The dropped year was only ever an economy for
+ * dates near today, and it stops being one the moment a date crosses a new
+ * year.
+ *
+ * `nowMs` is a parameter so the choice can be tested without waiting for
+ * December.
+ */
+export function formatDate(ms: number, nowMs = Date.now()) {
+  const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
+  return (sameYear ? dateFmt : dateYearFmt).format(ms);
+}
+
 export const formatTime = (ms: number) => timeFmt.format(ms);
 export const formatWeekday = (ms: number) => weekdayFmt.format(ms);
 
 export function formatDateTime(ms: number, nowMs = Date.now()) {
-  const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
-  return `${(sameYear ? dateFmt : dateYearFmt).format(ms)}, ${timeFmt.format(ms)}`;
+  return `${formatDate(ms, nowMs)}, ${timeFmt.format(ms)}`;
 }
 
 /** Value for a datetime-local input, in local time rather than UTC. */
@@ -132,3 +168,36 @@ export function fromDateInput(value: string) {
 
 export const percent = (fraction: number, dp = 0) =>
   Number.isFinite(fraction) ? `${(fraction * 100).toFixed(dp)}%` : "n/a";
+
+// ---------------------------------------------------------------------------
+// Half-lives the app draws but does not assert
+// ---------------------------------------------------------------------------
+
+/**
+ * How loudly to say it. The three levels are three different claims and they
+ * do not deserve the same tone: an animal measurement is a fact about animals,
+ * and a vendor's number is a fact about the vendor.
+ */
+export const ESTIMATE_LABEL: Record<HalfLifeEstimate["evidence"], string> = {
+  preclinical: "Animal data",
+  preliminary: "Early human data",
+  anecdotal: "Claimed, not measured",
+};
+
+/**
+ * One sentence on where the figure came from, shared by the chart and the
+ * library so the two can never describe the same number differently.
+ *
+ * The anecdotal wording is deliberately blunt. "Unconfirmed" and "estimated"
+ * both suggest a measurement that has not been checked yet, which is a
+ * flattering description of a number nobody measured at all.
+ */
+export function describeHalfLifeEstimate(e: HalfLifeEstimate) {
+  if (e.evidence === "anecdotal") {
+    return `${formatHalfLife(e.hours)}, claimed by ${e.source}. No study has measured it.`;
+  }
+  const where = e.species ?? "an unstated species";
+  const how = e.route ? ` given it ${ROUTE_LABEL[e.route].toLowerCase()}` : "";
+  const early = e.evidence === "preliminary" ? ", in early work that has not settled" : "";
+  return `${formatHalfLife(e.hours)}, measured in ${where}${how}${early}, reported by ${e.source}.`;
+}

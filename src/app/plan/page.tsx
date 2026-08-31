@@ -19,16 +19,19 @@ import { PctPanel } from "@/components/PctPanel";
 import { ProjectionPreview } from "@/components/ProjectionPreview";
 import { allPeptides, findPeptide, useStore, useProfileData } from "@/lib/store";
 import {
+  dosesPerDoseDay,
   endOfLocalDay,
   phaseSpanAt,
   protocolDoseTimesBetween,
   protocolDosesPerWeek,
   protocolNextDoseTime,
   protocolPhases,
+  scheduleTimes,
   scheduledDoseMcg,
 } from "@/lib/calc/schedule";
 import {
   formatDose,
+  formatDosePerDay,
   formatDate,
   formatWeekday,
   formatTime,
@@ -46,7 +49,10 @@ import {
   type ScheduleKind,
   type TitrationStep,
 } from "@/lib/types";
+import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
+import { TimesOfDay } from "@/components/TimesOfDay";
+import { DoseMarks } from "@/components/DoseMarks";
 import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
@@ -171,7 +177,15 @@ export default function PlanPage() {
                   </div>
                   <p className="mt-1 text-[13px] text-[var(--muted)]">{p.name}</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
-                    <span className="tnum font-mono text-[var(--tangerine)]">{formatDose(target)}</span>
+                    {/*
+                      The amount that goes in one syringe, and how many of them
+                      a dose day holds. Bare "250 mcg" beside a plan someone
+                      entered as 500 reads as a contradiction rather than as a
+                      split.
+                    */}
+                    <span className="tnum font-mono text-[var(--tangerine)]">
+                      {formatDosePerDay(target, dosesPerDoseDay(showSchedule))}
+                    </span>
                     <span className="text-[var(--muted)]">{describeSchedule(showSchedule)}</span>
                     <span className="text-[var(--faint)]">
                       {trim(protocolDosesPerWeek(p, now), 2)} per week
@@ -280,7 +294,12 @@ function describeSchedule(s: Schedule) {
     s.cycleWeeksOn && s.cycleWeeksOff
       ? `, ${s.cycleWeeksOn} on / ${s.cycleWeeksOff} off`
       : "";
-  return base + cycle + (s.timeOfDay ? ` at ${s.timeOfDay}` : "");
+  // Silent about the hour when the schedule never named one, rather than
+  // reporting the nine o'clock the maths falls back to as though it were chosen.
+  const named = s.kind !== "as-needed" && (s.timesOfDay?.length || s.timeOfDay);
+  const at = named ? ` at ${scheduleTimes(s).join(" and ")}` : "";
+
+  return base + cycle + at;
 }
 
 /**
@@ -308,15 +327,38 @@ function sameSchedule(a: Schedule, b: Schedule) {
   return (
     a.kind === b.kind &&
     (a.intervalDays ?? null) === (b.intervalDays ?? null) &&
-    (a.timeOfDay ?? null) === (b.timeOfDay ?? null) &&
+    scheduleTimes(a).join() === scheduleTimes(b).join() &&
     (a.cycleWeeksOn ?? null) === (b.cycleWeeksOn ?? null) &&
     (a.cycleWeeksOff ?? null) === (b.cycleWeeksOff ?? null) &&
     (a.daysOfWeek ?? []).join() === (b.daysOfWeek ?? []).join());
 }
 
-/** Steps are 1, 2, 3 on the way out, whatever adding and removing left behind. */
+/**
+ * Steps are 1, 2, 3 on the way out, whatever adding and removing left behind,
+ * and a band's times are tidied on the way out too.
+ *
+ * While a band is being edited its times are held exactly as typed, blanks
+ * included, so that a time just added has somewhere to be typed into. None of
+ * that belongs in saved data.
+ */
 function renumberPhases(phases: ProtocolPhase[]) {
-  return phases.map((p, i) => ({ ...p, step: i + 1 }));
+  return phases.map((p, i) => {
+    const step = i + 1;
+    if (!p.schedule?.timesOfDay) return { ...p, step };
+
+    const clean = [...new Set(p.schedule.timesOfDay.map((t) => t.trim()).filter(Boolean))].sort();
+    return {
+      ...p,
+      step,
+      schedule: {
+        ...p.schedule,
+        timeOfDay: clean[0] ?? p.schedule.timeOfDay ?? "09:00",
+        // A band keeps its list even at one time, because an absent list means
+        // "whatever the protocol says" rather than "once a day".
+        timesOfDay: clean.length ? clean : undefined,
+      },
+    };
+  });
 }
 
 /**
@@ -365,7 +407,9 @@ function ProtocolForm({
   const [kind, setKind] = useState<ScheduleKind>(initial?.schedule.kind ?? "interval-days");
   const [intervalDays, setIntervalDays] = useState(initial?.schedule.intervalDays ?? 7);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initial?.schedule.daysOfWeek ?? [1]);
-  const [timeOfDay, setTimeOfDay] = useState(initial?.schedule.timeOfDay ?? "09:00");
+  const [times, setTimes] = useState<string[]>(() => scheduleTimes(initial?.schedule ?? {
+    kind: "daily",
+  }));
   const [startedAt, setStartedAt] = useState(() => initial?.startedAt ?? Date.now());
   const [cycleOn, setCycleOn] = useState(initial?.schedule.cycleWeeksOn ?? 0);
   const [cycleOff, setCycleOff] = useState(initial?.schedule.cycleWeeksOff ?? 0);
@@ -420,16 +464,23 @@ function ProtocolForm({
       ? initial.route
       : (peptide?.routes[0] ?? "subcutaneous");
 
-  const schedule: Schedule = useMemo(
-    () => ({
+  const schedule: Schedule = useMemo(() => {
+    // A half-typed or emptied field is not a time. Sorted here so that the
+    // stored single time is the earliest one rather than whichever was typed
+    // first, and so that a protocol with one time keeps exactly the shape it
+    // had before any of this existed.
+    const clean = [...new Set(times.map((t) => t.trim()).filter(Boolean))].sort();
+
+    return {
       kind,
       intervalDays: kind === "interval-days" ? intervalDays : undefined,
       daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
-      timeOfDay: kind === "as-needed" ? undefined : timeOfDay,
+      timeOfDay: kind === "as-needed" ? undefined : (clean[0] ?? "09:00"),
+      timesOfDay: kind === "as-needed" || clean.length < 2 ? undefined : clean,
       cycleWeeksOn: cycleOn || undefined,
       cycleWeeksOff: cycleOff || undefined,
-    }),
-    [kind, intervalDays, daysOfWeek, timeOfDay, cycleOn, cycleOff]);
+    };
+  }, [kind, intervalDays, daysOfWeek, times, cycleOn, cycleOff]);
 
   /**
    * True when a saved protocol's timing is being moved. Adherence and progress
@@ -673,31 +724,37 @@ function ProtocolForm({
       )}
 
       {kind !== "as-needed" && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Time of day">
-            <input
-              type="time"
-              value={timeOfDay}
-              onChange={(e) => setTimeOfDay(e.target.value)}
-              className="w-full rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[15px] text-[var(--ink)] focus:border-[var(--tangerine)] focus:outline-none"
-            />
-          </Field>
-          <Field label="Weeks on" hint="Leave at 0 to run continuously.">
-            <NumberInput
-              value={cycleOn}
-              min={0}
-              max={52}
-              onChange={(e) => setCycleOn(Number(e.target.value))}
-            />
-          </Field>
-          <Field label="Weeks off">
-            <NumberInput
-              value={cycleOff}
-              min={0}
-              max={52}
-              onChange={(e) => setCycleOff(Number(e.target.value))}
-            />
-          </Field>
+        <div className="space-y-4">
+          {/*
+            The amount is only named here when one amount is in force. A plan
+            in bands or steps has a different dose in each, and every band
+            already spells out its own split, so quoting the first one here
+            would be quoting the wrong one for most of the plan.
+          */}
+          <TimesOfDay
+            times={times}
+            onChange={setTimes}
+            dailyMcg={lockedDose == null ? doseMcg : undefined}
+            variant="field"
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Weeks on" hint="Leave at 0 to run continuously.">
+              <NumberInput
+                value={cycleOn}
+                min={0}
+                max={52}
+                onChange={(e) => setCycleOn(Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Weeks off">
+              <NumberInput
+                value={cycleOff}
+                min={0}
+                max={52}
+                onChange={(e) => setCycleOff(Number(e.target.value))}
+              />
+            </Field>
+          </div>
         </div>
       )}
 
@@ -817,13 +874,28 @@ function Upcoming() {
   const custom = useStore((s) => s.customPeptides);
   const now = Date.now();
 
+  const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
+
+  /**
+   * The same colours the chart on Today uses, from the same assignment.
+   *
+   * Counting through the protocols here and through the chart's lines there
+   * would agree until the first blend or the first compound with no half-life,
+   * and then quietly stop agreeing. A colour that means one compound on one
+   * screen and another elsewhere is worse than no colour.
+   */
+  const palette = useMemo(
+    () => assignColors(colorSubjects(active, (id) => findPeptide(custom, id), now)),
+    [active, custom, now]);
+
   const days = useMemo(() => {
     const to = endOfLocalDay(now + 13 * 86_400_000);
-    const rows = protocols
-      .filter((p) => p.active)
+    const rows = active
       .flatMap((p) =>
         protocolDoseTimesBetween(p, now, to).map((at) => ({
           at,
+          protocolId: p.id,
+          peptideId: p.peptideId,
           name: findPeptide(custom, p.peptideId)?.name ?? p.peptideId,
           doseMcg: scheduledDoseMcg(p, at),
         })))
@@ -838,7 +910,7 @@ function Upcoming() {
       map.get(key)!.push(r);
     }
     return [...map.entries()].sort((a, b) => a[0] - b[0]);
-  }, [protocols, custom, now]);
+  }, [active, custom, now]);
 
   if (!days.length) return null;
 
@@ -852,15 +924,39 @@ function Upcoming() {
               {formatWeekday(day)} {formatDate(day)}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1">
-              {rows.map((r, i) => (
-                <span key={i} className="text-[13px] text-[var(--muted)]">
-                  <span className="tnum font-mono text-[var(--faint)]">{formatTime(r.at)}</span>{" "}
-                  <span className="text-[var(--ink)]">{r.name}</span>{" "}
-                  <span className="tnum font-mono text-[var(--tangerine)]">
-                    {formatDose(r.doseMcg)}
+              {rows.map((r, i) => {
+                const color = palette.byProtocol.get(r.protocolId);
+                return (
+                  <span key={i} className="flex items-center gap-1.5 text-[13px]">
+                    <span className="tnum font-mono text-[var(--faint)]">{formatTime(r.at)}</span>
+                    {color && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: color }}
+                      />
+                    )}
+                    <span style={color ? { color } : undefined} className="font-medium">
+                      {r.name}
+                    </span>
+                    {/*
+                      The amount used to be tangerine for everything, and
+                      tangerine is one of the compound colours, so a compound
+                      that happened to be tangerine sat beside an amount in the
+                      same colour meaning something else entirely. Neutral now:
+                      the colour says which compound, the figure says how much.
+                    */}
+                    <span className="tnum font-mono text-[var(--ink)]">
+                      {formatDose(r.doseMcg)}
+                    </span>
+                    <DoseMarks
+                      peptideId={r.peptideId}
+                      doseMcg={r.doseMcg}
+                      nowMs={now}
+                      className="text-[12px] text-[var(--faint)]"
+                    />
                   </span>
-                </span>
-              ))}
+                );
+              })}
             </div>
           </li>
         ))}

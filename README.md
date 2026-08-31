@@ -5,7 +5,10 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2.svg)](https://discord.gg/NTfnwSxxr)
 
-An open source tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics. Everything you enter stays in your browser, on your device.
+
+An open source tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics by default. Everything you enter stays in your browser, on your device.
+
+If you want the same data on more than one device, you can point the app at a sync server you host yourself, in [`server/`](server/README.md). It is off until you set it up, and what goes up is encrypted in your browser first, so the machine holding it cannot read it.
 
 Runs as a web app, installs to a home screen as a PWA, and ships as an Android APK.
 
@@ -48,6 +51,8 @@ There is no backend for your data. Lab report PDFs are parsed on the device, nev
 2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)) — the raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
 
 No analytics, no telemetry, no error reporting beyond these two calls. Fonts are self-hosted at build time, so the browser never contacts a third party.
+
+There is a third, and it is off unless you turn it on. Sync talks to a server address you enter yourself in Settings, and to nothing else. There is no hosted option and no default address, deliberately: this project does not want to be the custodian of anyone's dose history. What is sent is sealed in your browser first, with a key derived from your password, so the machine you point it at stores something it cannot read. Leave the field empty and no request is ever made. See [`server/`](server/README.md).
 
 Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
 
