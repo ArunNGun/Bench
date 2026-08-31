@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { backupDirty, documentChanged, UNWATCHED_KEYS, WATCHED_KEYS } from "./document";
+import {
+  backupDirty,
+  documentChanged,
+  documentFrom,
+  UNWATCHED_KEYS,
+  WATCHED_KEYS,
+} from "./document";
 import { EMPTY_DATA, type AppData } from "../types";
 
 const doc = (over: Partial<AppData> = {}): AppData => ({ ...EMPTY_DATA, ...over });
@@ -95,5 +101,35 @@ describe("backupDirty", () => {
     // Saving stamps after the change it is saving, and a strict comparison
     // would leave the rim on immediately after a successful backup.
     expect(backupDirty(1000, 1000)).toBe(false);
+  });
+});
+
+describe("documentFrom", () => {
+  /*
+   * The rule this exists for: a build writes back every field it read, even
+   * the ones it cannot interpret. Reported after a build from before bottles
+   * of water existed was opened once, and deleted the bottles.
+   */
+  it("keeps every part of the document", () => {
+    const out = documentFrom({ ...EMPTY_DATA });
+    expect(Object.keys(out).sort()).toEqual(Object.keys(EMPTY_DATA).sort());
+  });
+
+  it("keeps a field it has never heard of", () => {
+    const fromTheFuture = { ...EMPTY_DATA, somethingAddedLater: [{ id: "x" }] };
+    expect(documentFrom(fromTheFuture)).toHaveProperty("somethingAddedLater");
+  });
+
+  it("leaves out the parts that are not data", () => {
+    const state = { ...EMPTY_DATA, hydrated: true, addLog: () => "id" };
+    const out = documentFrom(state) as unknown as Record<string, unknown>;
+    expect(out).not.toHaveProperty("hydrated");
+    expect(out).not.toHaveProperty("addLog");
+  });
+
+  it("does not copy the values, only the shape", () => {
+    // Identity matters: documentChanged compares by it.
+    const logs = EMPTY_DATA.logs;
+    expect((documentFrom({ ...EMPTY_DATA, logs }) as { logs: unknown }).logs).toBe(logs);
   });
 });
