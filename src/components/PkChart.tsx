@@ -27,6 +27,13 @@ export interface PkSeries {
   doses: DoseEvent[];
   params: CurveParams;
   referenceMcg: number;
+  /**
+   * Fitted to a half-life measured somewhere other than in a person taking it
+   * this way. Drawn as a different kind of statement: dashed and faded, with no
+   * filled area under it, because the area reads as a quantity and there is no
+   * quantity here. The shape of the decay is the whole claim.
+   */
+  estimated?: boolean;
 }
 
 export function PkChart({
@@ -184,12 +191,14 @@ export function PkChart({
       {/* Curves */}
       {paths.map((p) => (
         <g key={p.id}>
-          <path d={p.area} fill={`url(#fill-${uid}-${p.id})`} />
+          {!p.estimated && <path d={p.area} fill={`url(#fill-${uid}-${p.id})`} />}
           <path
             d={p.line}
             fill="none"
             stroke={p.color}
-            strokeWidth={1.8}
+            strokeWidth={p.estimated ? 1.4 : 1.8}
+            strokeDasharray={p.estimated ? "5 4" : undefined}
+            opacity={p.estimated ? 0.65 : 1}
             strokeLinejoin="round"
             strokeLinecap="round"
             className={animate ? "animate-trace" : undefined}

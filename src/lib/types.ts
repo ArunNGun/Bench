@@ -72,6 +72,46 @@ export type MechanismClass =
   /** Acts at the LH receptor to drive testicular output directly. */
   | "gonadotropin";
 
+/**
+ * A half-life the library will draw a curve from, but will not state as fact.
+ *
+ * Graded on the same ladder the dose ranges already use, because the question
+ * is identical: how much does anyone actually know. Three of the five levels
+ * apply, and they are three different kinds of claim.
+ *
+ *   preclinical  measured, in animals. SS-31 is 4 hours in dogs, intravenously.
+ *   preliminary  measured in people, but thinly: a preprint, a conference
+ *                abstract, a study too small or too early to have settled.
+ *   anecdotal    nobody measured anything. A vendor's page, a community
+ *                consensus, a number that has been repeated until it sounds
+ *                like a fact.
+ *
+ * The last of those is the dangerous one and the reason `source` and `url` are
+ * required on all three. An anecdotal half-life is not a weak measurement, it
+ * is an attribution: the app is not saying the figure is right, it is saying
+ * who says it, and showing you where to go and check. A figure that cannot name
+ * anyone claiming it cannot be entered at all, which is what keeps this field
+ * from becoming the place inventions get laundered.
+ *
+ * Nothing is ever calculated from any of them. No percentage of peak, no steady
+ * state, no accumulation ratio, on any level. The curve shows a shape.
+ */
+export interface HalfLifeEstimate {
+  hours: number;
+  /** How much anyone actually knows. Drives how loudly the app says so. */
+  evidence: Extract<EvidenceLevel, "preclinical" | "preliminary" | "anecdotal">;
+  /**
+   * Who measured it and by what route. Required for the two measured levels and
+   * meaningless for the third, since an anecdotal figure has no experiment
+   * behind it to describe.
+   */
+  species?: string;
+  route?: Route;
+  /** Who states it. Printed next to the number, never abbreviated away. */
+  source: string;
+  url: string;
+}
+
 export type PeptideCategory =
   | "metabolic"
   | "repair"
@@ -106,6 +146,14 @@ export interface Peptide {
   halfLifeHours: number | null;
   /** Uncertainty or species caveat around the half-life figure. */
   halfLifeNote?: string;
+  /**
+   * A half-life the app will draw but will not assert: see `HalfLifeEstimate`
+   * for what the three levels mean and why each one has to name a source.
+   *
+   * Only ever set alongside `halfLifeHours: null`. Where a published human
+   * figure exists, that is the figure, and this has nothing to add.
+   */
+  halfLifeEstimate?: HalfLifeEstimate;
   /** Time to peak plasma concentration in hours, for subcutaneous dosing. */
   tmaxHours?: number;
 

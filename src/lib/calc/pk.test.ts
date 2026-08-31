@@ -3,6 +3,7 @@ import {
   absorptionRate,
   accumulationRatio,
   breakdownAt,
+  curveFor,
   eliminationRate,
   fractionRemaining,
   hoursUntilFraction,
@@ -367,5 +368,21 @@ describe("breakdownAt", () => {
   it("refuses a reference dose that is not a dose", () => {
     const doses = [{ at: t0, amountMcg: 1000 }];
     expect(breakdownAt(t0 + HOUR, doses, params, 0)).toEqual({ total: 0, contributions: [] });
+  });
+});
+
+describe("curveFor", () => {
+  it("prefers the human figure and calls it what it is", () => {
+    const c = curveFor({ halfLifeHours: 12, tmaxHours: 2, halfLifeEstimate: { hours: 4 } });
+    expect(c).toEqual({ params: { halfLifeHours: 12, tmaxHours: 2 }, estimated: false });
+  });
+
+  it("falls back to a measurement from elsewhere, and says so", () => {
+    const c = curveFor({ halfLifeHours: null, tmaxHours: 1, halfLifeEstimate: { hours: 4 } });
+    expect(c).toEqual({ params: { halfLifeHours: 4, tmaxHours: 1 }, estimated: true });
+  });
+
+  it("draws nothing when there is nothing measured anywhere", () => {
+    expect(curveFor({ halfLifeHours: null })).toBeNull();
   });
 });

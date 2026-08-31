@@ -139,6 +139,34 @@ export function singleDoseLevel(hoursSinceDose: number, { halfLifeHours, tmaxHou
   return (Math.exp(-ke * hoursSinceDose) - Math.exp(-ka * hoursSinceDose)) / peak;
 }
 
+/**
+ * The curve to draw for a compound, and whether it is a claim about people.
+ *
+ * Three states, not two. A published human half-life gives a curve that means
+ * what it looks like. A measurement from another species or another route gives
+ * a curve whose shape is informative and whose height is not, and callers are
+ * told so rather than left to notice. Neither gives nothing to draw.
+ *
+ * Structural rather than typed against `Peptide`, so the calc layer keeps
+ * knowing nothing about the library it serves.
+ */
+export function curveFor(p: {
+  halfLifeHours: number | null;
+  tmaxHours?: number;
+  halfLifeEstimate?: { hours: number };
+}): { params: CurveParams; estimated: boolean } | null {
+  if (p.halfLifeHours != null) {
+    return { params: { halfLifeHours: p.halfLifeHours, tmaxHours: p.tmaxHours }, estimated: false };
+  }
+  if (p.halfLifeEstimate) {
+    return {
+      params: { halfLifeHours: p.halfLifeEstimate.hours, tmaxHours: p.tmaxHours },
+      estimated: true,
+    };
+  }
+  return null;
+}
+
 export interface DoseEvent {
   /** Epoch milliseconds. */
   at: number;

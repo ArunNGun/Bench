@@ -1,3 +1,5 @@
+import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
+
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
 
 /** Trim trailing zeros so 0.10 reads as 0.1 and 2.00 as 2. */
@@ -151,3 +153,36 @@ export function fromDateInput(value: string) {
 
 export const percent = (fraction: number, dp = 0) =>
   Number.isFinite(fraction) ? `${(fraction * 100).toFixed(dp)}%` : "n/a";
+
+// ---------------------------------------------------------------------------
+// Half-lives the app draws but does not assert
+// ---------------------------------------------------------------------------
+
+/**
+ * How loudly to say it. The three levels are three different claims and they
+ * do not deserve the same tone: an animal measurement is a fact about animals,
+ * and a vendor's number is a fact about the vendor.
+ */
+export const ESTIMATE_LABEL: Record<HalfLifeEstimate["evidence"], string> = {
+  preclinical: "Animal data",
+  preliminary: "Early human data",
+  anecdotal: "Claimed, not measured",
+};
+
+/**
+ * One sentence on where the figure came from, shared by the chart and the
+ * library so the two can never describe the same number differently.
+ *
+ * The anecdotal wording is deliberately blunt. "Unconfirmed" and "estimated"
+ * both suggest a measurement that has not been checked yet, which is a
+ * flattering description of a number nobody measured at all.
+ */
+export function describeHalfLifeEstimate(e: HalfLifeEstimate) {
+  if (e.evidence === "anecdotal") {
+    return `${formatHalfLife(e.hours)}, claimed by ${e.source}. No study has measured it.`;
+  }
+  const where = e.species ?? "an unstated species";
+  const how = e.route ? ` given it ${ROUTE_LABEL[e.route].toLowerCase()}` : "";
+  const early = e.evidence === "preliminary" ? ", in early work that has not settled" : "";
+  return `${formatHalfLife(e.hours)}, measured in ${where}${how}${early}, reported by ${e.source}.`;
+}

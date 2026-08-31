@@ -448,7 +448,15 @@ export const GROWTH: Peptide[] = [
       "D-Arg-dimethylTyr-Lys-Phe-NH2. It concentrates in the inner mitochondrial membrane and binds cardiolipin, the lipid that organises the electron transport chain into supercomplexes. Binding cardiolipin changes how cytochrome c interacts with it, which the approved label describes as improving mitochondrial morphology and function. It is not an antioxidant supplement and not a hormone.",
     halfLifeHours: null,
     halfLifeNote:
-      "Not stated anywhere citable. This is the unusual case of an approved drug whose label reports absorption, distribution and excretion but no half-life: peak at 0.5 to 1 hour after subcutaneous injection, 92% bioavailable, and essentially the whole dose recovered in urine as parent or the M1 and M2 metabolites by 48 hours, with minimal accumulation on daily dosing. Those facts bound it below a day without giving a figure. The only number found anywhere is 4 hours in dogs after intravenous dosing, which is neither this species nor this route, so no curve is drawn.",
+      "Not stated anywhere citable for people. This is the unusual case of an approved drug whose label reports absorption, distribution and excretion but no half-life: peak at 0.5 to 1 hour after subcutaneous injection, 92% bioavailable, and essentially the whole dose recovered in urine as parent or the M1 and M2 metabolites by 48 hours, with minimal accumulation on daily dosing. Those facts bound it below a day without giving a figure. The 4 hours recorded here was measured in dogs given it intravenously, so the curve drawn from it shows a shape and not a level.",
+    halfLifeEstimate: {
+      hours: 4,
+      evidence: "preclinical",
+      species: "dogs",
+      route: "intravenous",
+      source: "ADDF Cognitive Vitality review, SS-31",
+      url: "https://www.alzdiscovery.org/uploads/cognitive_vitality_media/SS-31-Cognitive-Vitality-For-Researchers.pdf",
+    },
     routes: ["subcutaneous", "intravenous"],
     vialSizesMg: [10, 50],
     reconstitutedDays: 28,
