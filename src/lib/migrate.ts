@@ -26,6 +26,7 @@ import {
   DEFAULT_SETTINGS,
   type AppData,
   type CheckIn,
+  type DiluentBottle,
   type Order,
   type Vial,
 } from "./types";
@@ -113,6 +114,8 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     // v7. Absent in every older payload, and a vial with no order behaves
     // exactly as it always did, so nothing has to be backfilled.
     orders: saneOrders(own(data.orders)),
+    // v8. Bottles of water, counted apart from vials because they are not one.
+    diluents: saneBottles(own(data.diluents)),
   };
 }
 
@@ -138,6 +141,17 @@ function saneOverrides(raw: AppData["halfLifeOverrides"]): AppData["halfLifeOver
     };
   }
   return out;
+}
+
+/**
+ * Keep only bottles that could hold anything.
+ *
+ * A bottle with no volume would divide into a concentration of infinity and
+ * show as permanently empty, which is worse than not being there: it would sit
+ * on the shelf claiming to be stock while supplying nothing.
+ */
+function saneBottles(rows: DiluentBottle[]): DiluentBottle[] {
+  return rows.filter((b) => b && b.id && Number.isFinite(Number(b.volumeMl)) && b.volumeMl > 0);
 }
 
 /**
@@ -168,6 +182,7 @@ function emptyLike(): AppData {
     checkIns: [],
     halfLifeOverrides: {},
     orders: [],
+    diluents: [],
   };
 }
 

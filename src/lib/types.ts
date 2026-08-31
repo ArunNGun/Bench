@@ -557,7 +557,15 @@ export interface Vial {
    * both and no separate field is needed.
    */
   diluentMl?: number;
-  diluent?: "bacteriostatic" | "sterile" | "saline" | "oil";
+  diluent?: DiluentKind;
+  /**
+   * The bottle the water came from, when it was drawn from tracked stock.
+   *
+   * Absent means the water was not tracked, which is the honest state for every
+   * vial made up before bottles existed and for anyone who does not want to
+   * count millilitres.
+   */
+  diluentBottleId?: string;
   /**
    * Cumulative mass withdrawn, in micrograms. Mass rather than volume, because
    * a dose has a mass whatever state the vial is in, volume only becomes
@@ -752,6 +760,43 @@ export interface HalfLifeOverride {
  * rest without rewriting a single row. Sixty dollars of postage on a box of
  * three is twenty each; throw one away and the remaining two carry thirty.
  */
+/** What a vial was made up with. Bottles on the shelf are one of these too. */
+export type DiluentKind = "bacteriostatic" | "sterile" | "saline" | "oil";
+
+/**
+ * A bottle of water on the shelf, measured in millilitres.
+ *
+ * Deliberately not a `Vial`. Everything about a vial is mass: a label strength
+ * in milligrams, a concentration derived from it, a cost per milligram, a date
+ * the doses run out. Water has none of those, so a bottle wearing that type
+ * would be a wrong answer in every one of those figures rather than a missing
+ * one, and each of them would have to remember to exclude it.
+ *
+ * Two inventories is the price. It buys the guarantee that nothing which
+ * reasons about doses can ever be handed a bottle of water.
+ */
+export interface DiluentBottle {
+  id: string;
+  profileId: string;
+  kind: DiluentKind;
+  /** What the label says, in millilitres. */
+  volumeMl: number;
+  /** Cumulative millilitres drawn out. */
+  drawnMl?: number;
+  state: "sealed" | "open" | "finished" | "discarded";
+  /** When it was first punctured, which is when its own clock starts. */
+  openedAt?: number;
+  /** The manufacturer's date, which only binds while it is sealed. */
+  expiresAt?: number;
+  /** Beyond-use date, from first puncture. */
+  budAt?: number;
+  supplier?: string;
+  cost?: number;
+  currency?: string;
+  /** The order it arrived in, so it shares postage like anything else. */
+  orderId?: string;
+}
+
 export interface Order {
   id: string;
   profileId: string;
@@ -785,6 +830,8 @@ export interface AppData {
   halfLifeOverrides?: Record<string, HalfLifeOverride>;
   /** Purchases whose shipping was recorded, referenced by their vials. */
   orders: Order[];
+  /** Bottles of water and saline, counted in millilitres rather than mass. */
+  diluents: DiluentBottle[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -817,7 +864,7 @@ export const DEFAULT_PROFILE: Profile = {
  * stamped "version 1" holding version 5 data: EMPTY_DATA hard-coded 1, resetAll
  * restored it, and exportData faithfully wrote the lie into the file.
  */
-export const DATA_VERSION = 7;
+export const DATA_VERSION = 8;
 
 export const EMPTY_DATA: AppData = {
   version: DATA_VERSION,
@@ -833,6 +880,7 @@ export const EMPTY_DATA: AppData = {
   checkIns: [],
   halfLifeOverrides: {},
   orders: [],
+  diluents: [],
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */

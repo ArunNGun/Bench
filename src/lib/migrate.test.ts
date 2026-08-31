@@ -411,3 +411,39 @@ describe("v6 to v7: orders, for shipping", () => {
     expect(migrateAppData(once)).toEqual(once);
   });
 });
+
+describe("v7 to v8: bottles of water", () => {
+  it("gives older data an empty shelf rather than nothing", () => {
+    expect(migrateAppData({ version: 7, logs: [] }).diluents).toEqual([]);
+  });
+
+  it("adopts a bottle that arrived without an owner", () => {
+    const out = migrateAppData({
+      version: 8,
+      // @ts-expect-error deliberately missing profileId
+      diluents: [{ id: "b1", kind: "bacteriostatic", volumeMl: 30, state: "sealed" }],
+    });
+    expect(out.diluents[0].profileId).toBe(out.activeProfileId);
+  });
+
+  it("drops a bottle that could hold nothing", () => {
+    const out = migrateAppData({
+      version: 8,
+      diluents: [
+        { id: "good", profileId: "me", kind: "bacteriostatic", volumeMl: 30, state: "sealed" },
+        { id: "empty", profileId: "me", kind: "bacteriostatic", volumeMl: 0, state: "sealed" },
+      ],
+    });
+    expect(out.diluents.map((b) => b.id)).toEqual(["good"]);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({
+      version: 8,
+      diluents: [
+        { id: "b1", profileId: "me", kind: "bacteriostatic", volumeMl: 30, state: "sealed" },
+      ],
+    });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});
