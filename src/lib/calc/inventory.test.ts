@@ -594,8 +594,9 @@ describe("vials on order", () => {
 
   it("still counts towards what has been spent", () => {
     // The money has gone, whatever the courier is doing.
-    expect(totalSpend([here, ordered]).total).toBe(80);
-    expect(totalSpend([here, ordered]).pricedVials).toBe(2);
+    const spend = totalSpend([here, ordered], "EUR");
+    expect(spend.byCurrency).toEqual([{ currency: "EUR", total: 80, vials: 2 }]);
+    expect(spend.pricedVials).toBe(2);
   });
 
   it("is not grouped with the sealed vials on the shelf", () => {
