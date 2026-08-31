@@ -106,7 +106,34 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     // them undefined keeps the UI from having to guess at every read site.
     settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
     customPeptides: data.customPeptides ?? [],
+    // v7. Absent in every older payload, and an empty map behaves exactly as
+    // the field not existing did, so nothing has to be backfilled.
+    halfLifeOverrides: saneOverrides(data.halfLifeOverrides),
   };
+}
+
+/**
+ * Keep only overrides that could produce a curve.
+ *
+ * An imported file is not under our control, and a zero, a negative or a string
+ * that survived JSON would reach the model and draw a flat line or nothing at
+ * all, with no clue why. Dropping them is quieter than the alternative and the
+ * compound simply goes back to having no curve.
+ */
+function saneOverrides(raw: AppData["halfLifeOverrides"]): AppData["halfLifeOverrides"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: NonNullable<AppData["halfLifeOverrides"]> = {};
+  for (const [id, value] of Object.entries(raw)) {
+    if (!value || typeof value !== "object") continue;
+    const hours = Number(value.hours);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+    out[id] = {
+      hours,
+      setAt: Number.isFinite(Number(value.setAt)) ? Number(value.setAt) : Date.now(),
+      note: typeof value.note === "string" ? value.note : undefined,
+    };
+  }
+  return out;
 }
 
 /** A valid empty store, for when there is nothing readable to migrate. */
@@ -123,6 +150,7 @@ function emptyLike(): AppData {
     settings: { ...DEFAULT_SETTINGS },
     customPeptides: [],
     checkIns: [],
+    halfLifeOverrides: {},
   };
 }
 

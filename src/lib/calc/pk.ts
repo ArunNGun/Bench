@@ -139,33 +139,64 @@ export function singleDoseLevel(hoursSinceDose: number, { halfLifeHours, tmaxHou
   return (Math.exp(-ke * hoursSinceDose) - Math.exp(-ka * hoursSinceDose)) / peak;
 }
 
+/** Where the half-life behind a curve came from. */
+export type CurveBasis =
+  /** Measured in people, taking it the way people take it. */
+  | "published"
+  /** Measured, but in another species or by another route. */
+  | "elsewhere"
+  /** Your own figure, for a compound the library has none for. */
+  | "yours";
+
+export interface Curve {
+  params: CurveParams;
+  basis: CurveBasis;
+}
+
 /**
- * The curve to draw for a compound, and whether it is a claim about people.
+ * The curve to draw for a compound, and what kind of claim it is.
  *
- * Three states, not two. A published human half-life gives a curve that means
- * what it looks like. A measurement from another species or another route gives
- * a curve whose shape is informative and whose height is not, and callers are
- * told so rather than left to notice. Neither gives nothing to draw.
+ * Four states rather than two, in a fixed order of preference:
+ *
+ *   1. a published human half-life, which means what it looks like
+ *   2. a figure you supplied, for a compound that has none
+ *   3. a measurement from another species or route, whose shape informs and
+ *      whose height does not
+ *   4. nothing, and nothing drawn
+ *
+ * Your own figure beats an animal measurement because you set it deliberately
+ * and can see it labelled as yours, and it never beats a published human one:
+ * if the library later gains a real figure, the real one takes over. That is
+ * the one case where the app overrules you, and it does it in the direction of
+ * a measurement in people.
  *
  * Structural rather than typed against `Peptide`, so the calc layer keeps
  * knowing nothing about the library it serves.
  */
-export function curveFor(p: {
-  halfLifeHours: number | null;
-  tmaxHours?: number;
-  halfLifeEstimate?: { hours: number };
-}): { params: CurveParams; estimated: boolean } | null {
+export function curveFor(
+  p: {
+    halfLifeHours: number | null;
+    tmaxHours?: number;
+    halfLifeEstimate?: { hours: number };
+  },
+  yours?: { hours: number } | null): Curve | null {
   if (p.halfLifeHours != null) {
-    return { params: { halfLifeHours: p.halfLifeHours, tmaxHours: p.tmaxHours }, estimated: false };
+    return { params: { halfLifeHours: p.halfLifeHours, tmaxHours: p.tmaxHours }, basis: "published" };
+  }
+  if (yours && yours.hours > 0) {
+    return { params: { halfLifeHours: yours.hours, tmaxHours: p.tmaxHours }, basis: "yours" };
   }
   if (p.halfLifeEstimate) {
     return {
       params: { halfLifeHours: p.halfLifeEstimate.hours, tmaxHours: p.tmaxHours },
-      estimated: true,
+      basis: "elsewhere",
     };
   }
   return null;
 }
+
+/** Whether anything derived from a curve may be stated as a figure. */
+export const isMeasuredInPeople = (basis: CurveBasis) => basis === "published";
 
 export interface DoseEvent {
   /** Epoch milliseconds. */

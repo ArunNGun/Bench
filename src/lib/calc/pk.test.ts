@@ -4,6 +4,7 @@ import {
   accumulationRatio,
   breakdownAt,
   curveFor,
+  isMeasuredInPeople,
   eliminationRate,
   fractionRemaining,
   hoursUntilFraction,
@@ -372,17 +373,42 @@ describe("breakdownAt", () => {
 });
 
 describe("curveFor", () => {
-  it("prefers the human figure and calls it what it is", () => {
-    const c = curveFor({ halfLifeHours: 12, tmaxHours: 2, halfLifeEstimate: { hours: 4 } });
-    expect(c).toEqual({ params: { halfLifeHours: 12, tmaxHours: 2 }, estimated: false });
+  it("prefers the published human figure over everything", () => {
+    const c = curveFor(
+      { halfLifeHours: 12, tmaxHours: 2, halfLifeEstimate: { hours: 4 } },
+      { hours: 99 });
+    expect(c).toEqual({ params: { halfLifeHours: 12, tmaxHours: 2 }, basis: "published" });
   });
 
-  it("falls back to a measurement from elsewhere, and says so", () => {
+  it("takes your figure over a measurement in another species", () => {
+    const c = curveFor({ halfLifeHours: null, halfLifeEstimate: { hours: 4 } }, { hours: 2 });
+    expect(c).toEqual({ params: { halfLifeHours: 2, tmaxHours: undefined }, basis: "yours" });
+  });
+
+  it("falls back to a measurement from elsewhere when you have not set one", () => {
     const c = curveFor({ halfLifeHours: null, tmaxHours: 1, halfLifeEstimate: { hours: 4 } });
-    expect(c).toEqual({ params: { halfLifeHours: 4, tmaxHours: 1 }, estimated: true });
+    expect(c).toEqual({ params: { halfLifeHours: 4, tmaxHours: 1 }, basis: "elsewhere" });
   });
 
-  it("draws nothing when there is nothing measured anywhere", () => {
+  it("draws your figure for a compound with nothing else at all", () => {
+    const c = curveFor({ halfLifeHours: null }, { hours: 1.5 });
+    expect(c?.basis).toBe("yours");
+    expect(c?.params.halfLifeHours).toBe(1.5);
+  });
+
+  it("ignores a figure that is not a duration", () => {
+    expect(curveFor({ halfLifeHours: null }, { hours: 0 })).toBeNull();
+    expect(curveFor({ halfLifeHours: null }, { hours: -3 })).toBeNull();
+    expect(curveFor({ halfLifeHours: null }, null)).toBeNull();
+  });
+
+  it("draws nothing when there is nothing measured and nothing given", () => {
     expect(curveFor({ halfLifeHours: null })).toBeNull();
+  });
+
+  it("only lets a published figure carry the derived numbers", () => {
+    expect(isMeasuredInPeople("published")).toBe(true);
+    expect(isMeasuredInPeople("yours")).toBe(false);
+    expect(isMeasuredInPeople("elsewhere")).toBe(false);
   });
 });

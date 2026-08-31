@@ -133,6 +133,12 @@ interface StoreState extends AppData {
    * year of history, so the slug is fixed at creation and never rederived.
    */
   updateCustomPeptide: (id: string, next: Peptide) => void;
+  /**
+   * Your own half-life for a library compound that has none, or null to drop it
+   * again. Stored per compound rather than per profile: it is a belief about
+   * the compound, not a fact about a person.
+   */
+  setHalfLifeOverride: (peptideId: string, hours: number | null, note?: string) => void;
 
   importData: (data: AppData) => void;
   /**
@@ -372,6 +378,13 @@ export const useStore = create<StoreState>()(
         set((s) => ({
           customPeptides: [...s.customPeptides.filter((x) => x.id !== p.id), p],
         })),
+      setHalfLifeOverride: (peptideId, hours, note) =>
+        set((st) => {
+          const next = { ...(st.halfLifeOverrides ?? {}) };
+          if (hours == null || !(hours > 0)) delete next[peptideId];
+          else next[peptideId] = { hours, setAt: Date.now(), note };
+          return { halfLifeOverrides: next };
+        }),
       updateCustomPeptide: (id, next) =>
         set((st) => ({
           customPeptides: st.customPeptides.map((p) => (p.id === id ? { ...next, id } : p)),
@@ -402,6 +415,7 @@ export const useStore = create<StoreState>()(
           settings: { ...migrated.settings, sync: s.settings.sync },
           customPeptides: migrated.customPeptides,
           checkIns: migrated.checkIns,
+          halfLifeOverrides: migrated.halfLifeOverrides ?? {},
         }));
       },
       importHistory: ({ logs, measurements }) => {
@@ -443,6 +457,7 @@ export const useStore = create<StoreState>()(
           settings,
           customPeptides: s.customPeptides,
           checkIns: s.checkIns,
+          halfLifeOverrides: s.halfLifeOverrides ?? {},
         };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
@@ -463,6 +478,7 @@ export const useStore = create<StoreState>()(
         settings: s.settings,
         customPeptides: s.customPeptides,
         checkIns: s.checkIns,
+        halfLifeOverrides: s.halfLifeOverrides,
       }),
       /**
        * Shared with importData, so a backup restored from a file and this
