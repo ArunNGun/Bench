@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge, Button, Card, SectionLabel } from "./ui";
 import { CustomCompoundForm } from "./CustomCompoundForm";
 import { useStore } from "@/lib/store";
@@ -21,6 +21,7 @@ export function CustomCompounds() {
   const logs = useStore((s) => s.logs);
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
 
   /** How much of the app would lose its reference if this were deleted. */
@@ -60,11 +61,29 @@ export function CustomCompounds() {
                   <Badge tone="grape">yours</Badge>
                   <Badge tone="neutral">{CATEGORY_LABEL[p.category]}</Badge>
                   {p.halfLifeHours == null && <Badge tone="tangerine">no half-life</Badge>}
+                  {/*
+                    The badge above used to be a dead end: it named a gap and
+                    offered no way to fill it, and the only route to a half-life
+                    was to delete the compound and rebuild it, losing every
+                    protocol and logged dose that pointed at its id.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(editingId === p.id ? null : p.id);
+                      setConfirming(null);
+                      setOpen(false);
+                    }}
+                    aria-label={`Edit ${p.name}`}
+                    className="press ml-auto p-1 text-[var(--faint)] hover:text-[var(--ink)]"
+                  >
+                    <Pencil size={15} />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setConfirming(confirming === p.id ? null : p.id)}
                     aria-label={`Delete ${p.name}`}
-                    className="press ml-auto p-1 text-[var(--faint)] hover:text-[var(--rose)]"
+                    className="press p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -74,6 +93,16 @@ export function CustomCompounds() {
                   {used.protocols} protocol{used.protocols === 1 ? "" : "s"} · {used.logs} logged dose
                   {used.logs === 1 ? "" : "s"}
                 </p>
+
+                {editingId === p.id && (
+                  <div className="mt-2.5">
+                    <CustomCompoundForm
+                      editing={p}
+                      onCancel={() => setEditingId(null)}
+                      onCreated={() => setEditingId(null)}
+                    />
+                  </div>
+                )}
 
                 {confirming === p.id && (
                   <div className="mt-2.5 rounded-[var(--r-inner)] bg-[var(--rose-soft)] p-3">

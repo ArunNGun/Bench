@@ -125,6 +125,14 @@ interface StoreState extends AppData {
 
   addCustomPeptide: (p: Peptide) => void;
   removeCustomPeptide: (id: string) => void;
+  /**
+   * Change one of your own compounds in place.
+   *
+   * The id is kept whatever the name becomes, because protocols, logged
+   * doses and vials all point at it. Renaming a compound must not orphan a
+   * year of history, so the slug is fixed at creation and never rederived.
+   */
+  updateCustomPeptide: (id: string, next: Peptide) => void;
 
   importData: (data: AppData) => void;
   /**
@@ -363,6 +371,10 @@ export const useStore = create<StoreState>()(
       addCustomPeptide: (p) =>
         set((s) => ({
           customPeptides: [...s.customPeptides.filter((x) => x.id !== p.id), p],
+        })),
+      updateCustomPeptide: (id, next) =>
+        set((st) => ({
+          customPeptides: st.customPeptides.map((p) => (p.id === id ? { ...next, id } : p)),
         })),
       removeCustomPeptide: (id) =>
         set((s) => ({ customPeptides: s.customPeptides.filter((p) => p.id !== id) })),

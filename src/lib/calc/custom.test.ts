@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   CUSTOM_PREFIX,
   draftToPeptide,
+  peptideToDraft,
   isCustomId,
   slugifyCompound,
   validateDraft,
   type CustomDraft,
 } from "./custom";
+import { curveFor } from "./pk";
 import { PEPTIDES } from "../data/peptides";
 
 const draft = (over: Partial<CustomDraft> = {}): CustomDraft => ({
@@ -153,5 +155,93 @@ describe("draftToPeptide", () => {
     expect(validateDraft(d, PEPTIDES)).toEqual([]);
     const p = draftToPeptide(d);
     expect(p.doseRanges[0]).toMatchObject({ lowMcg: 100, highMcg: 200, perWeek: 3 });
+  });
+});
+
+describe("editing a compound you added", () => {
+  const made = (over: Partial<CustomDraft> = {}) =>
+    draftToPeptide({
+      name: "SS-31",
+      category: "longevity",
+      routes: ["subcutaneous"],
+      preparation: "powder",
+      doseLowMcg: 10_000,
+      doseHighMcg: 10_000,
+      frequency: "once daily",
+      perWeek: 7,
+      vialSizeMg: 50,
+      ...over,
+    });
+
+  it("reads an entry back into the form it came from", () => {
+    const p = made({ aka: "Elamipretide, MTP-131", halfLifeHours: 4 });
+    const d = peptideToDraft(p);
+    expect(d.name).toBe("SS-31");
+    expect(d.category).toBe("longevity");
+    expect(d.halfLifeHours).toBe(4);
+    expect(d.routes).toEqual(["subcutaneous"]);
+    expect(d.doseLowMcg).toBe(10_000);
+    expect(d.perWeek).toBe(7);
+    expect(d.vialSizeMg).toBe(50);
+    expect(d.aka).toBe("Elamipretide, MTP-131");
+  });
+
+  it("round-trips without changing anything", () => {
+    const p = made({ halfLifeHours: 4 });
+    expect(draftToPeptide(peptideToDraft(p))).toEqual(p);
+  });
+
+  it("survives a compound that has no half-life and no dose", () => {
+    const bare = draftToPeptide({
+      name: "Mystery",
+      category: "repair",
+      routes: ["subcutaneous"],
+      preparation: "powder",
+    });
+    const d = peptideToDraft(bare);
+    expect(d.halfLifeHours).toBeNull();
+    expect(d.doseLowMcg).toBeUndefined();
+    expect(draftToPeptide(d)).toEqual(bare);
+  });
+
+  it("lets an entry keep its own name while editing", () => {
+    const mine = made({ name: "Something Of My Own" });
+    // Without the exemption this is "you already have a compound with that
+    // name", which is true, and which would make the form unsaveable.
+    expect(validateDraft(peptideToDraft(mine), [...PEPTIDES, mine], mine.id)).toEqual([]);
+    expect(validateDraft(peptideToDraft(mine), [...PEPTIDES, mine])).not.toEqual([]);
+  });
+
+  it("still refuses a name that belongs to another of your compounds", () => {
+    const mine = made({ name: "Something Of My Own" });
+    const other = draftToPeptide({
+      name: "Taken",
+      category: "repair",
+      routes: ["subcutaneous"],
+      preparation: "powder",
+    });
+    const renamed = { ...peptideToDraft(mine), name: "Taken" };
+    const problems = validateDraft(renamed, [...PEPTIDES, mine, other], mine.id);
+    expect(problems.map((p) => p.field)).toContain("name");
+  });
+
+  it("keeps an entry editable after the library adds the same compound", () => {
+    // The real case: SS-31 existed as somebody's own entry before it was added
+    // to the library. Blocking the save would not remove the duplicate, it
+    // would only stop them giving their copy the half-life it is missing.
+    const mine = made({ name: "SS-31" });
+    expect(PEPTIDES.some((p) => p.name === "SS-31")).toBe(true);
+    expect(validateDraft(peptideToDraft(mine), [...PEPTIDES, mine], mine.id)).toEqual([]);
+  });
+
+  it("adding a half-life is all it takes to get a curve", () => {
+    const before = made({ name: "Something Of My Own" });
+    expect(curveFor(before)).toBeNull();
+
+    const after = draftToPeptide({ ...peptideToDraft(before), halfLifeHours: 4 });
+    expect(curveFor(after)).toEqual({
+      params: { halfLifeHours: 4, tmaxHours: undefined },
+      estimated: false,
+    });
   });
 });
