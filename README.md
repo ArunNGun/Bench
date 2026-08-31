@@ -5,7 +5,6 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2.svg)](https://discord.gg/NTfnwSxxr)
 
-
 An open source tracker for peptide, growth hormone and anabolic protocols. Protocols, doses, stock, reconstitution, bloodwork and outcomes, with no account, no server and no analytics by default. Everything you enter stays in your browser, on your device.
 
 If you want the same data on more than one device, you can point the app at a sync server you host yourself, in [`server/`](server/README.md). It is off until you set it up, and what goes up is encrypted in your browser first, so the machine holding it cannot read it.
