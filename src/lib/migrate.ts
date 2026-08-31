@@ -31,6 +31,7 @@ import {
   type Vial,
 } from "./types";
 import { vialCapacityMcg } from "./calc/inventory";
+import { isOrphaned } from "./calc/profiles";
 import { startOfLocalDay } from "./calc/schedule";
 
 // Defined in types.ts so EMPTY_DATA can use it too; re-exported here because
@@ -68,8 +69,20 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
       ? data.activeProfileId
       : profiles[0].id;
 
+  /*
+   * A row with no owner, or with an owner who no longer exists, is adopted.
+   *
+   * The second half was missing and it cost real data to find out. Deleting a
+   * profile used to leave its orders and its bottles of water behind, pointing
+   * at an id nothing answers to, and every screen filters by profile, so they
+   * were still in the file and nowhere on screen. Whatever put a row in that
+   * state, throwing it away is the one thing that cannot be undone, and a
+   * bottle that outlived the profile it was bought under is still a bottle in
+   * the fridge.
+   */
+  const live = new Set(profiles.map((p) => p.id));
   const own = <T extends { profileId?: string }>(rows: T[] | undefined): T[] =>
-    (rows ?? []).map((r) => (r.profileId ? r : { ...r, profileId: ownerId }));
+    (rows ?? []).map((r) => (isOrphaned(r, live) ? { ...r, profileId: ownerId } : r));
 
   // --- v2: vial consumption measured as mass, not volume -----------------
   // v1 tracked a volume, which only exists once a vial has been reconstituted,

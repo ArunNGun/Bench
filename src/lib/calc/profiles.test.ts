@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROFILE, DEFAULT_PROFILE_ID, PROFILE_TONES } from "../types";
+import { DEFAULT_PROFILE, DEFAULT_PROFILE_ID, EMPTY_DATA, PROFILE_TONES } from "../types";
+import { migrateAppData } from "../migrate";
+import { isOrphaned, PROFILE_OWNED_KEYS, SHARED_KEYS, withoutProfile } from "./profiles";
 import type { AppData, DoseLog, Protocol, Vial } from "../types";
 import { pickVialForDose, stockFor } from "./inventory";
 
@@ -140,5 +142,99 @@ describe("profile colours", () => {
     for (let n = 0; n < 20; n++) {
       expect(PROFILE_TONES[n % PROFILE_TONES.length]).toBeTruthy();
     }
+  });
+});
+
+describe("every part of the document is owned or shared, and says which", () => {
+  it("accounts for every key", () => {
+    const unclassified = Object.keys(EMPTY_DATA).filter(
+      (k) => !(PROFILE_OWNED_KEYS as readonly string[]).includes(k) && !(k in SHARED_KEYS));
+
+    expect(
+      unclassified,
+      "add it to PROFILE_OWNED_KEYS, or to SHARED_KEYS with a reason").toEqual([]);
+  });
+
+  it("claims nothing that is not in the document", () => {
+    for (const key of PROFILE_OWNED_KEYS) expect(EMPTY_DATA).toHaveProperty(key);
+    for (const key of Object.keys(SHARED_KEYS)) expect(EMPTY_DATA).toHaveProperty(key);
+  });
+});
+
+describe("withoutProfile", () => {
+  /** One row in every owned collection, for two profiles. */
+  const doc = () => {
+    const out = { ...EMPTY_DATA } as Record<string, unknown>;
+    for (const key of PROFILE_OWNED_KEYS) {
+      out[key] = [
+        { id: `${key}-mine`, profileId: "me" },
+        { id: `${key}-theirs`, profileId: "you" },
+      ];
+    }
+    return out as unknown as AppData;
+  };
+
+  it("takes every one of that profile's collections with it", () => {
+    // Walked by key rather than named, which is the point: the inline version
+    // of this in the store was written for six collections and never grew.
+    const left = withoutProfile(doc(), "you");
+    for (const key of PROFILE_OWNED_KEYS) {
+      const rows = left[key] as { id: string }[];
+      expect(rows.map((r) => r.id), key).toEqual([`${key}-mine`]);
+    }
+  });
+
+  it("leaves the other profile untouched", () => {
+    const left = withoutProfile(doc(), "nobody");
+    for (const key of PROFILE_OWNED_KEYS) {
+      expect((left[key] as unknown[]).length, key).toBe(2);
+    }
+  });
+});
+
+describe("isOrphaned", () => {
+  it("is true for a row with no owner", () => {
+    expect(isOrphaned({}, ["me"])).toBe(true);
+  });
+
+  it("is true for a row whose owner has been deleted", () => {
+    expect(isOrphaned({ profileId: "gone" }, ["me"])).toBe(true);
+  });
+
+  it("is false for a row a live profile owns", () => {
+    expect(isOrphaned({ profileId: "me" }, ["me", "you"])).toBe(false);
+  });
+});
+
+describe("the migration adopts what a deleted profile left behind", () => {
+  /*
+   * Reported from use: bottles of water entered under a second profile stayed
+   * in the file after that profile was deleted, owned by an id nothing answers
+   * to, and every screen filters by profile, so they were nowhere on screen.
+   */
+  const stranded = {
+    version: 8,
+    profiles: [{ ...DEFAULT_PROFILE, id: "me" }],
+    activeProfileId: "me",
+    logs: [],
+    diluents: [{ id: "b1", profileId: "deleted", kind: "bacteriostatic", volumeMl: 30, state: "open" }],
+    orders: [{ id: "o1", profileId: "deleted", shippingCost: 12, placedAt: 0 }],
+    vials: [{ id: "v1", profileId: "deleted", peptideId: "klow", strengthMg: 10, state: "sealed" }],
+  } as unknown as Parameters<typeof migrateAppData>[0];
+
+  it("gives them to the profile that exists rather than dropping them", () => {
+    const out = migrateAppData(stranded);
+    expect(out.diluents.map((b) => b.profileId)).toEqual(["me"]);
+    expect(out.orders.map((o) => o.profileId)).toEqual(["me"]);
+    expect(out.vials.map((v) => v.profileId)).toEqual(["me"]);
+  });
+
+  it("still leaves a row alone when its owner is real", () => {
+    const two = {
+      ...(stranded as object),
+      profiles: [{ ...DEFAULT_PROFILE, id: "me" }, { ...DEFAULT_PROFILE, id: "you" }],
+      diluents: [{ id: "b1", profileId: "you", kind: "bacteriostatic", volumeMl: 30, state: "open" }],
+    } as unknown as Parameters<typeof migrateAppData>[0];
+    expect(migrateAppData(two).diluents[0].profileId).toBe("you");
   });
 });
