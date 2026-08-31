@@ -106,6 +106,17 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
   });
 
   return {
+    /*
+     * Anything this build does not recognise travels through untouched.
+     *
+     * The fields below are rebuilt and override this spread, so nothing here
+     * escapes the repairs. What it buys is the case that has no other defence:
+     * a document written by a newer build, read by an older one. Naming the
+     * fields dropped the rest on the way in, and saving named them again on the
+     * way out, so opening yesterday's build once deleted today's records. A
+     * field nobody here can interpret is still somebody's data.
+     */
+    ...(data as object),
     version: DATA_VERSION,
     profiles,
     activeProfileId: ownerId,

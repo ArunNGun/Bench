@@ -447,3 +447,37 @@ describe("v7 to v8: bottles of water", () => {
     expect(migrateAppData(once)).toEqual(once);
   });
 });
+
+describe("a document written by a newer build", () => {
+  /*
+   * The direction the guarantee never covered. Someone tracking bottles of
+   * water opened a build from before bottles existed, once, and the field was
+   * dropped on the way in and left out on the way out. Data lost by opening an
+   * older version of the app.
+   */
+  it("carries a field this build does not know about", () => {
+    const out = migrateAppData({
+      version: 99,
+      logs: [],
+      somethingAddedLater: [{ id: "x" }],
+    } as unknown as Parameters<typeof migrateAppData>[0]) as unknown as Record<string, unknown>;
+
+    expect(out.somethingAddedLater).toEqual([{ id: "x" }]);
+  });
+
+  it("still stamps it with the version this build writes", () => {
+    const out = migrateAppData({ version: 99, logs: [] } as unknown as Parameters<typeof migrateAppData>[0]);
+    expect(out.version).toBe(DATA_VERSION);
+  });
+
+  it("still repairs the fields it does understand", () => {
+    const out = migrateAppData({
+      version: 99,
+      logs: [{ id: "l1", peptideId: "kpv", at: 1, doseMcg: 100, route: "subcutaneous" }],
+      unknownThing: true,
+    } as unknown as Parameters<typeof migrateAppData>[0]) as unknown as Record<string, unknown>;
+
+    expect((out.logs as { profileId?: string }[])[0].profileId).toBeTruthy();
+    expect(out.unknownThing).toBe(true);
+  });
+});

@@ -16,6 +16,40 @@
 
 import type { AppData, Settings } from "../types";
 
+/** Held in the store, not part of the document, and never written down. */
+const TRANSIENT_KEYS = new Set(["hydrated"]);
+
+/**
+ * The document as the store holds it: everything that is data, and nothing else.
+ *
+ * Written as an exclusion, and that is the whole point of it. Saving used to
+ * name the fields it wanted, which works perfectly until the app that reads the
+ * file is older than the app that wrote it. Then the older build does not know
+ * the newer field, drops it on the way in, names only what it knows on the way
+ * out, and the data is gone from the file. Silently, and on the first write.
+ *
+ * That is not a hypothetical. Someone tracking bottles of water opened a build
+ * from before bottles existed, once, and the bottles were deleted from their
+ * device. The rule this project publishes is that data survives every update.
+ * Nothing said which direction, and the direction that was never handled is the
+ * one that loses records.
+ *
+ * So a build now writes back every field it read, including the ones it cannot
+ * interpret. Carrying a field it does not understand costs a few bytes. Not
+ * carrying it costs someone their inventory.
+ */
+export function documentFrom<T extends object>(state: T): AppData {
+  const out: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(state)) {
+    if (typeof value === "function") continue;
+    if (TRANSIENT_KEYS.has(key)) continue;
+    out[key] = value;
+  }
+
+  return out as unknown as AppData;
+}
+
 /**
  * Parts a person would notice the loss of. Compared by identity, which is
  * sound because every setter in the store replaces the array or object it

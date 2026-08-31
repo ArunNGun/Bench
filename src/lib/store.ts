@@ -22,7 +22,7 @@ import {
   type DiluentBottle,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
-import { documentChanged } from "./calc/document";
+import { documentChanged, documentFrom } from "./calc/document";
 import { withoutProfile } from "./calc/profiles";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
@@ -618,22 +618,9 @@ export const useStore = create<StoreState>()(
         const s = get();
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { sync, ...settings } = s.settings;
-        return {
-          version: s.version,
-          profiles: s.profiles,
-          activeProfileId: s.activeProfileId,
-          measurements: s.measurements,
-          labs: s.labs,
-          protocols: s.protocols,
-          logs: s.logs,
-          vials: s.vials,
-          settings,
-          customPeptides: s.customPeptides,
-          checkIns: s.checkIns,
-          halfLifeOverrides: s.halfLifeOverrides ?? {},
-          orders: s.orders,
-          diluents: s.diluents,
-        };
+        // Everything the store holds, minus the parts that are not data, so a
+        // field this build has never heard of still reaches the file.
+        return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
     }),
@@ -641,22 +628,14 @@ export const useStore = create<StoreState>()(
       name: STORAGE_KEY,
       storage: createJSONStorage(() => idbStorage),
       version: DATA_VERSION,
-      partialize: (s) => ({
-        version: s.version,
-        profiles: s.profiles,
-        activeProfileId: s.activeProfileId,
-        measurements: s.measurements,
-        labs: s.labs,
-        protocols: s.protocols,
-        logs: s.logs,
-        vials: s.vials,
-        settings: s.settings,
-        customPeptides: s.customPeptides,
-        checkIns: s.checkIns,
-        halfLifeOverrides: s.halfLifeOverrides,
-        orders: s.orders,
-        diluents: s.diluents,
-      }),
+      /*
+       * What gets written, as an exclusion rather than a list.
+       *
+       * A list only works while the app that reads the file is never older
+       * than the app that wrote it. Opening an older build once, with a list,
+       * deletes whatever that build does not know about. See `documentFrom`.
+       */
+      partialize: (s) => documentFrom(s),
       /**
        * Shared with importData, so a backup restored from a file and this
        * device's own stored data are brought forward by exactly the same code.
