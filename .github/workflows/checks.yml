@@ -1,0 +1,62 @@
+# The gate CONTRIBUTING.md already describes, run by a machine instead of by
+# whoever remembers.
+#
+# Nothing here is new policy. The file says out loud what the contributing
+# guide asks of a pull request: types clean, lint clean, the suite green in two
+# timezones, and the web build succeeding. It exists because twenty five pull
+# requests were once merged on the strength of a Vercel badge, and that badge
+# reports whether a preview deployment was authorised, not whether the code
+# works.
+#
+# The second timezone is not decoration. Every screen in this app reasons about
+# local days, and DST has caught real bugs here more than once, so the suite
+# runs twice against clocks that disagree.
+
+name: Checks
+
+on:
+  pull_request:
+    branches: [beta, main]
+  push:
+    branches: [beta, main]
+
+# A second push to the same pull request cancels the run still going, since only
+# the newest answer is worth waiting for.
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx next lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Tests, in another timezone
+        run: TZ=America/New_York npm test
+
+      # Last, because it is the slowest and the least likely to fail on its own.
+      # A fixed build id keeps the run reproducible; the real one is stamped at
+      # deploy time.
+      - name: Web build
+        run: npm run build
+        env:
+          BUILD_ID: ci
