@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   daysOfSupply,
   daysOfSupplyForProtocol,
+  diluentAfterTopUp,
+  drawFromVial,
   groupSealedVials,
   supplyOutlook,
-  drawFromVial,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -609,5 +610,72 @@ describe("vials on order", () => {
     const arrived = { ...ordered, state: "sealed" as const };
     expect(vialUsable(arrived, NOW)).toBe(true);
     expect(stockFor([arrived], "klow", 1000, NOW).availableMcg).toBe(10_000);
+  });
+});
+
+describe("diluentAfterTopUp", () => {
+  /** The vial from the report: 50 mg in 2.5 mL, 46 mg left, so 2.3 mL left. */
+  const ghk = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 4_000 };
+
+  const concentrationAfter = (v: typeof ghk, added: number) => {
+    const diluentMl = diluentAfterTopUp(v, added)!;
+    return vialConcentration({ strengthMg: v.strengthMg, diluentMl });
+  };
+
+  it("gives mass over volume, not label over total diluent", () => {
+    // 46 mg in 2.3 + 0.5 mL is 16.43 mg/mL. Dividing the label by the new total
+    // would say 16.67, and that is the number this function exists to avoid.
+    expect(concentrationAfter(ghk, 0.5)).toBeCloseTo(16_428.57, 1);
+    expect(concentrationAfter(ghk, 0.5)).not.toBeCloseTo(16_666.67, 1);
+  });
+
+  it("leaves the mass in the vial alone", () => {
+    const diluentMl = diluentAfterTopUp(ghk, 0.5)!;
+    const after = { ...ghk, diluentMl };
+    expect(vialRemainingMcg(after)).toBe(vialRemainingMcg(ghk));
+  });
+
+  it("adds exactly the volume that went in", () => {
+    const before = vialRemainingMl(ghk);
+    const diluentMl = diluentAfterTopUp(ghk, 0.5)!;
+    expect(vialRemainingMl({ ...ghk, diluentMl })).toBeCloseTo(before + 0.5, 9);
+  });
+
+  it("agrees with the simple answer on an untouched vial", () => {
+    // Nothing drawn yet, so mass over volume and label over total diluent are
+    // the same statement. This is the case that hides the bug.
+    const fresh = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 0 };
+    expect(diluentAfterTopUp(fresh, 0.5)).toBeCloseTo(3, 9);
+    expect(concentrationAfter(fresh, 0.5)).toBeCloseTo(16_666.67, 1);
+  });
+
+  it("diverges further the emptier the vial is", () => {
+    // With 10 mg of 50 left, the naive figure is out by two thirds, which would
+    // be a real instruction to draw the wrong number of units.
+    const nearlyEmpty = { strengthMg: 50, diluentMl: 2.5, drawnMcg: 40_000 };
+    expect(concentrationAfter(nearlyEmpty, 0.5)).toBeCloseTo(10_000, 6);
+    expect(50_000 / (2.5 + 0.5)).toBeCloseTo(16_666.67, 1);
+  });
+
+  it("can be applied twice and still add up", () => {
+    const once = { ...ghk, diluentMl: diluentAfterTopUp(ghk, 0.5)! };
+    const twice = { ...once, diluentMl: diluentAfterTopUp(once, 0.5)! };
+    expect(vialRemainingMl(twice)).toBeCloseTo(vialRemainingMl(ghk) + 1, 9);
+    expect(vialRemainingMcg(twice)).toBe(vialRemainingMcg(ghk));
+  });
+
+  it("has no answer for a vial that is not open", () => {
+    expect(diluentAfterTopUp({ strengthMg: 50, drawnMcg: 0 }, 0.5)).toBeNull();
+  });
+
+  it("has no answer for an empty vial", () => {
+    // No mass to spread over the new volume, so no concentration to state.
+    expect(diluentAfterTopUp({ strengthMg: 50, diluentMl: 2.5, drawnMcg: 50_000 }, 0.5)).toBeNull();
+  });
+
+  it("refuses an amount that is not a volume", () => {
+    expect(diluentAfterTopUp(ghk, 0)).toBeNull();
+    expect(diluentAfterTopUp(ghk, -1)).toBeNull();
+    expect(diluentAfterTopUp(ghk, Number.NaN)).toBeNull();
   });
 });

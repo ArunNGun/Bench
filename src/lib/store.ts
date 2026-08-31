@@ -26,6 +26,7 @@ import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate } from "./calc/reconstitution";
 import { startOfLocalDay } from "./calc/schedule";
 import {
+  diluentAfterTopUp,
   drawFromVial,
   pickVialForDose,
   reconcileVials,
@@ -120,6 +121,17 @@ interface StoreState extends AppData {
   updateVial: (id: string, patch: Partial<Vial>) => void;
   removeVial: (id: string) => void;
   reconstituteVial: (id: string, diluentMl: number, diluent: Vial["diluent"], atMs?: number) => void;
+  /**
+   * Add more solvent to a vial that is already open.
+   *
+   * Mass is untouched and the beyond-use date is left where it is: it runs from
+   * the first puncture, not the last top up, and quietly extending it would be
+   * the app encouraging something it has no business encouraging.
+   *
+   * A no-op when there is nothing sensible to compute, rather than writing a
+   * concentration nobody can act on.
+   */
+  topUpVial: (id: string, addedMl: number) => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
 
@@ -370,6 +382,15 @@ export const useStore = create<StoreState>()(
                   budAt: beyondUseDate(atMs ?? Date.now()),
                 }
               : v),
+        })),
+
+      topUpVial: (id, addedMl) =>
+        set((s) => ({
+          vials: s.vials.map((v) => {
+            if (v.id !== id) return v;
+            const diluentMl = diluentAfterTopUp(v, addedMl);
+            return diluentMl == null ? v : { ...v, diluentMl };
+          }),
         })),
 
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
