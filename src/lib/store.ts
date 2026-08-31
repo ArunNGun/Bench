@@ -144,7 +144,7 @@ interface StoreState extends AppData {
    * A no-op when there is nothing sensible to compute, rather than writing a
    * concentration nobody can act on.
    */
-  topUpVial: (id: string, addedMl: number) => void;
+  topUpVial: (id: string, addedMl: number, fromBottleId?: string) => void;
   /**
    * Make up a vial, and take the water out of a bottle if it came from one.
    *
@@ -517,14 +517,27 @@ export const useStore = create<StoreState>()(
           };
         }),
 
-      topUpVial: (id, addedMl) =>
-        set((s) => ({
-          vials: s.vials.map((v) => {
-            if (v.id !== id) return v;
-            const diluentMl = diluentAfterTopUp(v, addedMl);
-            return diluentMl == null ? v : { ...v, diluentMl };
-          }),
-        })),
+      topUpVial: (id, addedMl, fromBottleId) =>
+        set((s) => {
+          const target = s.vials.find((v) => v.id === id);
+          const diluentMl = target ? diluentAfterTopUp(target, addedMl) : null;
+          // Nothing sensible to compute means nothing happens, and in
+          // particular no water leaves a bottle for a top up that was refused.
+          if (diluentMl == null) return {};
+
+          return {
+            vials: s.vials.map((v) => (v.id === id ? { ...v, diluentMl } : v)),
+            /*
+             * The same water, drawn the same way as at reconstitution. These
+             * two actions were built on separate branches and only met here,
+             * which is how the app came to count the water for one and not the
+             * other while both were doing the identical thing.
+             */
+            diluents: fromBottleId
+              ? drawFromBottle(s.diluents, fromBottleId, addedMl, Date.now())
+              : s.diluents,
+          };
+        }),
 
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
