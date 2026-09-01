@@ -37,6 +37,66 @@ data, and nobody can recover it either. Sync does not change that. A forgotten
 password makes the server's copy unreadable to everyone, including whoever runs
 it.
 
+## Reminders, on the device only
+
+Reminders were declined at the start, in the owner's own words: "do all except
+the reminder I don't need that." They were listed as out of scope in three
+places, and they stayed out for a year.
+
+They came back because someone else asked. A user on Discord filed it as a
+feature request, and the answer this time was yes, on conditions. Recording the
+reversal here rather than quietly deleting the old line, because the next person
+to read those documents deserves to know a rule was changed rather than ignored.
+
+What was allowed, and what was not:
+
+- **Local reminders are in.** The alarm is handed to Android's own
+  `AlarmManager` and raised by the operating system. No network call, offline,
+  and nothing leaves the phone. The privacy claim is untouched.
+- **Push is still out**, and this is not a detail. Push needs a service to send
+  it and a server to decide when, which is the backend this project does not
+  have. A reminder that arrives from somewhere else is somewhere else knowing
+  your schedule.
+- **Off until switched on**, and the permission is asked for at that moment
+  rather than at first launch. An app that asks on startup teaches people to
+  refuse.
+
+### The web cannot do this, and the app says so
+
+A browser cannot raise a notification at a set hour while it is closed. The API
+written for exactly this, Notification Triggers, was abandoned by Chrome before
+it shipped and is filed under "no longer pursuing"; Periodic Background Sync
+leaves the cadence to the browser and deals in hours rather than a time; Push
+needs the server that is ruled out above.
+
+So the switch appears on Android and the browser is told plainly what it cannot
+do, rather than being given a switch that silently does nothing. What the
+browser gets instead is an export of the dose schedule as a calendar file, each
+dose an event carrying its own alarm. The reminding is done by the one piece of
+software on every device that is already good at it.
+
+Two details of that file are deliberate and look wrong at a glance. Every dose
+is written out rather than expressed as a recurrence rule, because RRULE cannot
+carry phases, weeks off, or a plan that ends, and encoding them would be a
+second implementation of the schedule and therefore a second answer. Times are
+floating local times with no timezone and no trailing Z, because that means
+seven o'clock wherever you are, which is what `schedule.ts` already means; UTC
+would drift every dose by an hour twice a year, and a TZID needs a VTIMEZONE
+block whose transition rules cannot be derived without shipping a timezone
+database.
+
+### Discreet by default
+
+A notification reading "BPC-157 250 mcg" sits on a lock screen in front of
+whoever is beside you. The default says "Bench" and "A dose is due" and nothing
+else. Naming the compound is one setting away and is the user's decision to
+make, not ours to make for them.
+
+The same setting governs the calendar export, where it matters more: a calendar
+that syncs to Google or Apple carries whatever is in the event title to them,
+which nothing else in this app does. The panel says so, in those words, and only
+when the setting is on.
+
 ## Health Connect is read only
 
 Originally it read weight and wrote it back. The user asked for the write path

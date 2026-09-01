@@ -128,6 +128,32 @@ Related: a reveal condition that requires the element to still be **in** view
 will strand anything the reader flew past between two events, via a fast flick,
 the End key, or an anchor jump. Test the top edge only.
 
+## Reminders
+
+- **The web has no way to raise a notification at a set time while it is
+  closed.** Do not spend an afternoon looking. Notification Triggers, the API
+  written for exactly this, was abandoned by Chrome before it shipped and is
+  filed under "no longer pursuing". Periodic Background Sync decides its own
+  cadence, in hours. Push needs a server. This is why reminders are an Android
+  feature and the browser is offered a calendar export instead.
+- **Never reconcile alarms one at a time.** Cancel every pending one and re-arm
+  the whole set from `remindersFor`. Editing a phase, pausing a protocol or
+  switching profile moves many doses at once, and incremental reconciliation is
+  how a notification survives for a dose that no longer exists.
+- **A dose logged early has to stop its own reminder.** Both the Today page and
+  the reminder list go through `unloggedDoseTimes` for this reason. If one of
+  them ever grows its own idea of what counts as covered, the phone will ask for
+  a dose that is already in the leg.
+- **In an `.ics` file, do not write UTC.** A dose at seven o'clock is seven
+  o'clock, and UTC pins it to an instant that drifts by an hour twice a year.
+  Floating local time, no `Z` and no `TZID`, is the correct form and matches how
+  `schedule.ts` reasons. A `TZID` without a `VTIMEZONE` block is not valid, and a
+  `VTIMEZONE` naming only today's offset is wrong in exactly the way this avoids.
+- **Do not take `USE_EXACT_ALARM`.** It is granted without asking, and Google
+  Play restricts it to apps whose whole purpose is alarms. Taking it to save one
+  tap makes the app unpublishable there. `SCHEDULE_EXACT_ALARM` is the
+  requestable form and is what the manifest declares.
+
 ## Cascade layers
 
 **An unlayered rule in `globals.css` beats every Tailwind utility, whatever the

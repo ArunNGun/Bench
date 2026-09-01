@@ -59,6 +59,30 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Dose reminders. Declared here as well as by the notifications plugin,
+      because a permission this app asks a person for should be readable in this
+      app's own manifest rather than only in a dependency's.
+
+      Nothing here reaches a network. The alarm is handed to Android's own
+      AlarmManager and raised on the device, which is why reminders are the one
+      thing the Android build can do and the browser cannot.
+
+      SCHEDULE_EXACT_ALARM is the requestable form, and it is the right one.
+      USE_EXACT_ALARM is granted without asking, but Google Play restricts it to
+      apps whose whole purpose is alarms, and taking it would make this app
+      unpublishable there for the sake of saving one tap. Where exact alarms are
+      refused, Android delivers the reminder late rather than not at all.
+
+      RECEIVE_BOOT_COMPLETED exists because Android forgets every pending alarm
+      when the phone restarts. Without it, reminders stop after a reboot and
+      nothing says so.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:node="remove" />
+
     <!-- This app reads and writes body weight and nothing else. The health
          plugin ships with every health permission declared; the rest are
          removed here so the app never asks for data it does not use. -->

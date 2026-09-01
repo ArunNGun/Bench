@@ -669,6 +669,47 @@ export interface Settings {
   dataChangedAt?: number;
   /** When the "nothing is backed up" reminder was last dismissed. */
   backupNagDismissedAt?: number;
+
+  /**
+   * Reminders for a scheduled dose.
+   *
+   * Off until someone turns it on, and the permission is only asked for at that
+   * moment rather than at startup. An app that asks on first launch teaches
+   * people to refuse, and this one has nothing to say until there is a plan.
+   *
+   * Absent means off, which is what every install has today. Nothing was
+   * migrated to add this.
+   */
+  reminders?: RemindersSettings;
+}
+
+/**
+ * How dose reminders behave.
+ *
+ * Scheduled on the device by the operating system. Nothing is sent anywhere, so
+ * this adds no network call and the privacy claim is untouched. See
+ * `document/05-decisions.md`.
+ */
+export interface RemindersSettings {
+  enabled: boolean;
+  /**
+   * Minutes before the scheduled time to fire. Zero means on the hour.
+   *
+   * Some people want the nudge while they are still near the fridge rather than
+   * at the moment the dose is already late.
+   */
+  leadMinutes: number;
+  /**
+   * Name the compound and the dose, or say only that something is due.
+   *
+   * Discreet by default, and deliberately. A notification reading "BPC-157
+   * 250 mcg" sits on a lock screen in front of whoever is next to you, and the
+   * rest of this app has been careful never to put that there. Someone who
+   * would rather see what is due can say so; nobody has it decided for them.
+   */
+  showCompound: boolean;
+  /** Days ahead the calendar export covers, for surfaces that cannot schedule. */
+  calendarDays: number;
 }
 
 export type LabCategory = "growth" | "metabolic" | "lipids" | "organ" | "blood" | "cardio";
@@ -848,6 +889,20 @@ export interface AppData {
   diluents: DiluentBottle[];
 }
 
+/**
+ * Off, discreet, and a quarter ahead.
+ *
+ * Ninety days for the calendar export is long enough not to be re-exported
+ * every week and short enough that a forgotten re-export clears itself within a
+ * quarter rather than haunting a calendar for a year.
+ */
+export const DEFAULT_REMINDERS: RemindersSettings = {
+  enabled: false,
+  leadMinutes: 0,
+  showCompound: false,
+  calendarDays: 90,
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   doseUnit: "mcg",
@@ -859,6 +914,7 @@ export const DEFAULT_SETTINGS: Settings = {
   backupEnabled: true,
   backupIntervalHours: 24,
   backupKeep: 10,
+  reminders: DEFAULT_REMINDERS,
 };
 
 export const DEFAULT_PROFILE_ID = "me";

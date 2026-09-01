@@ -53,6 +53,8 @@ No analytics, no telemetry, no error reporting beyond these two calls. Fonts are
 
 There is a third, and it is off unless you turn it on. Sync talks to a server address you enter yourself in Settings, and to nothing else. There is no hosted option and no default address, deliberately: this project does not want to be the custodian of anyone's dose history. What is sent is sealed in your browser first, with a key derived from your password, so the machine you point it at stores something it cannot read. Leave the field empty and no request is ever made. See [`server/`](server/README.md).
 
+Dose reminders add no fourth request. The alarm is handed to Android's own scheduler and raised on the device, offline, with the app closed. They are off until you switch them on, and by default the notification says only that a dose is due rather than naming the compound, because a lock screen is read by whoever is beside you. The calendar export is the one place that can carry anything off the device, and only if you choose to name the compound and to import the file into a calendar that syncs somewhere; the Settings panel says so at the moment that choice is made.
+
 Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
 
 The trade-off is stated plainly in the app: nobody can read your data, and nobody can recover it for you either.
