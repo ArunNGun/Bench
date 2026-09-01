@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { siteUsage } from "@/lib/calc/sites";
+import { SITE_DOTS, siteUsage } from "@/lib/calc/sites";
 import type { DoseLog, InjectionSite } from "@/lib/types";
 import { relativeTime } from "@/lib/format";
 
@@ -12,45 +12,11 @@ import { relativeTime } from "@/lib/format";
  * to a tighter viewBox so it fills the available space. Injection sites are
  * plotted as interactive dots shaded by recency: tangerine = recently used,
  * mint = suggested next, faint outline = rested/available.
+ *
+ * Where each dot goes is `SITE_DOTS` in calc/sites, next to the `BODY` bounds
+ * it has to stay inside. They were here once, drifted out of step with the
+ * figure below, and put the thigh dots on the shins. A test holds them now.
  */
-
-// ---------------------------------------------------------------------------
-// Site coordinates
-// Viewbox: 0 0 200 240  (body centred at x=100)
-// Body path reference points:
-//   head circle  cx=100 cy=22 r=15
-//   shoulders    y≈52, width ≈40 either side
-//   waist        y≈120
-//   hips         y≈148
-//   knee         y≈190
-//   ankle        y≈230
-// ---------------------------------------------------------------------------
-
-interface SiteMeta {
-  id: InjectionSite;
-  cx: number;
-  cy: number;
-  label: string;
-}
-
-const SITES: SiteMeta[] = [
-  // Abdomen — 2x3 grid around navel (cx=100 cy=108)
-  { id: "abdomen-ul", cx: 84,  cy: 98,  label: "Abdomen upper-left"  },
-  { id: "abdomen-um", cx: 100, cy: 96,  label: "Abdomen upper-mid"   },
-  { id: "abdomen-ur", cx: 116, cy: 98,  label: "Abdomen upper-right" },
-  { id: "abdomen-ll", cx: 84,  cy: 118, label: "Abdomen lower-left"  },
-  { id: "abdomen-lm", cx: 100, cy: 120, label: "Abdomen lower-mid"   },
-  { id: "abdomen-lr", cx: 116, cy: 118, label: "Abdomen lower-right" },
-  // Deltoids — on the shoulder bumps
-  { id: "arm-l",     cx: 68,  cy: 68,  label: "Left deltoid"  },
-  { id: "arm-r",     cx: 132, cy: 68,  label: "Right deltoid" },
-  // Glutes — just below the hip flare
-  { id: "glute-l",   cx: 82,  cy: 156, label: "Left glute"  },
-  { id: "glute-r",   cx: 118, cy: 156, label: "Right glute" },
-  // Thighs — mid-thigh
-  { id: "thigh-l",   cx: 84,  cy: 192, label: "Left thigh"  },
-  { id: "thigh-r",   cx: 116, cy: 192, label: "Right thigh" },
-];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -147,7 +113,7 @@ export function SiteMap({
         />
 
         {/* ── Injection site dots ── */}
-        {SITES.map((s) => {
+        {SITE_DOTS.map((s) => {
           const u = byId.get(s.id);
           const rested = u?.rested ?? 1;
           const fill = 1 - rested;           // 0 = fully rested, 1 = just used
