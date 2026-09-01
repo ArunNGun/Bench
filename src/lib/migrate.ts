@@ -23,6 +23,7 @@
 import {
   DATA_VERSION,
   DEFAULT_PROFILE,
+  DEFAULT_REMINDERS,
   DEFAULT_SETTINGS,
   type AppData,
   type CheckIn,
@@ -130,7 +131,16 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     checkIns: dedupeByDay(own(data.checkIns)),
     // Settings gain fields over time. Filling from defaults rather than leaving
     // them undefined keeps the UI from having to guess at every read site.
-    settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
+    //
+    // Reminders are filled a level deeper, because a spread stops at the top and
+    // a half-written block from an imported file would otherwise arrive with a
+    // lead time of undefined. A reminder is a thing that fires at an hour, so
+    // that field of all fields has to have a number in it.
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...(data.settings ?? {}),
+      reminders: { ...DEFAULT_REMINDERS, ...(data.settings?.reminders ?? {}) },
+    },
     customPeptides: data.customPeptides ?? [],
     // v7. Absent in every older payload, and an empty map behaves exactly as
     // the field not existing did, so nothing has to be backfilled.

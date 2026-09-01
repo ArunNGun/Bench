@@ -79,6 +79,35 @@ export async function writeBackup(name: string, json: string): Promise<string | 
   }
 }
 
+/**
+ * Write any file into the same folder, and return where it went.
+ *
+ * For things that are not backups but belong beside them, the calendar export
+ * in particular. A webview will not reliably hand a blob to a download manager,
+ * so on Android the file is written where a file manager can find it and the
+ * user is told the path rather than left wondering where it went. Null when
+ * there is no filesystem, which is every browser, and the caller falls back to
+ * an ordinary download there.
+ */
+export async function writeToDocuments(name: string, text: string): Promise<string | null> {
+  const fs = plugin();
+  if (!fs) return null;
+
+  try {
+    await ensureDir(fs);
+    await fs.writeFile({
+      path: `${BACKUP_DIR}/${name}`,
+      data: text,
+      directory: DIRECTORY,
+      encoding: ENCODING,
+      recursive: true,
+    });
+    return `Documents/${BACKUP_DIR}/${name}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Every backup in the folder, newest first. Empty when unavailable. */
 export async function readBackupList(): Promise<BackupFile[]> {
   const fs = plugin();

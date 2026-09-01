@@ -46,6 +46,7 @@ import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
 import { SyncPanel } from "@/components/SyncPanel";
+import { RemindersPanel } from "@/components/RemindersPanel";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
@@ -97,6 +98,8 @@ export default function SettingsPage() {
       {message && <Callout tone={message.tone}>{message.text}</Callout>}
 
       <Profiles />
+
+      <RemindersPanel />
 
       <HealthConnect />
 

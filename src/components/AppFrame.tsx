@@ -18,6 +18,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
+import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
 
@@ -63,6 +64,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh">
       <SystemBarsSync />
       <AutoBackup />
+      <ReminderRunner />
 
       {/*
         The padding pushes the content row clear of the status bar while the
