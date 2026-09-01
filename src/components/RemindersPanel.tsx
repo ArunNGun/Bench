@@ -12,6 +12,31 @@ import { writeToDocuments } from "@/lib/backup/store";
 import { DEFAULT_REMINDERS } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 
+/** How far ahead the calendar file reaches. */
+const CALENDAR_SPANS = [
+  { days: 7, label: "The next week" },
+  { days: 14, label: "The next two weeks" },
+  { days: 21, label: "The next three weeks" },
+  { days: 30, label: "The next month" },
+  { days: 60, label: "The next two months" },
+  { days: 90, label: "The next three months" },
+  { days: 180, label: "The next six months" },
+] as const;
+
+/**
+ * How early the nudge comes.
+ *
+ * One list, used by the Android reminder and by the alarm written into each
+ * calendar event, because it is one setting and offering different choices in
+ * the two places would suggest otherwise.
+ */
+const LEAD_OPTIONS = [
+  { minutes: 0, label: "At the dose time" },
+  { minutes: 15, label: "15 minutes before" },
+  { minutes: 30, label: "30 minutes before" },
+  { minutes: 60, label: "An hour before" },
+] as const;
+
 /**
  * Reminders, and the calendar export that stands in for them on the web.
  *
@@ -137,41 +162,23 @@ export function RemindersPanel() {
 
       {canSchedule && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Remind me" hint="At the dose time, or a little before it.">
-              <Select
-                value={reminders.enabled ? String(reminders.leadMinutes) : "off"}
-                onChange={(e) =>
-                  e.target.value === "off"
-                    ? setEnabled(false, reminders.leadMinutes)
-                    : setEnabled(true, Number(e.target.value))
-                }
-              >
-                <option value="off">Never</option>
-                <option value="0">At the dose time</option>
-                <option value="15">15 minutes before</option>
-                <option value="30">30 minutes before</option>
-                <option value="60">An hour before</option>
-              </Select>
-            </Field>
-
-            <Field
-              label="On the lock screen"
-              hint="Whoever is next to you can read a notification too."
+          <Field label="Remind me" hint="At the dose time, or a little before it.">
+            <Select
+              value={reminders.enabled ? String(reminders.leadMinutes) : "off"}
+              onChange={(e) =>
+                e.target.value === "off"
+                  ? setEnabled(false, reminders.leadMinutes)
+                  : setEnabled(true, Number(e.target.value))
+              }
             >
-              <Select
-                value={reminders.showCompound ? "named" : "discreet"}
-                onChange={(e) =>
-                  updateSettings({
-                    reminders: { ...reminders, showCompound: e.target.value === "named" },
-                  })
-                }
-              >
-                <option value="discreet">Say only that a dose is due</option>
-                <option value="named">Name the compound and dose</option>
-              </Select>
-            </Field>
-          </div>
+              <option value="off">Never</option>
+              {LEAD_OPTIONS.map((o) => (
+                <option key={o.minutes} value={o.minutes}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
           {reminders.enabled && (
             <p className="text-[12.5px] text-[var(--muted)]">
@@ -183,24 +190,73 @@ export function RemindersPanel() {
         </>
       )}
 
-      <div className="space-y-3 border-t border-[var(--line)] pt-4">
-        <Field
-          label="Send my doses to a calendar"
-          hint="Covers the next few months. Re-export after changing a plan."
+      {/*
+        Outside the Android block on purpose. This setting governs what the
+        calendar events say as much as what a notification says, and it was
+        briefly hidden in a browser, which is the surface where naming the
+        compound has the furthest to travel: an event title syncs to Google or
+        Apple, a lock screen does not.
+      */}
+      <Field
+        label="What it says"
+        hint="On a lock screen, and in the title of every calendar event."
+      >
+        <Select
+          value={reminders.showCompound ? "named" : "discreet"}
+          onChange={(e) =>
+            updateSettings({
+              reminders: { ...reminders, showCompound: e.target.value === "named" },
+            })
+          }
         >
-          <Select
-            value={String(reminders.calendarDays)}
-            onChange={(e) =>
-              updateSettings({
-                reminders: { ...reminders, calendarDays: Number(e.target.value) },
-              })
-            }
-          >
-            <option value="30">The next month</option>
-            <option value="90">The next three months</option>
-            <option value="180">The next six months</option>
-          </Select>
-        </Field>
+          <option value="discreet">Say only that a dose is due</option>
+          <option value="named">Name the compound and dose</option>
+        </Select>
+      </Field>
+
+      <div className="space-y-3 border-t border-[var(--line)] pt-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Send my doses to a calendar" hint="Re-export after changing a plan.">
+            <Select
+              value={String(reminders.calendarDays)}
+              onChange={(e) =>
+                updateSettings({
+                  reminders: { ...reminders, calendarDays: Number(e.target.value) },
+                })
+              }
+            >
+              {CALENDAR_SPANS.map((s) => (
+                <option key={s.days} value={s.days}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          {/*
+            The same lead time, under the name it goes by here. On Android it is
+            already set above and applies to both, so showing it twice would be
+            two controls for one value.
+          */}
+          {!canSchedule && (
+            <Field label="Alarm on each event" hint="Your calendar raises it, not this app.">
+              <Select
+                value={String(reminders.leadMinutes)}
+                onChange={(e) =>
+                  updateSettings({
+                    reminders: { ...reminders, leadMinutes: Number(e.target.value) },
+                  })
+                }
+              >
+                {LEAD_OPTIONS.map((o) => (
+                  <option key={o.minutes} value={o.minutes}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+        </div>
 
         <Button variant="primary" onClick={exportCalendar} disabled={busy}>
           <CalendarPlus size={15} /> {busy ? "Working…" : "Export doses to calendar"}

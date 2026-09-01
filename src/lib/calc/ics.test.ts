@@ -95,11 +95,23 @@ describe("which doses are in it", () => {
     // the wall clock under it and can let one more dose in. Ninety days from
     // January in a zone that springs forward is ninety-one events, and that is
     // the horizon behaving, not failing.
-    for (const days of [30, 90]) {
+    // Every span the Settings panel offers.
+    for (const days of [7, 14, 21, 30, 60, 90, 180]) {
       const count = calendarEventCount(build({ days }));
-      expect(count).toBeGreaterThanOrEqual(days);
-      expect(count).toBeLessThanOrEqual(days + 1);
+      expect(count, `${days} days`).toBeGreaterThanOrEqual(days);
+      expect(count, `${days} days`).toBeLessThanOrEqual(days + 1);
     }
+  });
+
+  it("reads the span from settings when the caller names none", () => {
+    const ics = buildCalendar({
+      protocols: [protocol()],
+      peptides,
+      settings: settings({ calendarDays: 14 }),
+      nowMs: NOW,
+    });
+    expect(calendarEventCount(ics)).toBeGreaterThanOrEqual(14);
+    expect(calendarEventCount(ics)).toBeLessThanOrEqual(15);
   });
 
   it("skips a paused protocol, one that has ended, and an as-needed one", () => {
