@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DAY, overusedSites, siteUsage, suggestSite } from "./sites";
+import { BODY, DAY, SITE_DOTS, overusedSites, siteUsage, suggestSite } from "./sites";
 import { INJECTION_SITES, type DoseLog, type InjectionSite } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
@@ -172,5 +172,119 @@ describe("suggestSite with a pinned set", () => {
   it("handles a single pinned site by always returning it", () => {
     const logs = [log("thigh-l", 0)];
     expect(suggestSite(logs, NOW, 14, ["thigh-l"])).toBe("thigh-l");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where the dots are drawn
+//
+// The figure was redrawn shorter and the coordinates were not, so the thighs
+// ended up on the shins, the glutes above the knees and one abdomen dot in the
+// gap between the legs. Nothing failed, because nothing was checking. These
+// bounds are the same numbers the body is drawn with, so redrawing it means
+// updating BODY, and that is what tells the next person the dots have moved.
+// ---------------------------------------------------------------------------
+
+const dot = (id: InjectionSite) => {
+  const found = SITE_DOTS.find((s) => s.id === id);
+  if (!found) throw new Error(`no dot for ${id}`);
+  return found;
+};
+
+describe("the site map", () => {
+  it("has a dot for every site the app offers, and none it does not", () => {
+    expect(SITE_DOTS.map((s) => s.id).sort()).toEqual(
+      INJECTION_SITES.map((s) => s.id).sort());
+  });
+
+  describe("abdomen", () => {
+    const abdomen = SITE_DOTS.filter((s) => s.id.startsWith("abdomen"));
+
+    it("sits on the torso, above the crotch", () => {
+      for (const s of abdomen) {
+        expect(s.cy, s.id).toBeGreaterThan(BODY.torsoTop);
+        expect(s.cy, s.id).toBeLessThan(BODY.crotchY);
+      }
+    });
+
+    it("stays between the sides of the torso", () => {
+      for (const s of abdomen) {
+        expect(s.cx, s.id).toBeGreaterThan(BODY.torsoLeft);
+        expect(s.cx, s.id).toBeLessThan(BODY.torsoRight);
+      }
+    });
+
+    it("never lands in the gap between the legs", () => {
+      for (const s of abdomen) {
+        const inGap = s.cx > BODY.gapLeft && s.cx < BODY.gapRight && s.cy >= BODY.crotchY;
+        expect(inGap, s.id).toBe(false);
+      }
+    });
+  });
+
+  describe("thighs and glutes", () => {
+    it("are both on the upper leg, not down on the shin", () => {
+      for (const id of ["thigh-l", "thigh-r", "glute-l", "glute-r"] as InjectionSite[]) {
+        expect(dot(id).cy, id).toBeGreaterThan(BODY.crotchY);
+        expect(dot(id).cy, id).toBeLessThan(BODY.kneeY);
+      }
+    });
+
+    it("puts the glute above the thigh, where a hip is", () => {
+      expect(dot("glute-l").cy).toBeLessThan(dot("thigh-l").cy);
+      expect(dot("glute-r").cy).toBeLessThan(dot("thigh-r").cy);
+    });
+
+    it("leaves enough room between them to tap one and not the other", () => {
+      // Dots are drawn at r=8, so anything tighter than a diameter overlaps.
+      expect(dot("thigh-l").cy - dot("glute-l").cy).toBeGreaterThanOrEqual(16);
+      expect(dot("thigh-r").cy - dot("glute-r").cy).toBeGreaterThanOrEqual(16);
+    });
+
+    it("stays out of the gap between the legs", () => {
+      for (const id of ["thigh-l", "glute-l"] as InjectionSite[]) {
+        expect(dot(id).cx, id).toBeLessThan(BODY.gapLeft);
+      }
+      for (const id of ["thigh-r", "glute-r"] as InjectionSite[]) {
+        expect(dot(id).cx, id).toBeGreaterThan(BODY.gapRight);
+      }
+    });
+  });
+
+  describe("deltoids", () => {
+    it("sit on the sleeve rather than below it", () => {
+      for (const id of ["arm-l", "arm-r"] as InjectionSite[]) {
+        expect(dot(id).cy, id).toBeGreaterThan(BODY.armTopY);
+        expect(dot(id).cy, id).toBeLessThan(BODY.armBottomY);
+      }
+    });
+
+    it("sit outside the torso, where an arm is", () => {
+      expect(dot("arm-l").cx).toBeLessThan(BODY.torsoLeft);
+      expect(dot("arm-r").cx).toBeGreaterThan(BODY.torsoRight);
+    });
+  });
+
+  it("mirrors left and right about the middle of the figure", () => {
+    const pairs: [InjectionSite, InjectionSite][] = [
+      ["abdomen-ul", "abdomen-ur"],
+      ["abdomen-ll", "abdomen-lr"],
+      ["arm-l", "arm-r"],
+      ["glute-l", "glute-r"],
+      ["thigh-l", "thigh-r"],
+    ];
+    for (const [l, r] of pairs) {
+      expect(dot(l).cx + dot(r).cx, `${l}/${r}`).toBe(200);
+      expect(dot(l).cy, `${l}/${r}`).toBe(dot(r).cy);
+    }
+  });
+
+  it("keeps every dot inside the viewBox it is drawn in", () => {
+    for (const s of SITE_DOTS) {
+      expect(s.cx, s.id).toBeGreaterThan(0);
+      expect(s.cx, s.id).toBeLessThan(200);
+      expect(s.cy, s.id).toBeGreaterThan(0);
+      expect(s.cy, s.id).toBeLessThan(240);
+    }
   });
 });
