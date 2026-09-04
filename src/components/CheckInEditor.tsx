@@ -2,6 +2,7 @@
 
 import { Moon } from "lucide-react";
 import { Textarea } from "./ui";
+import { HelpNote } from "./HelpNote";
 import { SYMPTOMS, SYMPTOM_SCALE_MAX, type SymptomId } from "@/lib/types";
 import { trim } from "@/lib/format";
 
@@ -37,14 +38,31 @@ export function CheckInEditor({
 }) {
   return (
     <div className="space-y-3">
-      {SYMPTOMS.map((s) => (
-        <div key={s.id}>
-          <div className="flex items-baseline justify-between">
+      {SYMPTOMS.map((s) => {
+        const header = (
+          <div className="flex flex-1 items-baseline justify-between">
             <span className="text-[13px] font-semibold text-[var(--ink)]">{s.label}</span>
             <span className="text-[11px] text-[var(--faint)]">
               {draft[s.id] ? `${s.low} to ${s.high}` : "not rated"}
             </span>
           </div>
+        );
+
+        return (
+        <div key={s.id}>
+          {/*
+            The question mark only appears where there is something to say.
+            Physical hunger and food noise are easy to confuse and each needs a
+            sentence; Energy and Sleep would gain nothing but an icon, and six
+            of those down one column is noise for its own sake.
+          */}
+          {s.hint ? (
+            <HelpNote label={s.label} control={header}>
+              {s.hint}
+            </HelpNote>
+          ) : (
+            header
+          )}
           <div className="mt-1.5 flex gap-1.5">
             {Array.from({ length: SYMPTOM_SCALE_MAX }, (_, i) => i + 1).map((n) => {
               const on = draft[s.id] === n;
@@ -75,7 +93,8 @@ export function CheckInEditor({
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {(vitals?.sleepHours != null || vitals?.restingHrBpm != null) && (
         <p className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">

@@ -97,6 +97,43 @@ that syncs to Google or Apple carries whatever is in the event title to them,
 which nothing else in this app does. The panel says so, in those words, and only
 when the setting is on.
 
+## A symptom id is never renamed
+
+Appetite became Physical hunger and food noise was added beside it. The id
+stayed `appetite`.
+
+That is the whole decision. Every rating anyone has ever saved is keyed by these
+ids, and every screen draws only what `SYMPTOMS` mentions, so an id that stops
+appearing in that list takes a year of ratings off every screen while leaving
+them in the file. Present and invisible is the failure this project already has
+a migration and a trap entry about.
+
+What the axis asks about did not change, only what it is called, so the history
+carries forward meaning what it always meant. A rename that did change the
+question would need a new id and the old one kept as something the app reads
+back but no longer offers, which does not exist yet and should be built the day
+it is actually needed.
+
+`src/lib/calc/checkins.test.ts` asserts the id and its label, so the promise is
+held by a test rather than by whoever remembers this page.
+
+### Three directions, not two
+
+`higherIsBetter` was a flag with two states standing in for three. Food noise is
+the first axis whose good end is the bottom: five is a day spent thinking about
+food, and nobody on any protocol is aiming for more of that.
+
+`ratingTone` read a missing flag and a false one as the same thing, so writing
+`false` would have produced no colour rather than an inverted one. Worse,
+`lowestRatedTone` marks a day by its lowest rating, which for a downward axis is
+its best moment: a day entirely preoccupied with food would have been painted
+green. Both now turn a rating into a score, where five is always the good end,
+and compare those.
+
+Physical hunger keeps no direction at all, and that is deliberate and unchanged:
+suppressed hunger is the point of a GLP-1 and a problem on a bulk, so the app
+charts it and declines to judge. Food noise is not that kind of question.
+
 ## Health Connect is read only
 
 Originally it read weight and wrote it back. The user asked for the write path

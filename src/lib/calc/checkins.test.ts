@@ -11,7 +11,7 @@ import {
   streak,
 } from "./checkins";
 import { startOfLocalDay, addLocalDays } from "./schedule";
-import type { CheckIn, SymptomId } from "../types";
+import { SYMPTOMS, type CheckIn, type SymptomId } from "../types";
 
 const NOW = new Date(2026, 6, 30, 14, 30).getTime();
 const TODAY = startOfLocalDay(NOW);
@@ -56,7 +56,9 @@ describe("averages", () => {
   });
 
   it("returns a row per symptom even with no data at all", () => {
-    expect(averages([])).toHaveLength(6);
+    // Counted from the library rather than written out, so adding an axis is
+    // one edit rather than a hunt through the tests for the number six.
+    expect(averages([])).toHaveLength(SYMPTOMS.length);
     expect(averages([]).every((r) => r.mean === null)).toBe(true);
   });
 
@@ -298,5 +300,46 @@ describe("ratableDay", () => {
     // Clamping looks kinder and would overwrite the rating already given for
     // today with one meant for a day that has not happened.
     expect(ratableDay(day(11), NOW)).not.toBe(day(10));
+  });
+});
+
+describe("the axes themselves", () => {
+  it("keeps the appetite id, whatever the label says", () => {
+    /*
+     * The promise that made this split cheap. Every rating anyone has ever
+     * saved is keyed by these ids, and the screens draw only what this list
+     * mentions, so renaming the id would leave a year of ratings in the data
+     * and on no screen. What the axis asks about did not change, only its name.
+     */
+    const hunger = SYMPTOMS.find((s) => s.id === "appetite");
+    expect(hunger).toBeDefined();
+    expect(hunger!.label).toBe("Physical hunger");
+  });
+
+  it("rates food noise the other way up", () => {
+    const noise = SYMPTOMS.find((s) => s.id === "foodNoise")!;
+    expect(noise.higherIsBetter).toBe(false);
+    // Not undefined. The two are different answers now, and this axis is the
+    // reason they are.
+    expect(noise.higherIsBetter).not.toBeUndefined();
+  });
+
+  it("puts food noise directly after the hunger it is easily confused with", () => {
+    const ids = SYMPTOMS.map((s) => s.id);
+    expect(ids.indexOf("foodNoise")).toBe(ids.indexOf("appetite") + 1);
+  });
+
+  it("explains the two axes that need explaining, and no others", () => {
+    const withHint = SYMPTOMS.filter((s) => s.hint).map((s) => s.id);
+    expect(withHint.sort()).toEqual(["appetite", "foodNoise"]);
+  });
+
+  it("reads back an old rating unchanged", () => {
+    // A check-in saved before the split, carrying only appetite. It still
+    // averages, and it still counts as a rated day.
+    const rows = averages([checkIn(0, { appetite: 4 })]);
+    expect(rows.find((r) => r.id === "appetite")!.mean).toBe(4);
+    expect(rows.find((r) => r.id === "foodNoise")!.mean).toBeNull();
+    expect(streak([checkIn(0, { appetite: 4 })], NOW).current).toBe(1);
   });
 });
