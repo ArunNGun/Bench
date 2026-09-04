@@ -63,6 +63,7 @@ compute doses.**
 | `pct.ts` | When suppressive compounds clear, and published recovery protocols. Refuses to give a date where the half-life is unknown |
 | `project.ts` | What a protocol will do before it runs: accumulation, time to steady state, peak to trough swing |
 | `healthsync.ts` | Plans a read from Health Connect, and aggregates sleep and resting heart rate. Has no write path, by design and by test |
+| `rescue.ts` | Which collections lost rows, whether that looks like an accident, and how to union them back |
 | `reminders.ts` | Which dose reminders should be armed, and what each one says. Shares `unloggedDoseTimes` with the Today page so the two cannot disagree |
 | `ics.ts` | The dose schedule as a calendar file, for the surfaces that cannot raise an alarm of their own |
 

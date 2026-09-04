@@ -47,6 +47,7 @@ import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
 import { SyncPanel } from "@/components/SyncPanel";
 import { RemindersPanel } from "@/components/RemindersPanel";
+import { RescueNotice } from "@/components/RescueNotice";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
@@ -96,6 +97,12 @@ export default function SettingsPage() {
       </header>
 
       {message && <Callout tone={message.tone}>{message.text}</Callout>}
+
+      {/*
+        First, and above everything else on the page. If records have gone
+        missing, that is the most important thing this screen has to say.
+      */}
+      <RescueNotice />
 
       <Profiles />
 

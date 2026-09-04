@@ -97,6 +97,46 @@ that syncs to Google or Apple carries whatever is in the event title to them,
 which nothing else in this app does. The panel says so, in those words, and only
 when the setting is on.
 
+## A write that destroys records keeps a copy
+
+Twice a collection has emptied itself with nobody doing anything. Both times it
+was three bottles of water, both times it was found days later by accident, and
+both times the rows were recoverable only because an export happened to exist
+from before it happened. The second time, the only surviving copy was a file the
+user had saved for an unrelated reason.
+
+The cause of the second one is still not known, which is exactly why this exists.
+Archaeology after the fact depends on luck. The app had no opinion about a write
+that destroys records, so a write that emptied a whole collection went through as
+quietly as one that added a dose, and the only witness was a file.
+
+So the storage layer now compares what is about to be written against what it
+last wrote, and when a collection has emptied or lost most of itself, it sets the
+previous document aside under a second key before letting the write through.
+
+Three choices inside that are worth defending.
+
+**It does not refuse the write.** Deleting your own records is allowed, and this
+layer cannot tell a deletion that was meant from one that was not. Refusing would
+mean the app arguing with someone emptying their own fridge. Keeping a copy costs
+nothing and decides nothing.
+
+**The bar is high, deliberately.** A collection going to nothing, or losing more
+than half of itself in one write, with lists of two or three exempted because on
+a short list any single deletion is a large fraction. Deleting one dose, one
+vial, one protocol stays silent. A warning that fires on ordinary editing is a
+warning that gets ignored, which would leave the app worse off than it was.
+
+**Putting rows back is a union, not a restore.** Days can pass before anyone
+notices, and replacing the document wholesale would trade one silent loss for
+another. Only the collections that shrank are touched, only rows the live
+document does not already have are added, and where both sides have a row the
+live one wins, because a bottle drawn down since is the more current of the two.
+
+The copy lives under its own key rather than inside the document. Inside, it
+would ride along in every export and every sync payload, and a copy of your data
+folded into your data grows without anyone deciding that it should.
+
 ## A symptom id is never renamed
 
 Appetite became Physical hunger and food noise was added beside it. The id

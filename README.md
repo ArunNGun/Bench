@@ -55,7 +55,7 @@ There is a third, and it is off unless you turn it on. Sync talks to a server ad
 
 Dose reminders add no fourth request. The alarm is handed to Android's own scheduler and raised on the device, offline, with the app closed. They are off until you switch them on, and by default the notification says only that a dose is due rather than naming the compound, because a lock screen is read by whoever is beside you. The calendar export is the one place that can carry anything off the device, and only if you choose to name the compound and to import the file into a calendar that syncs somewhere; the Settings panel says so at the moment that choice is made.
 
-Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
+Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). A second key, `peptide-log-v1:rescue`, holds a copy of the previous document whenever a save would empty a whole collection, so a loss can be undone rather than discovered months later. It never leaves the device either, it is not part of an export, and Settings offers to put the rows back or to throw the copy away. Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
 
 The trade-off is stated plainly in the app: nobody can read your data, and nobody can recover it for you either.
 

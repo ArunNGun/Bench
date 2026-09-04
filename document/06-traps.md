@@ -128,6 +128,23 @@ Related: a reveal condition that requires the element to still be **in** view
 will strand anything the reader flew past between two events, via a fast flick,
 the End key, or an anchor jump. Test the top edge only.
 
+## Records that vanish
+
+- **A collection emptying itself is a real failure mode here, not a
+  hypothesis.** It has happened twice, both times to the same three bottles of
+  water, both times found days later by accident. The first cause was an older
+  build naming the fields it wrote; the second is still unknown.
+- **The storage layer keeps a copy** when a write empties a collection or takes
+  most of it. Settings shows it and offers the rows back. If you are chasing a
+  loss, look there first: the previous document may still be sitting under
+  `peptide-log-v1:rescue`.
+- **Do not raise the bar by lowering the threshold.** The check has to stay
+  quiet for ordinary deleting, or it becomes noise and gets dismissed by habit,
+  which is worse than not having it.
+- **Putting rows back is a union.** Never restore the whole document from the
+  copy: days of doses can sit between the loss and the repair, and a wholesale
+  restore trades one silent loss for another.
+
 ## Reminders
 
 - **The web has no way to raise a notification at a set time while it is
