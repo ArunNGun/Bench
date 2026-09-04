@@ -1,4 +1,5 @@
 import type { Tone } from "@/components/ui";
+import { SYMPTOM_SCALE_MAX } from "../types";
 
 /**
  * Rough reads red, great reads green.
@@ -31,8 +32,24 @@ export const FEELING_TONE: Record<number, Tone> = {
  * says only the number.
  */
 export function ratingTone(rating: number, higherIsBetter?: boolean): Tone {
-  if (!higherIsBetter) return "neutral";
-  return FEELING_TONE[rating] ?? "neutral";
+  if (higherIsBetter == null) return "neutral";
+  return FEELING_TONE[scoreOf(rating, higherIsBetter)] ?? "neutral";
+}
+
+/**
+ * The rating turned so that five is always the good end.
+ *
+ * Colours are keyed to a score, not to a number typed by a person, and until
+ * food noise arrived those were the same thing. They are not: a five there is a
+ * day spent thinking about food. Flipping here rather than in the colour table
+ * keeps one mapping from score to colour and puts the only place that knows
+ * which way an axis runs next to the flag that says so.
+ *
+ * `!higherIsBetter` used to stand in for "no direction", which quietly made
+ * `false` and absent the same answer. They are not the same answer either.
+ */
+export function scoreOf(rating: number, higherIsBetter: boolean): number {
+  return higherIsBetter ? rating : SYMPTOM_SCALE_MAX + 1 - rating;
 }
 
 /**
@@ -46,9 +63,19 @@ export function ratingTone(rating: number, higherIsBetter?: boolean): Tone {
  */
 export function lowestRatedTone(
   ratings: { rating: number; higherIsBetter?: boolean }[]): Tone | null {
-  const directional = ratings.filter((r) => r.higherIsBetter);
-  if (!directional.length) return null;
+  /*
+   * Compared as scores rather than as the numbers on screen.
+   *
+   * "Lowest" was the worst while every directional axis ran the same way. Food
+   * noise runs the other way, so its worst day is a five, and taking the lowest
+   * number would have marked a day spent entirely preoccupied with food as the
+   * best thing about it. Turning each rating to a score first makes one
+   * comparison correct for both directions.
+   */
+  const scored = ratings
+    .filter((r) => r.higherIsBetter != null)
+    .map((r) => scoreOf(r.rating, r.higherIsBetter!));
+  if (!scored.length) return null;
 
-  const worst = directional.reduce((a, b) => (b.rating < a.rating ? b : a));
-  return FEELING_TONE[worst.rating] ?? null;
+  return FEELING_TONE[Math.min(...scored)] ?? null;
 }

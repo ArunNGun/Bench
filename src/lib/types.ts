@@ -411,7 +411,23 @@ export type MeasurementSource = "manual" | "health-connect";
  * deliberate ceiling: a daily form long enough to feel like work stops being
  * filled in, and a half-filled record is worse than none.
  */
-export type SymptomId = "energy" | "mood" | "libido" | "sleep" | "recovery" | "appetite";
+/**
+ * `appetite` is labelled Physical hunger and always will be.
+ *
+ * The id is deliberately not renamed. It keys every rating anyone has ever
+ * saved, and a year of them would go unreadable the moment the list they are
+ * drawn from stopped mentioning it. What the axis asks about did not change,
+ * only what it is called, so the history carries forward meaning what it always
+ * meant. See `document/05-decisions.md`.
+ */
+export type SymptomId =
+  | "energy"
+  | "mood"
+  | "libido"
+  | "sleep"
+  | "recovery"
+  | "appetite"
+  | "foodNoise";
 
 export interface SymptomDef {
   id: SymptomId;
@@ -420,11 +436,26 @@ export interface SymptomDef {
   high: string;
   low: string;
   /**
-   * Whether a higher rating is a better outcome. Absent where the direction
-   * depends on what you are running: suppressed appetite is the point of a
-   * GLP-1 and a problem on a bulk, so the app charts it and declines to judge.
+   * Which end of the scale is the good one. Three states, and all three are
+   * used:
+   *
+   * - `true`, a five is what you want. Energy, mood, sleep.
+   * - `false`, a one is. Food noise, where five is a day spent thinking about
+   *   food and nobody on any protocol is aiming for that.
+   * - absent, no opinion. Physical hunger, where the direction depends on what
+   *   you are running: suppressed hunger is the point of a GLP-1 and a problem
+   *   on a bulk, so the app charts it and declines to judge.
+   *
+   * The middle case arrived with food noise and is the reason `ratingTone` and
+   * `lowestRatedTone` had to learn that `false` is not the same as absent.
    */
   higherIsBetter?: boolean;
+  /**
+   * What the axis is actually asking, for the axes where that is not obvious
+   * from a one-word label. Optional: an axis with nothing to explain shows no
+   * question mark rather than an empty one.
+   */
+  hint?: string;
 }
 
 export const SYMPTOMS: SymptomDef[] = [
@@ -433,7 +464,21 @@ export const SYMPTOMS: SymptomDef[] = [
   { id: "libido", label: "Libido", low: "Absent", high: "High", higherIsBetter: true },
   { id: "sleep", label: "Sleep", low: "Broken", high: "Deep", higherIsBetter: true },
   { id: "recovery", label: "Recovery", low: "Sore", high: "Fresh", higherIsBetter: true },
-  { id: "appetite", label: "Appetite", low: "None", high: "Ravenous" },
+  {
+    id: "appetite",
+    label: "Physical hunger",
+    low: "None",
+    high: "Ravenous",
+    hint: "What your body is telling you: an empty or growling stomach, flagging energy from not eating, a real need to eat, and whether a meal actually left you satisfied. Not what your head is doing about food, which is the next one.",
+  },
+  {
+    id: "foodNoise",
+    label: "Food noise",
+    low: "Quiet",
+    high: "Constant",
+    higherIsBetter: false,
+    hint: "How much of the day food occupied your thoughts: planning the next meal shortly after finishing one, cravings with no hunger behind them, food you could not ignore, the pull to snack when you were not hungry. These two move apart, which is the point of rating them apart: a GLP-1 can quieten the head while the stomach still behaves normally.",
+  },
 ];
 
 export const SYMPTOM_SCALE_MAX = 5;

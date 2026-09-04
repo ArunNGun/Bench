@@ -34,7 +34,7 @@ Most trackers in this space either want an account or get the arithmetic wrong. 
 | **Calculator** | Reconstitution and dose ↔ units for U-100 and U-40 |
 | **Bloodwork** | 16 markers charted against dose history, with prompts for what your compounds make worth watching |
 | **Outcomes** | Weight, waist, body fat, plus sleep and resting heart rate read from Android Health |
-| **Check-ins** | A daily rating for energy, mood, libido, sleep, recovery and appetite, compared either side of a protocol change |
+| **Check-ins** | A daily rating for energy, mood, libido, sleep, recovery, physical hunger and food noise, compared either side of a protocol change. Hunger and food noise are rated apart because they move apart: a GLP-1 can quieten the head while the stomach behaves normally |
 | **Safety** | Interaction checks across compounds running at the same time |
 | **Projection** | What a protocol will do before you run it: time to steady state, accumulation, peak to trough |
 | **Recovery** | When suppressive compounds clear, from ester half-lives, with cited protocols. No date is given where no human half-life exists |
@@ -48,7 +48,7 @@ Compounds the library does not carry can be added yourself, from any compound pi
 There is no backend for your data. Lab report PDFs are parsed on the device, never uploaded. The application makes two network requests in total:
 
 1. A startup check of `/version.json` to notice a new deploy.
-2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)) — the raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
+2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)). The raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
 
 No analytics, no telemetry, no error reporting beyond these two calls. Fonts are self-hosted at build time, so the browser never contacts a third party.
 
