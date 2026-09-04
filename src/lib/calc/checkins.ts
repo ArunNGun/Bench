@@ -174,6 +174,24 @@ export function series(
     .sort((a, b) => a.at - b.at);
 }
 
+/**
+ * The day a rating would belong to, or null when that day has not happened.
+ *
+ * A rating is a report of a day that was lived. While the only way to give one
+ * was the card on Today, that was true by construction. Once any day became
+ * reachable, the day became whatever a date field held, and a date field holds
+ * tomorrow the moment somebody types a four in the wrong box.
+ *
+ * Refusing beats clamping to today, which looks kinder and would silently
+ * overwrite the rating already given for today with one meant for a day that
+ * has not arrived. Lives here rather than in the store or the screen so that
+ * both ask the same question and a third caller cannot invent its own answer.
+ */
+export function ratableDay(at: number, nowMs = Date.now()): number | null {
+  const day = startOfLocalDay(at);
+  return day > startOfLocalDay(nowMs) ? null : day;
+}
+
 export interface DiaryDay<T> {
   /** Local midnight of the day. */
   day: number;

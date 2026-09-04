@@ -28,6 +28,7 @@ import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
 import { startOfLocalDay } from "./calc/schedule";
+import { ratableDay } from "./calc/checkins";
 import {
   diluentAfterTopUp,
   drawFromVial,
@@ -104,7 +105,11 @@ interface StoreState extends AppData {
 
   /**
    * Record how a day went. Upserts on the local day, so re-rating an evening
-   * after rating the morning corrects the entry rather than adding a second.
+   * after rating the morning corrects the entry rather than adding a second,
+   * and so correcting a day from the Log edits it rather than adding a second.
+   *
+   * Returns the id, or an empty string for a day that has not happened, which
+   * is the one input it refuses. See `ratableDay`.
    */
   saveCheckIn: (at: number, ratings: CheckIn["ratings"], notes?: string) => string;
   removeCheckIn: (id: string) => void;
@@ -389,7 +394,10 @@ export const useStore = create<StoreState>()(
       removeLab: (id) => set((s) => ({ labs: s.labs.filter((x) => x.id !== id) })),
 
       saveCheckIn: (at, ratings, notes) => {
-        const day = startOfLocalDay(at);
+        // A day that has not happened cannot be reported on. The rule and its
+        // reasoning live in calc so the screens ask the same question.
+        const day = ratableDay(at);
+        if (day == null) return "";
         const existing = get().checkIns.find(
           (c) => c.profileId === get().activeProfileId && c.at === day);
         const id = existing?.id ?? nanoid();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { CalendarPlus, Pencil, Plus } from "lucide-react";
 import {
   Badge,
   Button,
@@ -14,13 +14,14 @@ import {
   TONE_FG,
 } from "@/components/ui";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
+import { CheckInSheet } from "@/components/CheckInSheet";
 import { SiteMap } from "@/components/SiteMap";
 import { findPeptide, useStore, useProfileData } from "@/lib/store";
 import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
-import { diaryDays } from "@/lib/calc/checkins";
+import { diaryDays, ratableDay } from "@/lib/calc/checkins";
 import { overusedSites } from "@/lib/calc/sites";
-import { formatDate, formatDose, formatDateTime, formatTime, percent, trim } from "@/lib/format";
+import { formatDate, formatDose, formatDateTime, formatTime, percent, toDateInput, fromDateInput, trim } from "@/lib/format";
 import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
 import {
   FEELING_LABELS,
@@ -49,6 +50,8 @@ export default function LogPage() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | undefined>();
   const [filter, setFilter] = useState("");
+  /** The day whose rating is being edited, or null when the sheet is shut. */
+  const [ratingDay, setRatingDay] = useState<number | null>(null);
 
   const now = Date.now();
   const shown = useMemo(
@@ -160,16 +163,53 @@ export default function LogPage() {
         </Card>
       )}
 
-      {peptideIds.length > 1 && (
-        <Select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter by peptide">
-          <option value="">All peptides</option>
-          {peptideIds.map((id) => (
-            <option key={id} value={id}>
-              {findPeptide(custom, id)?.name ?? id}
-            </option>
-          ))}
-        </Select>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {peptideIds.length > 1 && (
+          <Select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter by peptide"
+            className="flex-1"
+          >
+            <option value="">All peptides</option>
+            {peptideIds.map((id) => (
+              <option key={id} value={id}>
+                {findPeptide(custom, id)?.name ?? id}
+              </option>
+            ))}
+          </Select>
+        )}
+
+        {/*
+          A day with no dose and no rating is not in the list, so there is
+          nothing to tap. Filling in the gaps instead was the other option and
+          would have buried anyone injecting weekly under six blank rows a week.
+          A date field reaches any day and costs one line.
+
+          Bounded at today by the input and again by the store, because `max` on
+          a date field is a hint to a picker and not a rule about what can be
+          typed.
+        */}
+        <label className="ml-auto flex items-center gap-2 text-[12.5px] text-[var(--muted)]">
+          <CalendarPlus size={15} className="shrink-0" />
+          <span className="whitespace-nowrap">Rate another day</span>
+          <input
+            type="date"
+            max={toDateInput(now)}
+            value=""
+            onChange={(e) => {
+              // Cleared rather than picked. `fromDateInput` answers "now" for
+              // anything it cannot read, which would open today's sheet on a
+              // field being emptied.
+              if (!e.target.value) return;
+              const day = ratableDay(fromDateInput(e.target.value), now);
+              if (day != null) setRatingDay(day);
+            }}
+            aria-label="Rate a day by date"
+            className="rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-2.5 py-1.5 text-[13px] text-[var(--ink)]"
+          />
+        </label>
+      </div>
 
       {!grouped.length ? (
         <EmptyState
@@ -309,9 +349,19 @@ export default function LogPage() {
                   harder to read for the sake of a line of text. Loud enough to
                   find, which is the whole complaint it answers.
                 */}
-                {checkIn && (
+                {checkIn ? (
                   <div
-                    className="rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2.5"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Edit how ${formatDate(day)} went`}
+                    onClick={() => setRatingDay(day)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setRatingDay(day);
+                      }
+                    }}
+                    className="press group cursor-pointer rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2.5 hover:border-[var(--faint)]"
                     style={tone ? { borderLeft: `3px solid ${TONE_FG[tone]}` } : undefined}
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -323,6 +373,11 @@ export default function LogPage() {
                           {s.label} {checkIn.ratings[s.id]}/{SYMPTOM_SCALE_MAX}
                         </Badge>
                       ))}
+                      <Pencil
+                        size={12}
+                        strokeWidth={2.4}
+                        className="ml-auto text-[var(--faint)] group-hover:text-[var(--muted)]"
+                      />
                     </div>
                     {checkIn.notes && (
                       <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--ink)]">
@@ -330,6 +385,20 @@ export default function LogPage() {
                       </p>
                     )}
                   </div>
+                ) : (
+                  /*
+                    A day with doses and no rating. Quiet enough to ignore while
+                    reading the log, and there because the alternative is asking
+                    someone to remember that a day can be rated at all once it is
+                    no longer today.
+                  */
+                  <button
+                    type="button"
+                    onClick={() => setRatingDay(day)}
+                    className="press w-full rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2 text-left text-[12px] text-[var(--faint)] hover:border-[var(--faint)] hover:text-[var(--muted)]"
+                  >
+                    Rate how this day went
+                  </button>
                 )}
               </div>
             </section>
@@ -337,6 +406,8 @@ export default function LogPage() {
           })}
         </div>
       )}
+
+      <CheckInSheet dayMs={ratingDay} onClose={() => setRatingDay(null)} />
 
       <LogDoseSheet
         open={open}

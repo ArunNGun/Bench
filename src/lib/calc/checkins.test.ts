@@ -5,6 +5,7 @@ import {
   diaryDays,
   inWindow,
   isTrendworthy,
+  ratableDay,
   series,
   shiftAround,
   streak,
@@ -258,5 +259,44 @@ describe("diaryDays", () => {
 
   it("is empty when there is nothing at all", () => {
     expect(diaryDays([], [])).toEqual([]);
+  });
+});
+
+describe("ratableDay", () => {
+  const NOW = new Date(2026, 5, 10, 14, 0, 0).getTime();
+  const day = (d: number, h = 0) => new Date(2026, 5, d, h, 0, 0).getTime();
+
+  it("gives back the local day a moment falls in", () => {
+    expect(ratableDay(day(8, 23), NOW)).toBe(day(8));
+    expect(ratableDay(day(8, 0), NOW)).toBe(day(8));
+  });
+
+  it("allows today, whatever the hour", () => {
+    expect(ratableDay(day(10, 0), NOW)).toBe(day(10));
+    expect(ratableDay(day(10, 23), NOW)).toBe(day(10));
+    // A rating given at two in the afternoon is about today, not half of it.
+    expect(ratableDay(NOW, NOW)).toBe(day(10));
+  });
+
+  it("allows any day in the past, however far back", () => {
+    // Deliberately unbounded. A day five years ago is still a day that was
+    // lived, and an arbitrary limit would only ever be somebody's guess.
+    expect(ratableDay(new Date(2021, 0, 1).getTime(), NOW)).toBe(
+      new Date(2021, 0, 1).getTime());
+  });
+
+  it("refuses tomorrow", () => {
+    expect(ratableDay(day(11), NOW)).toBeNull();
+    expect(ratableDay(day(11, 23), NOW)).toBeNull();
+  });
+
+  it("refuses a day far in the future, which is what a mistyped year looks like", () => {
+    expect(ratableDay(new Date(2062, 5, 10).getTime(), NOW)).toBeNull();
+  });
+
+  it("does not clamp a refused day onto today", () => {
+    // Clamping looks kinder and would overwrite the rating already given for
+    // today with one meant for a day that has not happened.
+    expect(ratableDay(day(11), NOW)).not.toBe(day(10));
   });
 });
