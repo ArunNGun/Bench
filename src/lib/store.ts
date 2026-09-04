@@ -24,6 +24,7 @@ import {
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged, documentFrom } from "./calc/document";
 import { withoutProfile } from "./calc/profiles";
+import { alarmingLosses, countRecords, restoreLost, type Rescue } from "./calc/rescue";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
@@ -61,17 +62,100 @@ import {
  */
 const hasIndexedDB = () => typeof globalThis !== "undefined" && "indexedDB" in globalThis;
 
+export const STORAGE_KEY = "peptide-log-v1";
+
+/**
+ * Where a copy is kept when a write destroys records.
+ *
+ * A second key rather than a field in the document. Inside, it would ride along
+ * in every export and every sync payload, and a copy of your data folded into
+ * your data grows without anybody deciding that it should.
+ */
+export const RESCUE_KEY = `${STORAGE_KEY}:rescue`;
+
+/**
+ * The last document this device wrote, so the next write has something to
+ * compare against. Held in memory only: the point of comparison is the write
+ * before this one, and after a reload the stored copy serves that purpose.
+ */
+let lastWritten: AppData | null = null;
+
+/**
+ * Read the state out of what the persist middleware is about to store.
+ *
+ * The middleware hands this layer a string, because it has already serialised.
+ * Parsing it back is the price of standing at the one point every write passes
+ * through, which is worth paying: a check anywhere higher can be bypassed by
+ * the next screen that writes without knowing about it.
+ */
+function documentIn(serialised: string): AppData | null {
+  try {
+    return (JSON.parse(serialised) as { state?: AppData }).state ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep a copy of what is about to be lost.
+ *
+ * Never blocks the write. Refusing would fight legitimate deletion, and a
+ * person is entitled to delete their own records; deciding which deletions are
+ * meant is not something this layer can know. So the write goes through and the
+ * previous document is set aside, which turns a silent loss into an offer.
+ *
+ * Written before the document it is protecting, so a failure between the two
+ * leaves the copy rather than losing both.
+ */
+async function keepRescue(previous: AppData, next: AppData) {
+  const lost = alarmingLosses(countRecords(previous), countRecords(next));
+  if (!lost.length) return;
+
+  const rescue: Rescue = { at: Date.now(), losses: lost, document: previous };
+  try {
+    await idbSet(RESCUE_KEY, JSON.stringify(rescue));
+  } catch {
+    // A rescue copy that cannot be written must not take the write with it.
+  }
+}
+
 const idbStorage: StateStorage = {
-  getItem: async (name) => (hasIndexedDB() ? ((await idbGet(name)) ?? null) : null),
+  getItem: async (name) => {
+    if (!hasIndexedDB()) return null;
+    const raw = (await idbGet(name)) ?? null;
+    // What was read is the baseline for the first write of this session.
+    if (typeof raw === "string") lastWritten = documentIn(raw);
+    return raw;
+  },
   setItem: async (name, value) => {
-    if (hasIndexedDB()) await idbSet(name, value);
+    if (!hasIndexedDB()) return;
+
+    const next = documentIn(value);
+    if (next && lastWritten) await keepRescue(lastWritten, next);
+    if (next) lastWritten = next;
+
+    await idbSet(name, value);
   },
   removeItem: async (name) => {
     if (hasIndexedDB()) await idbDel(name);
   },
 };
 
-export const STORAGE_KEY = "peptide-log-v1";
+/** The set-aside copy, if a write has destroyed records since it was cleared. */
+export async function readRescue(): Promise<Rescue | null> {
+  if (!hasIndexedDB()) return null;
+  try {
+    const raw = await idbGet(RESCUE_KEY);
+    return typeof raw === "string" ? (JSON.parse(raw) as Rescue) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Forget the copy, for when the loss was meant. */
+export async function clearRescue(): Promise<void> {
+  if (hasIndexedDB()) await idbDel(RESCUE_KEY);
+}
 
 // Re-exported so existing importers keep working; it is defined alongside the
 // migration that has to agree with it.
@@ -218,6 +302,15 @@ interface StoreState extends AppData {
   }) => { logs: number; measurements: number };
   exportData: () => AppData;
   resetAll: () => void;
+  /**
+   * Union the rows of a rescue copy back in.
+   *
+   * Not a restore of the whole document. Days may have passed between the loss
+   * and someone noticing it, and replacing wholesale would trade one silent
+   * loss for another. Only the collections that shrank are touched, and only
+   * rows the live document does not already have.
+   */
+  putRecordsBack: (rescue: Rescue) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -631,6 +724,10 @@ export const useStore = create<StoreState>()(
         return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
+
+      putRecordsBack: (rescue) => {
+        set((s) => restoreLost(documentFrom(s), rescue));
+      },
     }),
     {
       name: STORAGE_KEY,
