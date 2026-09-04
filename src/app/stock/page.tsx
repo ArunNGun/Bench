@@ -33,7 +33,7 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { dosesPerDoseDay, phaseSpanAt, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle } from "@/lib/calc/diluent";
+import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle, shelfOrder } from "@/lib/calc/diluent";
 import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, formatDosePerDay, trim } from "@/lib/format";
 import {
@@ -879,7 +879,7 @@ function ReconstituteForm({
   const conc = ml > 0 ? vial.strengthMg / ml : 0;
 
   const now = Date.now();
-  const available = bottles.filter((b) => b.kind === diluent && bottleUsable(b, now));
+  const available = shelfOrder(bottles.filter((b) => b.kind === diluent && bottleUsable(b, now)), now);
 
   /**
    * Which bottle the water came from.
@@ -1120,7 +1120,11 @@ function DiluentShelf() {
   const [usedMl, setUsedMl] = useState(1);
 
   const now = Date.now();
-  const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
+  // Ordered the way the app itself would reach for them, so the bottle at the
+  // top of the shelf is the one reconstituting will suggest.
+  const live = shelfOrder(
+    diluents.filter((b) => b.state !== "finished" && b.state !== "discarded"),
+    now);
   const stock = diluentStock(diluents, "bacteriostatic", now);
 
   if (!live.length && !adding) {
