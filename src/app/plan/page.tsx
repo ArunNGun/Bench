@@ -940,6 +940,7 @@ function Upcoming() {
           protocolId: p.id,
           peptideId: p.peptideId,
           name: findPeptide(custom, p.peptideId)?.name ?? p.peptideId,
+          route: p.route,
           doseMcg: scheduledDoseMcg(p, at),
         })))
       .sort((a, b) => a.at - b.at);
@@ -995,6 +996,7 @@ function Upcoming() {
                       peptideId={r.peptideId}
                       doseMcg={r.doseMcg}
                       nowMs={now}
+                      route={r.route}
                       className="text-[12px] text-[var(--faint)]"
                     />
                   </span>

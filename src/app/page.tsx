@@ -446,6 +446,7 @@ export default function NowPage() {
                     peptideId={t.protocol.peptideId}
                     doseMcg={t.targetMcg}
                     nowMs={now}
+                    route={t.protocol.route}
                     className="text-[12px] text-[var(--faint)]"
                   />
                 </div>
@@ -530,6 +531,7 @@ export default function NowPage() {
                         peptideId={t.protocol.peptideId}
                         doseMcg={t.targetMcg}
                         nowMs={now}
+                        route={t.protocol.route}
                         className="text-[12px] text-[var(--faint)]"
                       />
                     </span>
@@ -723,6 +725,7 @@ export default function NowPage() {
                       peptideId={t.protocol.peptideId}
                       doseMcg={t.targetMcg}
                       nowMs={now}
+                      route={t.protocol.route}
                       className="text-[12px] text-[var(--faint)]"
                     />
                     <span>· {t.protocol.name}</span>
