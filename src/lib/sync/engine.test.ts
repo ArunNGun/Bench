@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSyncEngine, QUIET_MS, RETRY_MIN_MS, type SyncPorts, type SyncStatus } from "./engine";
-import { SyncConflict, SyncOffline, type StoredBlob } from "./client";
+import {
+  createSyncEngine,
+  QUIET_MS,
+  RETRY_MAX_MS,
+  RETRY_MIN_MS,
+  type SyncPorts,
+  type SyncStatus,
+} from "./engine";
+import { SyncConflict, SyncOffline, SyncSignedOut, type StoredBlob } from "./client";
 
 /**
  * A server and a device, both fake, both inspectable.
@@ -302,5 +309,77 @@ describe("sync engine", () => {
     await drain();
 
     expect(h.state.pushes).toHaveLength(1);
+  });
+
+  describe("an expired session", () => {
+    it("is its own state, not a failure", async () => {
+      // The bug this fixes: it read as "Sync failed", so the offered way out
+      // was Try again, which is the one thing that cannot help.
+      const h = harness();
+      h.engine.start();
+      await tick(0);
+
+      h.state.failNext = new SyncSignedOut();
+      h.state.dirty = true;
+      h.engine.request("now");
+      await tick(0);
+
+      expect(h.engine.getStatus().phase).toBe("signedout");
+      expect(h.engine.getStatus().message).toMatch(/expired/i);
+    });
+
+    it("keeps the last agreed time, because nothing was lost", async () => {
+      // Already in agreement with the server, which is the state somebody is
+      // actually in when their cookie quietly expires.
+      const h = harness();
+      h.state.remote = h.blob(500);
+      h.state.remoteSeenAt = 500;
+      h.engine.start();
+      await tick(0);
+      const agreed = h.engine.getStatus().lastSyncedAt;
+      expect(agreed).not.toBeNull();
+
+      h.state.failNext = new SyncSignedOut();
+      h.engine.request("now");
+      await tick(0);
+
+      expect(h.engine.getStatus().lastSyncedAt).toBe(agreed);
+    });
+
+    it("sends nothing while it lasts, so no edit is thrown at a closed door", async () => {
+      const h = harness();
+      h.engine.start();
+      await tick(0);
+      h.state.pushes.length = 0;
+
+      h.state.failNext = new SyncSignedOut();
+      h.state.dirty = true;
+      h.engine.request("now");
+      await tick(0);
+
+      expect(h.state.pushes).toHaveLength(0);
+    });
+
+    it("tries again slowly, so signing in elsewhere heals it without a button", async () => {
+      const h = harness();
+      h.engine.start();
+      await tick(0);
+      h.state.pushes.length = 0;
+
+      h.state.failNext = new SyncSignedOut();
+      h.state.dirty = true;
+      h.engine.request("now");
+      await tick(0);
+      expect(h.engine.getStatus().phase).toBe("signedout");
+
+      // Nothing at the retry interval used for a server that is merely down.
+      await tick(RETRY_MIN_MS);
+      expect(h.state.pushes).toHaveLength(0);
+
+      // The session comes back on its own, in another tab.
+      await tick(RETRY_MAX_MS);
+      expect(h.state.pushes).toHaveLength(1);
+      expect(h.engine.getStatus().phase).toBe("idle");
+    });
   });
 });

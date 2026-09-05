@@ -59,6 +59,12 @@ export function SyncPanel() {
    */
   const canEncrypt = cryptoAvailable();
   const connected = key != null;
+  /*
+   * Signed in as far as this device is concerned, and not as far as the server
+   * is concerned. The key is still here and still correct; only the cookie is
+   * gone. So the way out is the password, and nothing else needs touching.
+   */
+  const expired = connected && status.phase === "signedout";
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
@@ -95,6 +101,22 @@ export function SyncPanel() {
       setRegistering(false);
     });
 
+  /**
+   * Back in, without throwing anything away.
+   *
+   * The address, the username and the key are all still right. Only the server
+   * has forgotten who this is, so only the password is asked for, and the
+   * settings are left exactly as they are.
+   */
+  const reconnect = () =>
+    run("Signing in", async () => {
+      const derived = await login(url, username, password);
+      setKeyIsRemembered(await rememberKey(derived));
+      setKey(derived);
+      setPassword("");
+      engine?.request("now");
+    });
+
   const disconnect = () =>
     run("Signing out", async () => {
       await logout(url).catch(() => undefined);
@@ -122,6 +144,17 @@ export function SyncPanel() {
           Your browser only allows encryption on a secure origin, which means https, or localhost on
           the machine running the app. This page is neither, so the key cannot be derived and sync
           is switched off. Reach the app over https, or open it on the machine it runs on.
+        </Callout>
+      )}
+
+      {expired && (
+        <Callout tone="warn" title="Your session on the server has expired">
+          <p>
+            Nothing is wrong with your data, on this device or on the server. A session lasts thirty
+            days, and every session on a server ends at once if its signing secret is changed. Type
+            your password below to sign in again. The address, the username and the key on this
+            device all stay as they are.
+          </p>
         </Callout>
       )}
 
@@ -167,14 +200,20 @@ export function SyncPanel() {
         </Field>
         <Field
           label="Password"
-          hint={connected ? "Not stored. The key it derives is." : "Also the encryption key."}
+          hint={
+            expired
+              ? "The same password. It signs you in and derives the same key."
+              : connected
+                ? "Not stored. The key it derives is."
+                : "Also the encryption key."
+          }
         >
           <TextInput
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            disabled={connected}
+            disabled={connected && !expired}
           />
         </Field>
       </div>
@@ -225,18 +264,24 @@ export function SyncPanel() {
           </>
         ) : (
           <>
-            {/*
-              Syncing is automatic now, so this is not how data gets to the
-              server. It is here for the moment when someone wants to see it
-              happen rather than trust that it did.
-            */}
-            <Button
-              variant="ghost"
-              disabled={busy != null || conflicted}
-              onClick={() => engine?.request("now")}
-            >
-              <RefreshCw size={15} /> Sync now
-            </Button>
+            {expired ? (
+              <Button variant="primary" disabled={!password || busy != null} onClick={reconnect}>
+                <CloudUpload size={15} /> Sign in again
+              </Button>
+            ) : (
+              /*
+                Syncing is automatic now, so this is not how data gets to the
+                server. It is here for the moment when someone wants to see it
+                happen rather than trust that it did.
+              */
+              <Button
+                variant="ghost"
+                disabled={busy != null || conflicted}
+                onClick={() => engine?.request("now")}
+              >
+                <RefreshCw size={15} /> Sync now
+              </Button>
+            )}
             <Button variant="ghost" disabled={busy != null} onClick={disconnect}>
               <CloudOff size={15} /> Sign out
             </Button>

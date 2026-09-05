@@ -40,6 +40,26 @@ export class SyncConflict extends SyncError {
 /** Distinguishes "the network is down" from "the server said no". */
 export class SyncOffline extends SyncError {}
 
+/**
+ * The session is gone, so the server does not know who is asking.
+ *
+ * Its own type because it is neither a failure to retry nor a reason to throw
+ * anything away, and it was being treated as the first and repaired as the
+ * second. The cookie has a life of its own: it expires after thirty days, and
+ * every cookie on a server dies at once if its signing secret is changed. Both
+ * are ordinary events, and neither says anything about the data on either side.
+ *
+ * What went wrong before this existed: the panel still held the key, so it drew
+ * itself as connected with every field disabled, and the only control that
+ * could have helped was Sign out, which also discarded the address, the
+ * username and the key that were all still perfectly good.
+ */
+export class SyncSignedOut extends SyncError {
+  constructor() {
+    super("Your session on the server has expired. Enter your password to sign in again.");
+  }
+}
+
 /** True inside the Android build, where this whole feature is switched off. */
 export function isNative() {
   if (typeof window === "undefined") return false;
@@ -101,6 +121,14 @@ async function call(baseUrl: string, path: string, init: RequestInit = {}) {
     const current = (body as { current?: StoredBlob | null } | null)?.current ?? null;
     throw new SyncConflict(current && isSealedEnvelope(current.envelope) ? current : null);
   }
+
+  /*
+   * Everywhere except signing in, a 401 means the cookie is gone rather than
+   * that anything is wrong. Signing in is the exception and has to stay one:
+   * there, 401 is a wrong password, and reporting that as an expired session
+   * would send somebody looking for a problem they do not have.
+   */
+  if (res.status === 401 && !path.startsWith("/api/login")) throw new SyncSignedOut();
 
   if (!res.ok) {
     throw new SyncError((body as { error?: string } | null)?.error ?? `Server said ${res.status}`);
