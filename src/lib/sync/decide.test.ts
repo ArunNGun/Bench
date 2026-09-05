@@ -168,3 +168,41 @@ describe("when the account is the copy that counts", () => {
     expect(describeSync({ kind: "pull", reason: "adopt-account" })).toMatch(/set aside/i);
   });
 });
+
+describe("the loop that ate a dose seconds after it was logged", () => {
+  /*
+   * The real sequence, on a brand new account in a hosted build.
+   *
+   * `settings.sync` is written by the panel in Settings, and somebody who signs
+   * in on the login page never goes near it. So `setRemoteSeenAt` had nothing
+   * to update and did nothing, and `remoteSeenAt` stayed null for ever.
+   *
+   * Every run therefore looked like first contact. With the account treated as
+   * the copy that counts, every run pulled the server's copy over the device,
+   * and anything logged since the last push was gone within seconds.
+   *
+   * The record is fixed in the runner. This is the second lock: even with
+   * `remoteSeenAt` stuck at null, an unsent edit is never adopted over.
+   */
+  it("asks rather than adopting when this device has something unsent", () => {
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: 500,
+      dirty: true,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "ask", reason: "first-contact" });
+  });
+
+  it("still adopts the account when nothing is waiting to be sent", () => {
+    // The case it exists for: a browser holding leftovers read from IndexedDB
+    // at startup, which nobody edited.
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: 500,
+      dirty: false,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "pull", reason: "adopt-account" });
+  });
+});

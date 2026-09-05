@@ -231,3 +231,37 @@ The same sweep also:
 
 If you must sweep: bound the regex to a single line, never let `\s` cross a
 newline, review the diff, and run the full suite plus a build afterwards.
+
+## A record nobody wrote, and a rule that trusted it
+
+`settings.sync` holds the address, the username and `remoteSeenAt`, which is
+the version of the server's copy this device last agreed with. It is written in
+exactly one place: the panel in Settings, when somebody signs in there.
+
+A hosted build has nobody who does that. They arrive through the server's own
+login page and unlock in front of the app, and never open that panel. So
+`setRemoteSeenAt` found no record, returned early, and `remoteSeenAt` stayed
+null permanently.
+
+Null is how the app says "this device and this server have never agreed", which
+is true exactly once and was now true always. Every run looked like first
+contact. Once the account became the copy that counts, every run therefore
+pulled the server's copy over the top of the device, and anything logged since
+the last successful push was destroyed within seconds of being typed.
+
+Two things made it survivable rather than a catastrophe. The rescue guard
+caught every one of those writes, so nothing was actually lost. And it happened
+instantly and repeatedly, which is the one kind of data loss that gets reported
+on the first day instead of found months later.
+
+Both halves are fixed and either alone would have been enough, which is why
+both are there.
+
+- The runner creates the record when there is not one, rather than giving up.
+- Adopting the account is refused while this device holds anything unsent. The
+  leftovers that case exists for were read from disk at startup and are not
+  dirty; an edit made seconds ago is, and is never adopted over.
+
+The general lesson, worth more than the specific bug: **a piece of state that
+only one screen ever writes is a piece of state that some path will find
+missing.** The early return that hid it read as defensive. It was the failure.

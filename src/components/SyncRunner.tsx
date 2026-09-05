@@ -141,11 +141,32 @@ export function SyncRunner() {
       serverPrimary: accountRequired(),
 
       getRemoteSeenAt: () => useStore.getState().settings.sync?.remoteSeenAt ?? null,
+      /**
+       * Remember which version of the server's copy this device last agreed
+       * with, creating the record if there is not one yet.
+       *
+       * The `if (!sync) return` this replaces was the worst bug in the project
+       * so far. `settings.sync` is written by the panel in Settings, and in a
+       * hosted build nobody goes near that panel: they sign in on the login
+       * page and unlock. So there was no record to update, this did nothing,
+       * and `remoteSeenAt` stayed null for ever.
+       *
+       * Which meant every single run looked like first contact. With the
+       * account treated as the copy that counts, every run therefore pulled the
+       * server's copy over the top of this device, and anything logged since
+       * the last successful push was destroyed within seconds of being typed.
+       * The rescue guard caught it every time, which is the only reason it was
+       * noticed rather than silently endured.
+       */
       setRemoteSeenAt: (at) => {
-        const sync = useStore.getState().settings.sync;
-        if (!sync) return;
-        useStore.getState().updateSettings({
-          sync: { ...sync, remoteSeenAt: at ?? undefined },
+        const state = useStore.getState();
+        const sync = state.settings.sync;
+        state.updateSettings({
+          sync: {
+            url: sync?.url ?? url,
+            username: sync?.username ?? useSyncState.getState().session?.username ?? "",
+            remoteSeenAt: at ?? undefined,
+          },
         });
       },
 

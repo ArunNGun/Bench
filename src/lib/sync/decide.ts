@@ -104,15 +104,18 @@ export function decideSync({
      * Somebody signed in to see their account, and whatever this browser held
      * before was never part of it.
      *
-     * Nothing is destroyed by saying so. A pull writes the whole document
-     * through the store, so the guard in the storage layer sees the collections
-     * shrink and sets the previous document aside exactly as it would for any
-     * other write that loses records. What was here is one press away in the
-     * notice on every page, rather than gone.
+     * Only when nothing is waiting to be sent, and that condition is the whole
+     * lesson of the bug that followed the first version of this. `dirty` means
+     * this device holds an edit nobody else has seen, made by somebody in this
+     * session, seconds ago. Adopting over the top of that is not "the server is
+     * primary", it is destroying work that was typed while the app was open.
+     *
+     * The leftovers this case exists for are not dirty: they were read from
+     * IndexedDB at startup, not edited. So the narrow rule catches the case it
+     * was written for and cannot reach the one it must never touch.
      */
-    return serverPrimary
-      ? { kind: "pull", reason: "adopt-account" }
-      : { kind: "ask", reason: "first-contact" };
+    if (serverPrimary && !dirty) return { kind: "pull", reason: "adopt-account" };
+    return { kind: "ask", reason: "first-contact" };
   }
 
   if (remoteUpdatedAt !== remoteSeenAt) {
