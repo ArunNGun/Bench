@@ -153,11 +153,17 @@ export function AdminPanel() {
 
       <div className="flex flex-wrap items-end gap-2.5">
         <div className="min-w-[12rem] flex-1">
-          <Field label="Invite somebody" hint="You choose the name. They choose the password.">
+          {/*
+            No placeholder. It held a name, which read as a suggestion of who
+            to invite, and a real person's name at that.
+          */}
+          <Field
+            label="Invite somebody"
+            hint="You choose the name, they choose the password. Lowercase letters, digits, dot, dash, underscore."
+          >
             <TextInput
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="tofs"
               autoComplete="off"
             />
           </Field>
