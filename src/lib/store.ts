@@ -20,6 +20,7 @@ import {
   type Settings,
   type Vial,
   type DiluentBottle,
+  type DiluentKind,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged, documentFrom } from "./calc/document";
@@ -28,6 +29,7 @@ import { alarmingLosses, countRecords, restoreLost, type Rescue } from "./calc/r
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
+import { transferToSpray } from "./calc/spray";
 import { startOfLocalDay } from "./calc/schedule";
 import { ratableDay } from "./calc/checkins";
 import {
@@ -249,6 +251,23 @@ interface StoreState extends AppData {
     diluent: Vial["diluent"],
     atMs?: number,
     fromBottleId?: string) => void;
+
+  /**
+   * Empty a made-up vial into a nasal spray bottle, making it up with saline.
+   *
+   * One action rather than a delete and an add, because it is one physical
+   * event and doing it in two steps would leave a window where the mass exists
+   * twice or not at all. Returns the new bottle's id, or null when there was
+   * nothing left in the vial to pour.
+   */
+  transferToSpray: (
+    vialId: string,
+    options: {
+      addedMl: number;
+      mlPerSpray: number;
+      diluent?: DiluentKind;
+      fromBottleId?: string;
+    }) => string | null;
 
   addDiluent: (b: Omit<DiluentBottle, "id" | "profileId">) => string;
   updateDiluent: (id: string, patch: Partial<DiluentBottle>) => void;
@@ -582,6 +601,34 @@ export const useStore = create<StoreState>()(
             orders: orphaned ? s.orders.filter((o) => o.id !== orphaned) : s.orders,
           };
         }),
+      transferToSpray: (vialId, options) => {
+        const source = get().vials.find((v) => v.id === vialId);
+        if (!source) return null;
+
+        const plan = transferToSpray(source, {
+          addedMl: options.addedMl,
+          mlPerSpray: options.mlPerSpray,
+          diluent: options.diluent,
+          diluentBottleId: options.fromBottleId,
+          atMs: Date.now(),
+        });
+        if (!plan) return null;
+
+        const id = nanoid(10);
+        set((s) => ({
+          vials: [
+            ...s.vials.map((v) => (v.id === vialId ? plan.source : v)),
+            { ...plan.bottle, id, profileId: s.activeProfileId },
+          ],
+          // The saline added on top comes out of the ampoule it was named from.
+          // What was already in the vial was drawn when the vial was made up.
+          diluents: options.fromBottleId
+            ? drawFromBottle(s.diluents, options.fromBottleId, plan.drawnMl, Date.now())
+            : s.diluents,
+        }));
+        return id;
+      },
+
       addDiluent: (b) => {
         const id = nanoid(10);
         set((s) => ({ diluents: [...s.diluents, { ...b, id, profileId: s.activeProfileId }] }));

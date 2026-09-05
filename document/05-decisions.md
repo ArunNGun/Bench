@@ -97,6 +97,49 @@ that syncs to Google or Apple carries whatever is in the event title to them,
 which nothing else in this app does. The panel says so, in those words, and only
 when the setting is on.
 
+## A nasal spray bottle is a vial
+
+The obvious reading of `diluent.ts` is that a new container gets a new
+collection: bottles of water are kept apart from vials, with a paragraph
+explaining why. The opposite conclusion is right here, and for the same reason.
+
+Water has no milligrams. A bottle of it wearing the vial type would be a
+category error carried into concentration, doses remaining, cost per milligram
+and the date the shelf runs dry, and every one of those would have to remember
+to exclude it. Ten places to remember is ten places to forget.
+
+A spray bottle is a mass dissolved in a volume. That is what a vial is. So it is
+a `Vial` with `container: "spray"`, and it inherits concentration, depletion,
+cost per dose, days of supply and the whole of `stockFor` without a line of new
+arithmetic. A separate collection would have meant a second implementation of
+all of it, which is the same trap read backwards.
+
+### What it does not inherit is the syringe
+
+The one place a shared type can go quietly wrong is a bottle being handed to a
+syringe. `pickVialForDose`, `stockFor` and `marksForDose` take a container and
+default it to `"vial"`, so nothing that already asked those questions had to
+learn a new one, and a spray cannot become the answer to "which vial does this
+injection come from" even when it is the only stock of that compound there is.
+`marksForDose` passes `"vial"` explicitly rather than by omission, because marks
+are a reading off a barrel and a nasal dose never meets one.
+
+### Two things it deliberately will not say
+
+**No beyond-use date.** The twenty-eight days used for a punctured vial comes
+from a convention about multi-dose vials, and there is no such convention for a
+preservative-free solution in a pump that one person carries in a pocket and
+another keeps in a fridge. The day it was filled is recorded and the judgement
+is left where it belongs. Saying nothing at all would imply it keeps
+indefinitely, so the fill date is shown rather than hidden.
+
+**Presses remaining is an estimate and says so.** Solution is lost in
+preparation and in transfer, priming delivers less than a dose, and the last
+millilitre cannot be lifted by the pump. The figure reads high by an unknowable
+amount, so the word "about" is in the interface and marking a bottle empty by
+hand stays available. A precise count would be the same class of error as an
+invented half-life.
+
 ## A write that destroys records keeps a copy
 
 Twice a collection has emptied itself with nobody doing anything. Both times it

@@ -66,6 +66,24 @@ export function vialUsable(v: Vial, nowMs: number) {
 }
 
 /**
+ * Which container a question is about.
+ *
+ * Defaults to a vial everywhere, which is what every row was before nasal
+ * sprays existed and what every injection still wants. The default matters more
+ * than the parameter: it means nothing that already asked these questions had
+ * to learn a new one, and a spray bottle cannot quietly become the answer to
+ * "which vial does this injection come from".
+ *
+ * That is the one place a shared container type could go badly wrong. A bottle
+ * on a shelf reads fine next to a vial; a bottle handed to a syringe does not.
+ */
+export type ContainerKind = NonNullable<Vial["container"]>;
+
+export function matchesContainer(v: Pick<Vial, "container">, want: ContainerKind = "vial") {
+  return (v.container ?? "vial") === want;
+}
+
+/**
  * Which vial a dose should come out of.
  *
  * Prefers an already-open vial over breaking into a sealed one, and among
@@ -77,8 +95,10 @@ export function pickVialForDose(
   vials: Vial[],
   peptideId: string,
   doseMcg: number,
-  nowMs: number): Vial | null {
-  const candidates = vials.filter((v) => v.peptideId === peptideId && vialUsable(v, nowMs));
+  nowMs: number,
+  container: ContainerKind = "vial"): Vial | null {
+  const candidates = vials.filter(
+    (v) => v.peptideId === peptideId && matchesContainer(v, container) && vialUsable(v, nowMs));
   if (!candidates.length) return null;
 
   const byDeadline = (a: Vial, b: Vial) =>
@@ -268,8 +288,10 @@ export function stockFor(
   vials: Vial[],
   peptideId: string,
   doseMcg: number,
-  nowMs: number): Stock {
-  const usable = vials.filter((v) => v.peptideId === peptideId && vialUsable(v, nowMs));
+  nowMs: number,
+  container: ContainerKind = "vial"): Stock {
+  const usable = vials.filter(
+    (v) => v.peptideId === peptideId && matchesContainer(v, container) && vialUsable(v, nowMs));
 
   let availableMcg = 0;
   let openMcg = 0;
@@ -319,7 +341,10 @@ export function marksForDose(
   doseMcg: number,
   scale: SyringeScale,
   nowMs: number): number | null {
-  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs), doseMcg, scale);
+  // Vials only, and not by omission. Marks are a reading off a barrel, and a
+  // nasal dose never meets one, so a spray bottle must not be able to answer
+  // this question even when it is the only stock of that compound on the shelf.
+  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs, "vial"), doseMcg, scale);
 }
 
 /**

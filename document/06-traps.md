@@ -128,6 +128,20 @@ Related: a reveal condition that requires the element to still be **in** view
 will strand anything the reader flew past between two events, via a fast flick,
 the End key, or an anchor jump. Test the top edge only.
 
+## Containers
+
+- **A spray bottle is a `Vial` with `container: "spray"`.** Anything that asks
+  which container a dose comes from has to say which kind it means.
+  `pickVialForDose`, `stockFor` and `marksForDose` take one and default to
+  `"vial"`, which is what every row was before sprays existed.
+- **Never let a spray answer a syringe question.** Marks, units, barrel scale
+  and injection site are all meaningless for a nasal dose, and a bottle has a
+  concentration so it will happily produce numbers for all of them. `draw` in
+  the log sheet is gated on the route for exactly this reason.
+- **A spray carries no `budAt`, on purpose.** If you find yourself adding one,
+  read the decision first. The same goes for making presses remaining look
+  precise.
+
 ## Records that vanish
 
 - **A collection emptying itself is a real failure mode here, not a
