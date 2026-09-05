@@ -16,8 +16,9 @@
 import { useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { createSyncEngine, type SyncPorts } from "@/lib/sync/engine";
-import { fetchBlob, isNative, pushData, cryptoAvailable } from "@/lib/sync/client";
+import { fetchBlob, isNative, pushData, session, cryptoAvailable } from "@/lib/sync/client";
 import { open } from "@/lib/sync/crypto";
+import { HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { recallKey } from "@/lib/sync/vault";
 import type { AppData, Settings } from "@/lib/types";
@@ -58,9 +59,38 @@ function isEmptyData(s: AppData) {
 }
 
 export function SyncRunner() {
-  const url = useStore((s) => s.settings.sync?.url);
+  const stored = useStore((s) => s.settings.sync?.url);
+  // A hosted build knows where its server is and does not ask.
+  const url = HOSTED?.url ?? stored;
   const key = useSyncState((s) => s.key);
   const setKey = useSyncState((s) => s.setKey);
+  const setSession = useSyncState((s) => s.setSession);
+  const phase = useSyncState((s) => s.status.phase);
+
+  /*
+   * Ask the server who this is, and whether they own it.
+   *
+   * Asked again when the phase changes because the two answers that matter are
+   * the two that move it: signing in makes a session where there was none, and
+   * an expired one takes it away. Anything else here would either be a poll or
+   * a stale badge.
+   */
+  useEffect(() => {
+    if (isNative() || !url) return;
+    let cancelled = false;
+    void session(url)
+      .then((who) => {
+        if (!cancelled) setSession(who);
+      })
+      .catch(() => {
+        // Unreachable is not the same as signed out, and neither is worth an
+        // error here. The status line already says the server cannot be
+        // reached; this only decides whether to draw one panel.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url, phase, setSession]);
 
   /*
    * Bring back the key a previous visit stored, once, at startup. Without this

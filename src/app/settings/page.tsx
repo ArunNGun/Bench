@@ -45,6 +45,7 @@ import { doseCsv } from "@/lib/calc/dosecsv";
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
+import { AdminPanel } from "@/components/AdminPanel";
 import { SyncPanel } from "@/components/SyncPanel";
 import { RemindersPanel } from "@/components/RemindersPanel";
 import { RescueNotice } from "@/components/RescueNotice";
@@ -115,6 +116,8 @@ export default function SettingsPage() {
       <ImportPanel />
 
       <SyncPanel />
+
+      <AdminPanel />
 
       <Card className="space-y-4 p-4">
         <SectionLabel>Defaults</SectionLabel>

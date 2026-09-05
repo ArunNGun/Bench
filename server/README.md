@@ -72,6 +72,30 @@ the encryption key, so an owner who knew it could read that person's history.
 Only a hash of the token is kept, so the link cannot be recovered later. Lose it
 and you cancel the invitation and make another.
 
+### A build that knows where its server is
+
+The app can be built so that it belongs to one server. Two variables, read at
+build time and nowhere else:
+
+```bash
+NEXT_PUBLIC_SYNC_URL=https://bench.example \
+NEXT_PUBLIC_REQUIRE_ACCOUNT=1 \
+npm run build
+```
+
+With them set: nobody is asked to type an address, there is no offer to set up a
+new server or to paste a setup token, and signing out returns to the login page
+rather than leaving somebody in an app they can no longer load. An owner also
+gets a panel in Settings for the invitations and accounts described above, which
+is the same set of endpoints and the same refusals, drawn rather than typed.
+
+With them unset this is the ordinary Bench, unchanged in every screen. There is
+no fork and no second branch: the difference is two strings.
+
+The address alone, without the requirement, is a real and useful middle state.
+The server is filled in, and somebody who wants to use the app without an
+account still can.
+
 ### The rest of `admin.mjs`
 
 ```bash

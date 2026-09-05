@@ -24,6 +24,7 @@ import {
   register,
   SyncError,
 } from "@/lib/sync/client";
+import { accountRequired, HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { forgetKey, rememberKey } from "@/lib/sync/vault";
 import { formatDateTime } from "@/lib/format";
@@ -35,10 +36,13 @@ export function SyncPanel() {
 
   const key = useSyncState((s) => s.key);
   const setKey = useSyncState((s) => s.setKey);
+  const setSession = useSyncState((s) => s.setSession);
   const status = useSyncState((s) => s.status);
   const engine = useSyncState((s) => s.engine);
 
-  const [url, setUrl] = useState(settings.sync?.url ?? "");
+  // A hosted build knows its own address. Nobody types it, and nobody can point
+  // this build at a different one, which is the whole reason it is a build.
+  const [url, setUrl] = useState(HOSTED?.url ?? settings.sync?.url ?? "");
   const [username, setUsername] = useState(settings.sync?.username ?? "");
   const [password, setPassword] = useState("");
   const [setupToken, setSetupToken] = useState("");
@@ -122,7 +126,15 @@ export function SyncPanel() {
       await logout(url).catch(() => undefined);
       await forgetKey();
       setKey(null);
+      setSession(null);
       updateSettings({ sync: undefined });
+      /*
+       * Where the app is served from behind the server's own login, signing out
+       * of the server means signing out of the app. Staying put would leave
+       * somebody looking at a page they are no longer allowed to load, until
+       * the next reload told them so.
+       */
+      if (accountRequired()) window.location.assign("/login");
     });
 
   const conflicted = status.phase === "conflict";
@@ -131,13 +143,23 @@ export function SyncPanel() {
     <Card className="space-y-4 p-4">
       <SectionLabel>Sync to your own server</SectionLabel>
 
-      <Callout tone="info" title="Prototype">
-        This is the one part of the app that talks to a network. Your data is encrypted in this
-        browser before it is uploaded, with a key derived from your password, so the server holds
-        something it cannot read. Lose the password and the copy on the server is lost with it.
-        Everything still works offline; the server is a copy, not the store. A server accepts one
-        account, and closes registration by itself once it has one.
-      </Callout>
+      {HOSTED ? (
+        <Callout tone="info" title="This copy of Bench syncs to one server">
+          Your data is encrypted in this browser before it is uploaded, with a key derived from your
+          password, so the server holds something it cannot read. That includes whoever runs it:
+          they can see that your account exists and how large it is, and nothing else. It also
+          means nobody can reset your password for you. Lose it and the copy on the server is lost
+          with it, which is why you were asked to keep your own backup.
+        </Callout>
+      ) : (
+        <Callout tone="info" title="Prototype">
+          This is the one part of the app that talks to a network. Your data is encrypted in this
+          browser before it is uploaded, with a key derived from your password, so the server holds
+          something it cannot read. Lose the password and the copy on the server is lost with it.
+          Everything still works offline; the server is a copy, not the store. New accounts on a
+          server are made by invitation from whoever set it up.
+        </Callout>
+      )}
 
       {!canEncrypt && (
         <Callout tone="danger" title="Not available on this address">
@@ -180,14 +202,23 @@ export function SyncPanel() {
         </Callout>
       )}
 
-      <Field label="Server address" hint="For example https://bench.example.com or http://localhost:8787">
-        <TextInput
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="http://localhost:8787"
-          disabled={connected}
-        />
-      </Field>
+      {HOSTED ? (
+        <p className="text-[12.5px] text-[var(--muted)]">
+          Server: <span className="font-mono text-[var(--text)]">{HOSTED.url}</span>
+        </p>
+      ) : (
+        <Field
+          label="Server address"
+          hint="For example https://bench.example.com or http://localhost:8787"
+        >
+          <TextInput
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="http://localhost:8787"
+            disabled={connected}
+          />
+        </Field>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Username">
@@ -218,7 +249,12 @@ export function SyncPanel() {
         </Field>
       </div>
 
-      {!connected && registering && (
+      {/*
+        A hosted build has no setup token to offer. Its server already has an
+        owner, and everyone after that arrives by an invitation link that makes
+        the account on the login page, before this screen is ever reached.
+      */}
+      {!HOSTED && !connected && registering && (
         <Field
           label="Setup token"
           hint="Printed in the server log when it starts, while it still has no account. docker compose logs sync"
@@ -247,20 +283,21 @@ export function SyncPanel() {
               field, which is also the moment to notice that a server with an
               account on it will refuse anyway.
             */}
-            {!registering ? (
-              <Button disabled={!canEncrypt} onClick={() => setRegistering(true)}>
-                Set up a new server
-              </Button>
-            ) : (
-              <Button
-                disabled={
-                  !canEncrypt || !url || !username || !password || !setupToken || busy != null
-                }
-                onClick={() => connect("register")}
-              >
-                Create the account
-              </Button>
-            )}
+            {!HOSTED &&
+              (!registering ? (
+                <Button disabled={!canEncrypt} onClick={() => setRegistering(true)}>
+                  Set up a new server
+                </Button>
+              ) : (
+                <Button
+                  disabled={
+                    !canEncrypt || !url || !username || !password || !setupToken || busy != null
+                  }
+                  onClick={() => connect("register")}
+                >
+                  Create the account
+                </Button>
+              ))}
           </>
         ) : (
           <>
