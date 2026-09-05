@@ -9,6 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // The sync server is plain ESM with no build step, so its tests are .mjs
+    // and sit beside it rather than under src.
+    include: ["src/**/*.test.ts", "server/**/*.test.mjs"],
   },
 });

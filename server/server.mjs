@@ -12,28 +12,50 @@
  * and a project whose selling point is that you can read what it does should
  * not ask you to read a tree of packages first.
  *
- *   POST /api/register  { username, authSecret, salt, setupToken }   first run only
+ *   POST /api/register  { username, authSecret, salt, setupToken }   the first account
+ *                       { username, authSecret, salt, invite }       every one after it
  *   GET  /api/salt      ?username=                      before the password is asked for
  *   POST /api/login     { username, authSecret }        sets a session cookie
  *   POST /api/logout
  *   GET  /api/session                                   200 or 401, for the proxy
- *   GET  /login                                         the page the proxy sends you to
+ *   GET  /login         ?invite=                        sign in, or take up an invitation
  *   GET  /api/data                                      the sealed envelope, or 204
  *   PUT  /api/data      { envelope, updatedAt, ifMatch }  409 if the copy moved
+ *
+ * And, for whoever owns the server:
+ *
+ *   GET  /api/accounts                                  names and sizes, never contents
+ *   GET  /api/invites
+ *   POST /api/invites   { username, days }              the token is shown once
+ *   POST /api/invites/:id/revoke
+ *   POST /api/accounts/:username/remove  { authSecret } asks for the password again
  *
  * Run: node server/server.mjs
  * Env: PORT, BENCH_DATA_DIR, BENCH_SESSION_SECRET, BENCH_ORIGIN
  */
 
 import { createServer } from "node:http";
-import { randomBytes, scryptSync, timingSafeEqual, createHmac } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from "node:fs";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  FLOOR_MS,
+  allowedOrigin,
+  clearGate,
+  countFailure,
+  gateOf,
+  inviteExpiry,
+  inviteProblem,
+  lockedFor,
+  parseOrigins,
+  retryAfterSeconds,
+  usernameOk,
+} from "./policy.mjs";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DATA_DIR = process.env.BENCH_DATA_DIR ?? join(dirname(fileURLToPath(import.meta.url)), "data");
-const ORIGIN = process.env.BENCH_ORIGIN ?? "http://localhost:3210";
+const ORIGINS = parseOrigins(process.env.BENCH_ORIGIN);
 
 /**
  * Sessions are signed rather than stored, so a restart does not log you out and
@@ -42,41 +64,42 @@ const ORIGIN = process.env.BENCH_ORIGIN ?? "http://localhost:3210";
  * invalidates every cookie.
  */
 const SESSION_SECRET = process.env.BENCH_SESSION_SECRET ?? randomBytes(32).toString("hex");
-if (!process.env.BENCH_SESSION_SECRET) {
-  console.warn("BENCH_SESSION_SECRET is not set, sessions will not survive a restart");
-}
 
 const SESSION_HOURS = 24 * 30;
 
 mkdirSync(DATA_DIR, { recursive: true });
 
-/**
- * Registration closes itself once an account exists.
- *
- * It used to be a switch you had to turn on and then remember to turn off,
- * which is a poor way to protect anything: the failure mode is silent and
- * permanent, and it only bites on a server that is already public. Asking the
- * filesystem removes the thing to remember.
- */
-const accountsExist = () =>
-  readdirSync(DATA_DIR).some((f) => f.endsWith(".account.json"));
+const accountsExist = () => readdirSync(DATA_DIR).some((f) => f.endsWith(".account.json"));
 
 /**
  * A one-time token, printed at startup while the server has no accounts.
  *
- * Closing after the first account still leaves a window: between the moment
- * this starts listening and the moment you register, whoever finds the port can
- * claim the account instead. On a machine reachable from the internet that
+ * It makes the first account, and only the first. Between the moment this
+ * starts listening and the moment you register, whoever finds the port could
+ * otherwise claim it instead, and on a machine reachable from the internet that
  * window is the whole risk. Requiring a value that only appears in the server's
  * own log closes it, at the cost of one copied string.
  *
  * Regenerated on every boot, so a token seen once is useless after a restart,
  * and never written to disk.
+ *
+ * Everyone after the first arrives by invitation, which is a different door
+ * with the same property: it cannot be walked through by someone who was not
+ * handed something first.
  */
 const SETUP_TOKEN = accountsExist() ? null : randomBytes(16).toString("hex");
 
 const accountPath = (username) => join(DATA_DIR, `${encodeURIComponent(username)}.account.json`);
 const blobPath = (username) => join(DATA_DIR, `${encodeURIComponent(username)}.blob.json`);
+const invitePath = (id) => join(DATA_DIR, `${encodeURIComponent(id)}.invite.json`);
+
+const listFiles = (suffix) =>
+  readdirSync(DATA_DIR)
+    .filter((f) => f.endsWith(suffix))
+    .map((f) => decodeURIComponent(f.slice(0, -suffix.length)));
+
+const listAccounts = () => listFiles(".account.json");
+const listInvites = () => listFiles(".invite.json");
 
 /**
  * Write by rename, which is atomic on the same filesystem.
@@ -111,6 +134,99 @@ function secretMatches(authSecret, account) {
   const stored = Buffer.from(account.authHash, "hex");
   // Constant time, so the comparison does not leak how much of it was right.
   return attempt.length === stored.length && timingSafeEqual(attempt, stored);
+}
+
+/**
+ * Invitation tokens are hashed with plain SHA-256 and no stretching.
+ *
+ * Not an oversight. Stretching exists because passwords are short and chosen by
+ * people, so a stolen hash can be attacked with a dictionary. This token is 144
+ * bits from the system's random source, which has no dictionary and no pattern,
+ * so the only attack left is guessing the whole space. Hashing it at all is for
+ * the case where the data directory is read: a token in the clear on disk would
+ * be a live invitation to anyone who looked.
+ */
+const hashToken = (token) => createHash("sha256").update(String(token)).digest("hex");
+
+function tokenMatches(token, invite) {
+  const attempt = Buffer.from(hashToken(token), "hex");
+  const stored = Buffer.from(String(invite?.tokenHash ?? ""), "hex");
+  return attempt.length === stored.length && timingSafeEqual(attempt, stored);
+}
+
+/** Find the invitation a token opens, or null. */
+function findInvite(token) {
+  if (!token) return null;
+  for (const id of listInvites()) {
+    const invite = readJson(invitePath(id));
+    if (invite && tokenMatches(token, invite)) return invite;
+  }
+  return null;
+}
+
+/** Hold the answer for at least this long, counted from when the request arrived. */
+const notBefore = (startedAt, ms) =>
+  new Promise((done) => setTimeout(done, Math.max(0, startedAt + ms - Date.now())));
+
+// ---------------------------------------------------------------------------
+// The owner
+// ---------------------------------------------------------------------------
+
+const isAdmin = (username) => readJson(accountPath(username ?? ""))?.admin === true;
+
+/**
+ * What the owner is allowed to know about an account.
+ *
+ * A name, when it was made, when it last synced, and how large the blob is.
+ * Not one byte of the blob, because that is not withheld out of politeness: the
+ * server cannot read it, and this endpoint is the place where someone would
+ * eventually think it convenient to try.
+ */
+function describeAccount(username) {
+  const account = readJson(accountPath(username));
+  if (!account) return null;
+  const blob = readJson(blobPath(username));
+  const gate = gateOf(account);
+  const locked = lockedFor(gate, Date.now());
+  return {
+    username,
+    admin: account.admin === true,
+    createdAt: account.createdAt ?? null,
+    lastSyncAt: blob?.receivedAt ?? null,
+    bytes: blob ? JSON.stringify(blob).length : 0,
+    failures: gate.failures,
+    lockedUntil: locked > 0 ? gate.lockedUntil : null,
+  };
+}
+
+/** Everything about an invitation except the one thing that opens it. */
+function describeInvite(id) {
+  const invite = readJson(invitePath(id));
+  if (!invite) return null;
+  const { tokenHash, ...rest } = invite;
+  return rest;
+}
+
+function makeInvite(username, days, invitedBy) {
+  const now = Date.now();
+  const id = randomBytes(6).toString("hex");
+  // base64url so it survives being a query parameter, being pasted into a chat
+  // and being read aloud badly.
+  const token = randomBytes(18).toString("base64url");
+  const expiresAt = inviteExpiry(now, days);
+
+  writeAtomic(invitePath(id), {
+    id,
+    username,
+    tokenHash: hashToken(token),
+    createdAt: now,
+    createdBy: invitedBy,
+    expiresAt,
+    usedAt: null,
+    usedBy: null,
+  });
+
+  return { id, username, token, expiresAt };
 }
 
 // ---------------------------------------------------------------------------
@@ -150,8 +266,6 @@ function send(res, status, body, headers = {}) {
   const payload = body == null ? "" : JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
-    "access-control-allow-origin": ORIGIN,
-    "access-control-allow-credentials": "true",
     "cache-control": "no-store", ...headers,
   });
   res.end(payload);
@@ -171,6 +285,18 @@ async function readBody(req, limitBytes = 32 * 1024 * 1024) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+  const startedAt = Date.now();
+
+  /*
+   * Set once, before anything can answer.
+   *
+   * `Vary: Origin` because the answer now depends on who asked. Without it a
+   * cache in front of this could hand one caller's permission slip to another,
+   * which is the sort of bug that only appears in production and only sometimes.
+   */
+  res.setHeader("access-control-allow-origin", allowedOrigin(ORIGINS, req.headers.origin));
+  res.setHeader("access-control-allow-credentials", "true");
+  res.setHeader("vary", "Origin");
 
   if (req.method === "OPTIONS") {
     return send(res, 204, null, {
@@ -191,27 +317,76 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { salt: account?.salt ?? randomBytes(16).toString("base64") });
     }
 
+    /**
+     * What an invitation is for, so the form can fill the name in and lock it.
+     *
+     * Public, because whoever holds the token is the person it was written for
+     * and the name is not the secret. It tells a holder nothing they were not
+     * already sent, and it saves the alternative, which is asking someone to
+     * type a username they were told in a different message and refusing them
+     * when they get it wrong.
+     */
+    if (req.method === "GET" && url.pathname === "/api/invite") {
+      const invite = findInvite(url.searchParams.get("token"));
+      const problem = inviteProblem(invite, invite?.username, Date.now());
+      if (problem) return send(res, 404, { error: problem });
+      return send(res, 200, { username: invite.username, expiresAt: invite.expiresAt });
+    }
+
+    /**
+     * Two doors, and which one is open is decided by the filesystem rather than
+     * by a setting, so there is nothing to remember to turn off.
+     *
+     * Empty server: the setup token from the log, and that account becomes the
+     * owner. Server with accounts: an invitation, which the owner made for one
+     * named person and which stops working once it is used.
+     *
+     * What both have in common is that neither can be walked through by someone
+     * who was not handed something first. There is no moment at which this
+     * address will make an account for a stranger.
+     */
     if (req.method === "POST" && url.pathname === "/api/register") {
-      // Checked on every request rather than cached at boot, so a server that
-      // has just been set up refuses the second attempt without a restart.
-      if (accountsExist()) {
-        return send(res, 403, {
-          error: "Registration is closed. This server already has an account.",
-        });
-      }
-
-      const { username, authSecret, salt, setupToken } = await readBody(req);
-
-      const given = Buffer.from(String(setupToken ?? ""));
-      const expected = Buffer.from(SETUP_TOKEN ?? "");
-      if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-        return send(res, 403, {
-          error: "Wrong setup token. It is printed in the server log when it starts.",
-        });
-      }
+      const { username, authSecret, salt, setupToken, invite: token } = await readBody(req);
+      const now = Date.now();
 
       if (!username || !authSecret || !salt) {
         return send(res, 400, { error: "username, authSecret and salt are required" });
+      }
+      if (!usernameOk(username)) {
+        return send(res, 400, {
+          error: "A username is 2 to 32 characters: lowercase letters, digits, dot, dash, underscore.",
+        });
+      }
+      if (existsSync(accountPath(username))) {
+        return send(res, 409, { error: "That username is taken." });
+      }
+
+      // Checked on every request rather than cached at boot, so a server that
+      // has just been set up refuses a second setup token without a restart.
+      const first = !accountsExist();
+      let usedInvite = null;
+
+      if (first) {
+        const given = Buffer.from(String(setupToken ?? ""));
+        const expected = Buffer.from(SETUP_TOKEN ?? "");
+        if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+          return send(res, 403, {
+            error: "Wrong setup token. It is printed in the server log when it starts.",
+          });
+        }
+      } else {
+        if (!token && setupToken) {
+          // Someone following the old instructions, or the first person to try
+          // the token after it was spent. Saying "this invitation does not
+          // exist" about a setup token would send them looking for the wrong
+          // thing entirely.
+          return send(res, 403, {
+            error: "The setup token only makes the first account. This server has one, so new accounts need an invitation.",
+          });
+        }
+        usedInvite = findInvite(token);
+        const problem = inviteProblem(usedInvite, username, now);
+        if (problem) return send(res, 403, { error: problem });
       }
 
       const hashSalt = randomBytes(16).toString("hex");
@@ -222,22 +397,65 @@ const server = createServer(async (req, res) => {
         salt,
         hashSalt,
         authHash: hashSecret(authSecret, hashSalt),
-        createdAt: Date.now(),
+        // The first account owns the server. Everyone else is a guest, and
+        // there is no path from guest to owner that does not go through the
+        // command line, on purpose.
+        admin: first,
+        createdAt: now,
+        gate: clearGate(),
       });
+
+      // Marked used after the account exists, never before. The other order
+      // would burn someone's only invitation on a write that then failed.
+      if (usedInvite) {
+        writeAtomic(invitePath(usedInvite.id), { ...usedInvite, usedAt: now, usedBy: username });
+      }
 
       return send(res, 201, { ok: true }, { "set-cookie": sessionCookie(issueSession(username)) });
     }
 
+    /**
+     * The one endpoint that is worth guessing at, and so the only one that
+     * counts how often it has been.
+     *
+     * Three things happen here that did not before. Every answer takes at least
+     * `FLOOR_MS`, so guessing costs real time and so a name that exists cannot
+     * be told from one that does not by how quickly the refusal arrives. Wrong
+     * passwords accumulate in a sliding window. And once there are enough of
+     * them the account shuts for a while, answering immediately with 429 rather
+     * than holding the socket, because a slow refusal is itself something to
+     * flood a server with.
+     */
     if (req.method === "POST" && url.pathname === "/api/login") {
       const { username, authSecret } = await readBody(req);
       const account = readJson(accountPath(username ?? ""));
+      const now = Date.now();
+
+      const waiting = account ? lockedFor(gateOf(account), now) : 0;
+      if (waiting > 0) {
+        return send(res, 429, {
+          error: "Too many failed attempts. Try again later.",
+        }, { "retry-after": String(retryAfterSeconds(waiting)) });
+      }
 
       // One message for both failures, so this cannot be used to find out which
       // usernames exist.
       if (!account || !secretMatches(authSecret ?? "", account)) {
+        if (account) {
+          writeAtomic(accountPath(account.username), {
+            ...account,
+            gate: countFailure(gateOf(account), now),
+          });
+        }
+        await notBefore(startedAt, FLOOR_MS);
         return send(res, 401, { error: "Wrong username or password" });
       }
 
+      if (gateOf(account).failures || gateOf(account).lockCount) {
+        writeAtomic(accountPath(account.username), { ...account, gate: clearGate() });
+      }
+
+      await notBefore(startedAt, FLOOR_MS);
       return send(res, 200, { ok: true }, { "set-cookie": sessionCookie(issueSession(username)) });
     }
 
@@ -259,13 +477,103 @@ const server = createServer(async (req, res) => {
      */
     if (req.method === "GET" && url.pathname === "/api/session") {
       const who = readSession(req.headers.cookie);
-      return who ? send(res, 200, { username: who }) : send(res, 401, { error: "Not signed in" });
+      if (!who) return send(res, 401, { error: "Not signed in" });
+      // Whether you are the owner is answered here rather than worked out in a
+      // browser, because a browser is where the answer would be convenient to
+      // change. The endpoints below ask again anyway; this is only so the app
+      // knows whether to draw the panel.
+      return send(res, 200, { username: who, admin: isAdmin(who) });
     }
 
     /** Where the proxy sends anyone without a session. */
     if (req.method === "GET" && url.pathname === "/login") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      return res.end(loginPage(url.searchParams.get("next") ?? "/"));
+      return res.end(loginPage(url.searchParams.get("next") ?? "/", url.searchParams.get("invite")));
+    }
+
+    // --- the owner's door --------------------------------------------------
+
+    /*
+     * Everything under here checks `isAdmin` for itself.
+     *
+     * The app hides the panel from everyone else, and that hiding is decoration.
+     * A hidden button is not a lock, because the request it would have sent can
+     * be typed by hand. This is the lock.
+     */
+    if (url.pathname === "/api/accounts" || url.pathname.startsWith("/api/accounts/") ||
+        url.pathname === "/api/invites" || url.pathname.startsWith("/api/invites/")) {
+      const who = readSession(req.headers.cookie);
+      if (!who) return send(res, 401, { error: "Not signed in" });
+      if (!isAdmin(who)) return send(res, 403, { error: "Not yours to see" });
+
+      if (req.method === "GET" && url.pathname === "/api/accounts") {
+        return send(res, 200, { accounts: listAccounts().map(describeAccount).filter(Boolean) });
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/invites") {
+        return send(res, 200, { invites: listInvites().map(describeInvite).filter(Boolean) });
+      }
+
+      /**
+       * Makes an invitation and shows the token exactly once.
+       *
+       * Only the hash is kept, so this answer cannot be asked for again. If the
+       * link is lost the invitation is revoked and a new one made, which is the
+       * correct amount of inconvenience for a value that lets someone in.
+       */
+      if (req.method === "POST" && url.pathname === "/api/invites") {
+        const { username, days } = await readBody(req);
+        if (!usernameOk(username)) {
+          return send(res, 400, {
+            error: "A username is 2 to 32 characters: lowercase letters, digits, dot, dash, underscore.",
+          });
+        }
+        if (existsSync(accountPath(username))) {
+          return send(res, 409, { error: "That username is taken." });
+        }
+        const made = makeInvite(username, days, who);
+        return send(res, 201, made);
+      }
+
+      const revoke = /^\/api\/invites\/([^/]+)\/revoke$/.exec(url.pathname);
+      if (req.method === "POST" && revoke) {
+        const id = decodeURIComponent(revoke[1]);
+        if (!existsSync(invitePath(id))) return send(res, 404, { error: "No such invitation" });
+        rmSync(invitePath(id));
+        return send(res, 200, { ok: true });
+      }
+
+      /**
+       * Removes an account and the only copy of that person's history.
+       *
+       * Asks for the owner's password again rather than trusting the session.
+       * Administering accounts from inside the app means a cookie left open on a
+       * borrowed laptop is now a cookie that can delete a friend's dose history,
+       * and one extra password prompt closes that entire class of accident.
+       */
+      const remove = /^\/api\/accounts\/([^/]+)\/remove$/.exec(url.pathname);
+      if (req.method === "POST" && remove) {
+        const target = decodeURIComponent(remove[1]);
+        const { authSecret } = await readBody(req);
+        const me = readJson(accountPath(who));
+
+        if (!me || !secretMatches(authSecret ?? "", me)) {
+          await notBefore(startedAt, FLOOR_MS);
+          return send(res, 403, { error: "Wrong password" });
+        }
+        if (target === who) {
+          // Removing yourself would leave a server with blobs and nobody who
+          // can reach them, and no way back in short of the command line.
+          return send(res, 400, { error: "You cannot remove your own account here. Use admin.mjs." });
+        }
+        if (!existsSync(accountPath(target))) return send(res, 404, { error: "No such account" });
+
+        rmSync(accountPath(target));
+        rmSync(blobPath(target), { force: true });
+        return send(res, 200, { ok: true });
+      }
+
+      return send(res, 404, { error: "No such endpoint" });
     }
 
     // --- the data ----------------------------------------------------------
@@ -332,7 +640,8 @@ const server = createServer(async (req, res) => {
 });
 
 /**
- * The page shown to anyone the proxy has turned away.
+ * The page shown to anyone the proxy has turned away, and the page an
+ * invitation link opens.
  *
  * Deliberately one file with no build step and no framework. It exists to take
  * a username and a password and call the same endpoint the app calls, so there
@@ -343,8 +652,13 @@ const server = createServer(async (req, res) => {
  * here: 600k PBKDF2 rounds, then HKDF with the "auth" label. The other label,
  * the one that produces the data key, is deliberately absent. This page has no
  * business holding it.
+ *
+ * With `?invite=` it asks for a password twice instead of once and calls
+ * register rather than login. The salt is made here, in the browser, and sent
+ * up with the account, because it is an input to the key and the server is not
+ * allowed to be the one that chooses it.
  */
-function loginPage(next) {
+function loginPage(next, invite) {
   const safeNext = next.startsWith("/") ? next : "/";
   return `<!doctype html>
 <html lang="en">
@@ -369,16 +683,29 @@ function loginPage(next) {
            background: #4ea1a5; color: #08131a; border: 0; border-radius: 8px; cursor: pointer; }
   button[disabled] { opacity: .6; cursor: default; }
   .err { color: #e0798b; font-size: 13px; min-height: 1.4em; margin: .75rem 0 0; }
+  .warn { color: #cfa24e; font-size: 12.5px; line-height: 1.55; margin: 0 0 1.25rem;
+          border-left: 2px solid #cfa24e; padding: .1rem 0 .1rem .7rem; }
+  input[readonly] { color: #8fa3bf; }
+  [hidden] { display: none; }
 </style>
 </head>
 <body>
 <form id="f">
   <h1>Bench</h1>
-  <p class="sub">Sign in to continue.</p>
+  <p class="sub" id="sub">Sign in to continue.</p>
+  <p class="warn" id="warn" hidden>
+    Your password is the key to your data. It never leaves this device, and it is
+    not stored anywhere. Nobody can reset it for you, so if you lose it your
+    history is gone. Choose something you will not lose.
+  </p>
   <label for="u">Username</label>
   <input id="u" name="username" autocomplete="username" autofocus required>
   <label for="p">Password</label>
   <input id="p" name="password" type="password" autocomplete="current-password" required>
+  <div id="again" hidden>
+    <label for="p2">Password again</label>
+    <input id="p2" name="password2" type="password" autocomplete="new-password">
+  </div>
   <button id="b" type="submit">Sign in</button>
   <p class="err" id="e"></p>
 </form>
@@ -402,20 +729,82 @@ async function authSecret(password, saltB64) {
 const f = document.getElementById("f");
 const b = document.getElementById("b");
 const e = document.getElementById("e");
+const u = document.getElementById("u");
+const p = document.getElementById("p");
+const p2 = document.getElementById("p2");
+
+const INVITE = ${JSON.stringify(invite ?? null)};
+const NEXT = ${JSON.stringify(safeNext)};
+let joining = false;
+
+/*
+ * An invitation turns this into a registration form.
+ *
+ * The name comes from the invitation rather than from typing, because the
+ * invitation is already bound to one, and a form that lets you enter a
+ * different one only exists to reject you afterwards.
+ */
+if (INVITE) {
+  (async () => {
+    const res = await fetch("/api/invite?token=" + encodeURIComponent(INVITE));
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      e.textContent = (body && body.error) || "This invitation cannot be used.";
+      b.disabled = true;
+      return;
+    }
+    joining = true;
+    u.value = body.username;
+    u.readOnly = true;
+    p.autocomplete = "new-password";
+    p2.required = true;
+    document.getElementById("sub").textContent = "Choose a password for " + body.username + ".";
+    document.getElementById("warn").hidden = false;
+    document.getElementById("again").hidden = false;
+    b.textContent = "Create account";
+    p.focus();
+  })();
+}
 
 f.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   b.disabled = true;
   e.textContent = "";
+  const label = joining ? "Create account" : "Sign in";
   try {
-    const username = document.getElementById("u").value.trim();
-    const password = document.getElementById("p").value;
+    const username = u.value.trim();
+    const password = p.value;
+
+    if (joining && password !== p2.value) throw new Error("The two passwords do not match.");
+    if (joining && password.length < 10) {
+      throw new Error("Use at least 10 characters. This is the only key to your data.");
+    }
+
+    // Takes a moment on a phone. The whole point of the iteration count.
+    b.textContent = joining ? "Creating..." : "Signing in...";
+
+    if (joining) {
+      // The salt is made here and sent up. It is an input to the key, so the
+      // server does not get to choose it.
+      const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username, salt, invite: INVITE, authSecret: await authSecret(password, salt),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error((body && body.error) || "Could not create the account");
+      }
+      location.replace(NEXT);
+      return;
+    }
 
     const saltRes = await fetch("/api/salt?username=" + encodeURIComponent(username));
     const { salt } = await saltRes.json();
 
-    // Takes a moment on a phone. The whole point of the iteration count.
-    b.textContent = "Signing in...";
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -424,13 +813,13 @@ f.addEventListener("submit", async (ev) => {
 
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      throw new Error(body?.error ?? "Sign in failed");
+      throw new Error((body && body.error) || "Sign in failed");
     }
-    location.replace(${JSON.stringify(safeNext)});
+    location.replace(NEXT);
   } catch (err) {
     e.textContent = err.message;
     b.disabled = false;
-    b.textContent = "Sign in";
+    b.textContent = label;
   }
 });
 </script>
@@ -470,7 +859,7 @@ function looksPrivate(origin) {
 server.listen(PORT, () => {
   console.log(`Bench sync on http://localhost:${PORT}`);
   console.log(`Data in ${DATA_DIR}`);
-  console.log(`Allowing browser requests from ${ORIGIN}`);
+  console.log(`Allowing browser requests from ${ORIGINS.join(", ")}`);
 
   /*
    * A reminder rather than a refusal.
@@ -481,7 +870,7 @@ server.listen(PORT, () => {
    * the requirement lives in a README, and a README is a thing you read once and
    * a log is a thing you see every restart.
    */
-  if (!looksPrivate(ORIGIN)) {
+  if (!ORIGINS.every(looksPrivate)) {
     console.log("");
     console.log("  The app at this origin is not on a machine you are sitting at.");
     console.log("  Put the whole site behind the proxy gate before you use it:");
@@ -489,13 +878,25 @@ server.listen(PORT, () => {
     console.log("  Without it, anyone who types the address gets the app.");
     console.log("");
   }
+  if (!process.env.BENCH_SESSION_SECRET) {
+    console.log("");
+    console.log("  BENCH_SESSION_SECRET is not set, so one was invented for this run.");
+    console.log("  The next restart will sign everybody out at the same moment.");
+    console.log("  Fine while you are the only account. Not fine once there are others.");
+    console.log("");
+  }
+
   if (SETUP_TOKEN) {
     console.log("");
     console.log("  No account yet. Register with this setup token:");
     console.log(`      ${SETUP_TOKEN}`);
-    console.log("  It changes on every restart and closes for good once an account exists.");
+    console.log("  It changes on every restart and is spent once the first account exists.");
+    console.log("  That account is the owner. Everyone after it arrives by invitation:");
+    console.log("      node server/admin.mjs invite --user NAME");
     console.log("");
   } else {
-    console.log("Registration is closed, an account already exists");
+    const accounts = listAccounts();
+    console.log(`${accounts.length} account${accounts.length === 1 ? "" : "s"}. New ones need an invitation:`);
+    console.log("      node server/admin.mjs invite --user NAME");
   }
 });

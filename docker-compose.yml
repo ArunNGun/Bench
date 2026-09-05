@@ -76,14 +76,17 @@ services:
     environment:
       PORT: "8787"
       BENCH_DATA_DIR: /data
-      # The browser origin allowed to call this. Not the server's own address:
-      # the request comes from whatever machine the browser is on, so reaching
-      # the app from another device means naming that address here.
-      #   $env:BENCH_ORIGIN="http://192.168.1.20:3210"
+      # The browser origins allowed to call this, comma separated. Not the
+      # server's own address: the request comes from whatever machine the
+      # browser is on, so reaching the app from another device means naming that
+      # address here. A list, because the domain and a laptop on the LAN are
+      # both legitimately the app.
+      #   BENCH_ORIGIN=https://bench.example,http://192.168.1.20:3210
       BENCH_ORIGIN: ${BENCH_ORIGIN:-http://localhost:3210}
-      # Set this for anything beyond a look, or every restart logs you out.
-      # Registration needs no switch: the server prints a setup token while it
-      # has no account, and closes itself once it has one.
+      # Set this. Without it the server invents one at every start, so the next
+      # restart signs everybody out at the same moment. Survivable while you are
+      # the only account, and not once other people rely on it.
+      #   BENCH_SESSION_SECRET=$(openssl rand -hex 32)
       BENCH_SESSION_SECRET: ${BENCH_SESSION_SECRET:-}
     volumes:
       - ./server:/app/server:ro
