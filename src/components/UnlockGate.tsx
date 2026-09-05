@@ -62,6 +62,20 @@ export function UnlockGate() {
        */
       const derived = await login(HOSTED!.url, session!.username, password);
       await rememberKey(derived);
+      /*
+       * Write the record the engine keeps its place in. It is created here as
+       * well as by the engine itself, because everything downstream reads a
+       * username from it, and a hosted build otherwise never has one: the panel
+       * in Settings is what used to write this, and nobody signing in through
+       * the login page ever opens it.
+       */
+      useStore.getState().updateSettings({
+        sync: {
+          url: HOSTED!.url,
+          username: session!.username,
+          remoteSeenAt: useStore.getState().settings.sync?.remoteSeenAt,
+        },
+      });
       setKey(derived);
       setPassword("");
     } catch (err) {
