@@ -319,9 +319,16 @@ export function SyncPanel() {
                 <RefreshCw size={15} /> Sync now
               </Button>
             )}
-            <Button variant="ghost" disabled={busy != null} onClick={disconnect}>
-              <CloudOff size={15} /> Sign out
-            </Button>
+            {/*
+              A hosted build signs out from the header and from its own card,
+              which also clear this browser's copy. Leaving this one here would
+              be a second way to leave that does less, sitting next to the first.
+            */}
+            {!accountRequired() && (
+              <Button variant="ghost" disabled={busy != null} onClick={disconnect}>
+                <CloudOff size={15} /> Sign out
+              </Button>
+            )}
           </>
         )}
       </div>
