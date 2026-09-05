@@ -634,6 +634,35 @@ export interface Vial {
   /** Beyond-use date, from first puncture. */
   budAt?: number;
 
+  /**
+   * What the solution is in. Absent means a vial, which is every row made
+   * before nasal sprays existed and every row anyone injects from.
+   *
+   * A spray bottle is deliberately a `Vial` rather than a collection of its
+   * own. The reasoning is the opposite of the one that keeps bottles of water
+   * apart: water has no milligrams, so a vial type would be a category error
+   * carried into every figure. A spray bottle is a mass dissolved in a volume,
+   * which is exactly what a vial is, so it reuses concentration, depletion,
+   * cost per dose, days of supply and the whole of `stockFor` rather than
+   * growing a second implementation of each.
+   *
+   * What it does not reuse is the syringe. See `calc/spray.ts`.
+   */
+  container?: "vial" | "spray";
+  /**
+   * Millilitres one press of the pump delivers, for a spray.
+   *
+   * Measured rather than assumed. Calibrated bottles state it; the rest are
+   * measured by pulling the plunger out of a syringe and spraying into the
+   * barrel, which is where the 0.1 mL default comes from.
+   */
+  mlPerSpray?: number;
+  /**
+   * The vial this bottle was filled from, so the chain stays visible after the
+   * vial has been marked finished.
+   */
+  filledFromVialId?: string;
+
   notes?: string;
 }
 

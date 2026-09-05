@@ -29,7 +29,7 @@ Most trackers in this space either want an account or get the arithmetic wrong. 
 | **Library** | 49 compounds across metabolic, repair, growth hormone, anabolic, ancillary and blends. Cited half-lives, dose ranges, titration ladders, side effects, contraindications, legal status |
 | **Plan** | Protocols with schedules, titration ladders, pinned injection sites, adherence |
 | **Log** | Doses with site, units, syringe scale, how you felt, side effects |
-| **Stock** | Vials sealed → reconstituted → empty, tracked by mass, with beyond-use dates and cost per dose |
+| **Stock** | Vials sealed → reconstituted → empty, tracked by mass, with beyond-use dates and cost per dose. A made-up vial can be emptied into a nasal spray bottle, which then doses in presses rather than in marks |
 | **Calculator** | Reconstitution and dose ↔ units for U-100 and U-40 |
 | **Bloodwork** | 16 markers charted against dose history, with prompts for what your compounds make worth watching |
 | **Outcomes** | Weight, waist, body fat, plus sleep and resting heart rate read from Android Health |

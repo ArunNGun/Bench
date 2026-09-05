@@ -23,7 +23,14 @@ import { BlendBreakdown } from "./BlendBreakdown";
 import { isBlend } from "@/lib/calc/blend";
 import { allPeptides, findPeptide, useProfileData, useStore, vialStatus } from "@/lib/store";
 import { AddCompoundInline } from "./AddCompoundInline";
-import { pickVialForDose, stockFor, vialRemainingMcg, vialUsable } from "@/lib/calc/inventory";
+import {
+  matchesContainer,
+  pickVialForDose,
+  stockFor,
+  vialRemainingMcg,
+  vialUsable,
+} from "@/lib/calc/inventory";
+import { mcgForSprays, mcgPerSpray, mlForSprays, spraysForDose } from "@/lib/calc/spray";
 import { suggestSite } from "@/lib/calc/sites";
 import {
   calculateDraw,
@@ -94,9 +101,14 @@ export function LogDoseSheet({
    */
   function applyProtocol(proto: Protocol | undefined, forPeptideId: string, atMs: number) {
     const dose = proto ? scheduledDoseMcg(proto, atMs) : 0;
+    const nextRoute = proto?.route ?? "subcutaneous";
     setDoseMcg(dose);
-    setRoute(proto?.route ?? "subcutaneous");
-    setVialId(pickVialForDose(vials, forPeptideId, dose, atMs)?.id ?? "");
+    setRoute(nextRoute);
+    // A nasal protocol draws from a bottle and never from a vial, so the
+    // container is decided by the route rather than by whatever is nearest.
+    setVialId(
+      pickVialForDose(vials, forPeptideId, dose, atMs, nextRoute === "intranasal" ? "spray" : "vial")
+        ?.id ?? "");
     setSiteOverride(false);
     setSite(suggestSite(logs.filter((l) => l.peptideId === forPeptideId), atMs, 14, proto?.sites));
   }
@@ -164,6 +176,15 @@ export function LogDoseSheet({
     : protocols.find((p) => p.id === protocolId);
   const syringe = syringeById(syringeId) ?? SYRINGES[2];
 
+  /*
+   * A nasal dose has almost nothing in common with an injection at the moment
+   * of taking it. No barrel, no marks, no site, and a count of presses rather
+   * than a volume. Rather than a second form, the half of this one that is
+   * about a syringe stands down, which keeps the compound, the dose, the time,
+   * the notes and how you feel in one place.
+   */
+  const nasal = route === "intranasal";
+
   // Sites pinned to this protocol, if any were chosen when it was set up.
   // Memoised so the identity is stable across renders, it feeds hook deps.
   const pinned = useMemo(() => protocol?.sites ?? [], [protocol?.sites]);
@@ -181,8 +202,13 @@ export function LogDoseSheet({
   // Every vial that could supply this dose, open or still sealed. Restricting
   // this to reconstituted vials is what stopped stock from moving.
   const usableVials = useMemo(
-    () => vials.filter((v) => v.peptideId === peptideId && vialUsable(v, Date.now())),
-    [vials, peptideId]);
+    () =>
+      vials.filter(
+        (v) =>
+          v.peptideId === peptideId &&
+          matchesContainer(v, nasal ? "spray" : "vial") &&
+          vialUsable(v, Date.now())),
+    [vials, peptideId, nasal]);
 
   // Reset the form each time it opens, prefilled from the protocol.
   useEffect(() => {
@@ -277,8 +303,14 @@ export function LogDoseSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, vialId, syringeId, concMcgPerMl]);
 
+  /*
+   * A syringe reading, and only for a syringe. A spray bottle has a
+   * concentration and would happily produce units and a barrel scale, and
+   * recording those against a dose that went up a nose would be a number
+   * nobody could act on and nobody asked for.
+   */
   const draw =
-    vial && vial.diluentMl
+    !nasal && vial && vial.diluentMl
       ? calculateDraw({
           vialMcg: mgToMcg(vial.strengthMg),
           diluentMl: vial.diluentMl,
@@ -442,6 +474,36 @@ export function LogDoseSheet({
               />
             </Field>
 
+            {nasal ? (
+              /*
+                Presses, because that is what a person does and counts. Whole
+                ones only: a pump delivers its volume or it fails, so half a
+                press is a failed dose rather than half a dose.
+              */
+              <Field
+                label="Presses"
+                hint={
+                  vial && mcgPerSpray(vial) > 0
+                    ? `${formatDose(mcgPerSpray(vial))} a press, ${trim(
+                        mlForSprays(vial, spraysForDose(vial, doseMcg)),
+                        2)} mL in total.`
+                    : "Fill a spray bottle from a made-up vial to convert between presses and dose."
+                }
+              >
+                <NumberInput
+                  value={vial ? spraysForDose(vial, doseMcg) : ""}
+                  min={0}
+                  step={1}
+                  suffix="presses"
+                  placeholder={vial ? undefined : "n/a"}
+                  disabled={skipped || !vial}
+                  onChange={(e) => {
+                    if (!vial) return;
+                    setDoseMcg(Number(mcgForSprays(vial, Math.round(Number(e.target.value))).toFixed(2)));
+                  }}
+                />
+              </Field>
+            ) : (
             <Field
               label="Syringe units"
               hint={
@@ -460,9 +522,11 @@ export function LogDoseSheet({
                 onChange={(e) => setUnitsAndDose(Number(e.target.value))}
               />
             </Field>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            {!nasal && (
             <Field
               label="Barrel"
               hint={
@@ -482,6 +546,7 @@ export function LogDoseSheet({
                 onChange={(v) => setScale(v as SyringeScale)}
               />
             </Field>
+            )}
 
             <Field label="When">
               <input
@@ -504,6 +569,7 @@ export function LogDoseSheet({
               </Select>
             </Field>
 
+            {!nasal && (
             <Field
               label="Site"
               hint={
@@ -521,8 +587,16 @@ export function LogDoseSheet({
                 ))}
               </Select>
             </Field>
+            )}
           </div>
 
+          {/*
+            Nothing about rotation applies to a nose. Repeatedly injecting one
+            spot builds tissue that absorbs erratically, which is the whole
+            reason this map exists; a nose has no such problem, and asking which
+            nostril would invite a record nobody can act on.
+          */}
+          {!nasal && (
           <div>
             <SiteMap
               logs={peptideLogs}
@@ -549,11 +623,14 @@ export function LogDoseSheet({
               </div>
             )}
           </div>
+          )}
 
           {usableVials.length > 0 ? (
             <Field
-              label="Drawn from"
-              hint="This dose comes off the chosen vial. Set it to “Not recorded” to log without touching stock."
+              label={nasal ? "Sprayed from" : "Drawn from"}
+              hint={`This dose comes off the chosen ${
+                nasal ? "bottle" : "vial"
+              }. Set it to “Not recorded” to log without touching stock.`}
             >
               <Select value={vialId} onChange={(e) => setVialId(e.target.value)}>
                 <option value="">Not recorded, leave stock alone</option>
@@ -573,8 +650,9 @@ export function LogDoseSheet({
             </Field>
           ) : (
             <Callout tone="warn">
-              No vial of this peptide is in stock, so this dose will be logged without drawing
-              anything down. Add one under Stock to keep the count accurate.
+              {nasal
+                ? "No nasal spray of this peptide is filled, so this dose will be logged without drawing anything down. Make up a vial under Stock and transfer it into a bottle to keep the count accurate."
+                : "No vial of this peptide is in stock, so this dose will be logged without drawing anything down. Add one under Stock to keep the count accurate."}
             </Callout>
           )}
 
@@ -596,7 +674,7 @@ export function LogDoseSheet({
             </div>
           )}
 
-          {draw && (
+          {draw && !nasal && (
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone="tangerine">
@@ -617,6 +695,26 @@ export function LogDoseSheet({
                 </Select>
               </div>
               <Syringe spec={syringe} units={draw.unitsRounded} ghostUnits={draw.units} />
+            </div>
+          )}
+
+          {nasal && vial && mcgPerSpray(vial) > 0 && doseMcg > 0 && !skipped && (
+            <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="grape">
+                  {spraysForDose(vial, doseMcg)} press
+                  {spraysForDose(vial, doseMcg) === 1 ? "" : "es"}
+                </Badge>
+                <Badge>
+                  {trim(mlForSprays(vial, spraysForDose(vial, doseMcg)), 2)} mL ·{" "}
+                  {formatDose(mcgForSprays(vial, spraysForDose(vial, doseMcg)))}
+                </Badge>
+              </div>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--faint)]">
+                Split them between nostrils however you like. Nothing here records which, because a
+                nose has no rotation problem to solve and the record would be one nobody could act
+                on.
+              </p>
             </div>
           )}
 

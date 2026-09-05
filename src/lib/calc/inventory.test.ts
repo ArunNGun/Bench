@@ -4,6 +4,7 @@ import {
   daysOfSupplyForProtocol,
   diluentAfterTopUp,
   marksForDose,
+  matchesContainer,
   drawFromVial,
   groupSealedVials,
   supplyOutlook,
@@ -726,5 +727,53 @@ describe("diluentAfterTopUp", () => {
     expect(diluentAfterTopUp(ghk, 0)).toBeNull();
     expect(diluentAfterTopUp(ghk, -1)).toBeNull();
     expect(diluentAfterTopUp(ghk, Number.NaN)).toBeNull();
+  });
+});
+
+describe("keeping sprays and syringes apart", () => {
+  const NOW = Date.UTC(2026, 8, 5, 9, 0, 0);
+  const shelf = [
+    vial({ id: "v", state: "reconstituted", strengthMg: 5, diluentMl: 2 }),
+    vial({
+      id: "spray",
+      state: "reconstituted",
+      strengthMg: 5,
+      diluentMl: 5,
+      container: "spray",
+      mlPerSpray: 0.1,
+    }),
+  ];
+
+  it("treats a row with no container as a vial, which every old row is", () => {
+    expect(matchesContainer({})).toBe(true);
+    expect(matchesContainer({ container: "vial" })).toBe(true);
+    expect(matchesContainer({ container: "spray" })).toBe(false);
+    expect(matchesContainer({ container: "spray" }, "spray")).toBe(true);
+  });
+
+  it("never hands a spray bottle to an injection", () => {
+    expect(pickVialForDose(shelf, "klow", 250, NOW)!.id).toBe("v");
+  });
+
+  it("never hands a vial to a nasal dose", () => {
+    expect(pickVialForDose(shelf, "klow", 250, NOW, "spray")!.id).toBe("spray");
+  });
+
+  it("finds nothing rather than the wrong thing", () => {
+    // A shelf holding only a spray must not offer it to a syringe, even though
+    // it is the only stock of that compound there is.
+    const onlySpray = [shelf[1]];
+    expect(pickVialForDose(onlySpray, "klow", 250, NOW)).toBeNull();
+  });
+
+  it("counts each container's stock on its own", () => {
+    expect(stockFor(shelf, "klow", 250, NOW).availableMcg).toBe(5000);
+    expect(stockFor(shelf, "klow", 250, NOW, "spray").availableMcg).toBe(5000);
+  });
+
+  it("refuses to read marks off a spray bottle", () => {
+    // Marks are a reading off a barrel and a nasal dose never meets one, so
+    // this has to be null rather than a number nobody can act on.
+    expect(marksForDose([shelf[1]], "klow", 250, "U100", NOW)).toBeNull();
   });
 });
