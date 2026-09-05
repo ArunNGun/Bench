@@ -23,7 +23,7 @@
  */
 
 import { decideSync, describeSync, type SyncAction } from "./decide";
-import { SyncConflict, SyncOffline, SyncError, type StoredBlob } from "./client";
+import { SyncConflict, SyncOffline, SyncError, SyncSignedOut, type StoredBlob } from "./client";
 
 export type SyncPhase =
   | "off"
@@ -31,6 +31,8 @@ export type SyncPhase =
   | "syncing"
   | "offline"
   | "conflict"
+  /** The session expired. Nothing is wrong with the data, and nobody is signed in. */
+  | "signedout"
   | "error";
 
 export interface SyncStatus {
@@ -205,6 +207,22 @@ export function createSyncEngine(ports: SyncPorts) {
           message: err.message,
           conflict: err.current,
         });
+        return;
+      }
+
+      /*
+       * A cookie expires on its own schedule, and every cookie on a server dies
+       * at once if its signing secret changes. Neither is a failure, and
+       * neither is fixed by asking again with the same nothing.
+       *
+       * It still retries, slowly. Somebody who signs in on the login page in
+       * another tab should not have to come back here and press a button, and
+       * at this interval a session that is never renewed costs one request an
+       * hour rather than a loop.
+       */
+      if (err instanceof SyncSignedOut) {
+        setStatus({ phase: "signedout", message: err.message });
+        schedule(RETRY_MAX_MS);
         return;
       }
 
