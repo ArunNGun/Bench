@@ -22,6 +22,7 @@ import { FirstBackupGate } from "./FirstBackupGate";
 import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
+import { SignOutButton } from "./SignOutButton";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
@@ -95,6 +96,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               both answer "whose data is this and where is my copy of it".
             */}
             <BackupButton />
+            {/* Renders nothing outside a hosted build. */}
+            <SignOutButton />
             {SECONDARY.map((item) => (
               <Link
                 key={item.href}

@@ -137,6 +137,19 @@ the previous document aside exactly as it would for any other write that loses
 records. What was in the browser before is one press away in the notice on
 every page.
 
+Signing out is also different, and is in the header rather than buried in a
+settings card. It sends anything unsent to the server, and only then removes
+this browser's copy of the data along with the key that reads it. That is
+deliberate: a hosted server creates a situation Bench never had before, a
+browser one person used and another person opens, and the dose history sits in
+IndexedDB in plain text as it always has. Leaving it there would hand it to
+whoever sits down next.
+
+If anything cannot be sent, signing out refuses and says why rather than taking
+the day's logging with it. Offline, an unanswered conflict, a failed run and an
+expired session each get their own sentence, because each has a different way
+out.
+
 With the requirement set, somebody joining is stopped once, at the start, and
 asked to save a backup file before the app opens. That is where they are told,
 at the only moment it can still be acted on, that their password is the key and

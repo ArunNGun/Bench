@@ -159,6 +159,32 @@ export async function clearRescue(): Promise<void> {
   if (hasIndexedDB()) await idbDel(RESCUE_KEY);
 }
 
+/**
+ * Erase this browser's copy of everything, document and rescue together.
+ *
+ * The one place in the app that deletes without setting anything aside, and it
+ * has to be. It exists for signing out of a hosted server, which is the only
+ * situation where a browser passes from one person to another, and where a
+ * rescue copy would not be a safety net but a way of handing the next person
+ * the previous one's dose history.
+ *
+ * Deleting the keys rather than writing an empty document through the store,
+ * for the same reason: a write would go through the guard and produce exactly
+ * the rescue copy this is trying not to leave. It also avoids a race between
+ * that write and the deletion that would have to chase it.
+ *
+ * Only ever called after the server has confirmed it holds everything. The
+ * caller is responsible for that, and refuses if it cannot.
+ */
+export async function wipeLocal(): Promise<void> {
+  if (!hasIndexedDB()) return;
+  // So a later write in this tab does not compare against a document that is
+  // no longer there and report the whole thing as an alarming loss.
+  lastWritten = null;
+  await idbDel(RESCUE_KEY);
+  await idbDel(STORAGE_KEY);
+}
+
 // Re-exported so existing importers keep working; it is defined alongside the
 // migration that has to agree with it.
 export { DATA_VERSION } from "./migrate";

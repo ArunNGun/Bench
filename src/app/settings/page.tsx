@@ -45,6 +45,7 @@ import { doseCsv } from "@/lib/calc/dosecsv";
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
+import { AccountCard } from "@/components/AccountCard";
 import { AdminPanel } from "@/components/AdminPanel";
 import { SyncPanel } from "@/components/SyncPanel";
 import { RemindersPanel } from "@/components/RemindersPanel";
@@ -114,6 +115,8 @@ export default function SettingsPage() {
       <Backups />
 
       <ImportPanel />
+
+      <AccountCard />
 
       <SyncPanel />
 
