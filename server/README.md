@@ -137,6 +137,13 @@ the previous document aside exactly as it would for any other write that loses
 records. What was in the browser before is one press away in the notice on
 every page.
 
+Signing in on `/login` proves who somebody is and nothing else. That page
+derives only the auth half of the password, on purpose, because it is a sign-in
+form and has no business holding a key to anybody's history. So the app asks for
+the password once on arrival, in front of everything, and derives the half it
+needs. Without that step it would come up authenticated, sync nothing, and give
+no clue why.
+
 Signing out is also different, and is in the header rather than buried in a
 settings card. It sends anything unsent to the server, and only then removes
 this browser's copy of the data along with the key that reads it. That is

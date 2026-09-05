@@ -19,6 +19,7 @@ import { ProfileSwitcher } from "./ProfileSwitcher";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
 import { FirstBackupGate } from "./FirstBackupGate";
+import { UnlockGate } from "./UnlockGate";
 import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
@@ -67,6 +68,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       <SystemBarsSync />
       <AutoBackup />
       <ReminderRunner />
+      {/*
+        Before the backup gate, which asks for a file this browser cannot yet
+        produce: without the key there is nothing to export.
+      */}
+      <UnlockGate />
       <FirstBackupGate />
 
       {/*
@@ -96,8 +102,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               both answer "whose data is this and where is my copy of it".
             */}
             <BackupButton />
-            {/* Renders nothing outside a hosted build. */}
-            <SignOutButton />
             {SECONDARY.map((item) => (
               <Link
                 key={item.href}
@@ -114,6 +118,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 <span className="hidden lg:inline">{item.label}</span>
               </Link>
             ))}
+            {/*
+              Last but one, beside the theme toggle rather than beside Backup.
+              Leaving is not something anybody reaches for often, and putting it
+              next to a control that writes a file invites the wrong tap. It
+              renders nothing outside a hosted build.
+            */}
+            <SignOutButton />
             <ThemeToggle />
           </div>
         </div>
