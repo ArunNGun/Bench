@@ -207,6 +207,114 @@ export async function putBlob(baseUrl: string, blob: StoredBlob, ifMatch: number
   await call(baseUrl, "/api/data", { method: "PUT", body: JSON.stringify({ ...blob, ifMatch }) });
 }
 
+// ---------------------------------------------------------------------------
+// Who am I, and the parts only an owner can reach
+// ---------------------------------------------------------------------------
+
+export interface SessionInfo {
+  username: string;
+  /** Whether this account may see and change the others. Decided by the server. */
+  admin: boolean;
+}
+
+/**
+ * Who the server thinks is asking, or null for nobody.
+ *
+ * `admin` comes from here rather than from anything this app works out for
+ * itself. The panel it controls is only drawn for an owner, and that drawing is
+ * decoration: every endpoint behind it asks the same question again, because a
+ * hidden button is not a lock when the request it would have sent can be typed
+ * by hand.
+ */
+export async function session(baseUrl: string): Promise<SessionInfo | null> {
+  try {
+    const body = (await call(baseUrl, "/api/session")) as SessionInfo | null;
+    return body?.username ? { username: body.username, admin: body.admin === true } : null;
+  } catch (err) {
+    if (err instanceof SyncSignedOut) return null;
+    throw err;
+  }
+}
+
+export interface AccountSummary {
+  username: string;
+  admin: boolean;
+  createdAt: number | null;
+  lastSyncAt: number | null;
+  /** Size of the sealed blob. Never its contents, which the server cannot read. */
+  bytes: number;
+  failures: number;
+  lockedUntil: number | null;
+}
+
+export interface InviteSummary {
+  id: string;
+  username: string;
+  createdAt: number;
+  createdBy: string;
+  expiresAt: number;
+  usedAt: number | null;
+  usedBy: string | null;
+}
+
+export async function listAccounts(baseUrl: string): Promise<AccountSummary[]> {
+  const body = (await call(baseUrl, "/api/accounts")) as { accounts?: AccountSummary[] } | null;
+  return body?.accounts ?? [];
+}
+
+export async function listInvites(baseUrl: string): Promise<InviteSummary[]> {
+  const body = (await call(baseUrl, "/api/invites")) as { invites?: InviteSummary[] } | null;
+  return body?.invites ?? [];
+}
+
+export interface NewInvite {
+  id: string;
+  username: string;
+  /** Shown once and never again. Only its hash reaches the disk. */
+  token: string;
+  expiresAt: number;
+}
+
+export async function createInvite(
+  baseUrl: string,
+  username: string,
+  days?: number): Promise<NewInvite> {
+  const body = (await call(baseUrl, "/api/invites", {
+    method: "POST",
+    body: JSON.stringify({ username, days }),
+  })) as NewInvite | null;
+  if (!body?.token) throw new SyncError("The server did not return an invitation");
+  return body;
+}
+
+export async function revokeInvite(baseUrl: string, id: string): Promise<void> {
+  await call(baseUrl, `/api/invites/${encodeURIComponent(id)}/revoke`, { method: "POST" });
+}
+
+/**
+ * Remove an account and the only copy of that person's history.
+ *
+ * Asks for the owner's password again rather than riding on the session. A
+ * cookie left open on a borrowed laptop is now a cookie that can delete a
+ * friend's dose history, and one prompt closes that whole class of accident.
+ *
+ * The password is turned into the same auth secret used to sign in, here, and
+ * the password itself is not sent.
+ */
+export async function removeAccount(
+  baseUrl: string,
+  owner: string,
+  ownerPassword: string,
+  target: string): Promise<void> {
+  requireCrypto();
+  const salt = await fetchSalt(baseUrl, owner);
+  const { authSecret } = await deriveKeys(ownerPassword, salt);
+  await call(baseUrl, `/api/accounts/${encodeURIComponent(target)}/remove`, {
+    method: "POST",
+    body: JSON.stringify({ authSecret }),
+  });
+}
+
 /** Encrypt here, upload the result. The server never holds the plain payload. */
 export async function pushData(
   baseUrl: string,
