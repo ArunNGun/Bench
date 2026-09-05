@@ -96,6 +96,13 @@ The address alone, without the requirement, is a real and useful middle state.
 The server is filled in, and somebody who wants to use the app without an
 account still can.
 
+With the requirement set, somebody joining is stopped once, at the start, and
+asked to save a backup file before the app opens. That is where they are told,
+at the only moment it can still be acted on, that their password is the key and
+that nobody can reset it. The way out is the file rather than a checkbox,
+because a checkbox measures only whether somebody will click a checkbox. It
+never appears for anyone who has saved a file before.
+
 ### The rest of `admin.mjs`
 
 ```bash
