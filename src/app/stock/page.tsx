@@ -913,6 +913,24 @@ function AddVialForm({
   );
 }
 
+/**
+ * One name per diluent, and every screen uses it.
+ *
+ * Three forms named the same thing three ways: a reconstitution offered "0.9%
+ * sodium chloride", a transfer offered "Sterile saline 0.9%", and the shelf
+ * called it something else again. Somebody went looking for saline in a list
+ * that had it and could not see it, which is what a synonym costs.
+ */
+const DILUENT_LABEL: Record<DiluentKind, string> = {
+  bacteriostatic: "Bacteriostatic water",
+  sterile: "Sterile water (single use)",
+  saline: "Saline 0.9% (sodium chloride)",
+  oil: "Carrier oil",
+};
+
+/** The kinds a vial or a bottle can actually be made up with. Oil is not one. */
+const DILUENT_CHOICES: DiluentKind[] = ["bacteriostatic", "sterile", "saline"];
+
 function ReconstituteForm({
   vial,
   bottles,
@@ -967,9 +985,11 @@ function ReconstituteForm({
             value={diluent}
             onChange={(e) => setDiluent(e.target.value as NonNullable<Vial["diluent"]>)}
           >
-            <option value="bacteriostatic">Bacteriostatic water</option>
-            <option value="sterile">Sterile water (single use)</option>
-            <option value="saline">0.9% sodium chloride</option>
+            {DILUENT_CHOICES.map((k) => (
+              <option key={k} value={k}>
+                {DILUENT_LABEL[k]}
+              </option>
+            ))}
           </Select>
         </Field>
       </div>
@@ -1128,9 +1148,13 @@ function TransferToSprayForm({
 
       <Field label="What went in">
         <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
-          <option value="saline">Sterile saline 0.9%</option>
-          <option value="sterile">Sterile water</option>
-          <option value="bacteriostatic">Bacteriostatic water</option>
+          {/* Saline first, because a nose does not take the preservative in
+              bacteriostatic water. */}
+          {(["saline", "sterile", "bacteriostatic"] as DiluentKind[]).map((k) => (
+            <option key={k} value={k}>
+              {DILUENT_LABEL[k]}
+            </option>
+          ))}
         </Select>
       </Field>
 
@@ -1274,13 +1298,6 @@ function TopUpForm({
     </Card>
   );
 }
-
-const DILUENT_LABEL: Record<DiluentKind, string> = {
-  bacteriostatic: "Bacteriostatic water",
-  sterile: "Sterile water",
-  saline: "0.9% sodium chloride",
-  oil: "Carrier oil",
-};
 
 /**
  * Water, on its own shelf.
