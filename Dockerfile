@@ -37,8 +37,24 @@ COPY . .
 # rebuilt. Substituting here means an empty value is treated as absent.
 ARG BUILD_ID
 
+# Which server this image belongs to, if any.
+#
+# Build arguments rather than runtime environment, and that is not a choice.
+# Next inlines NEXT_PUBLIC_* into the JavaScript while it compiles, so by the
+# time a container starts the answer is already baked into the bundle it is
+# serving. Setting these in compose's `environment:` looks right, changes
+# nothing, and gives no error, which is the most expensive kind of wrong.
+#
+# Both absent is the ordinary Bench: no address, no account, every screen as it
+# has always been. See src/lib/sync/hosted.ts.
+ARG NEXT_PUBLIC_SYNC_URL
+ARG NEXT_PUBLIC_REQUIRE_ACCOUNT
+
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN BUILD_ID="${BUILD_ID:-$(date +%s%3N)}" npm run build
+RUN BUILD_ID="${BUILD_ID:-$(date +%s%3N)}" \
+    NEXT_PUBLIC_SYNC_URL="${NEXT_PUBLIC_SYNC_URL}" \
+    NEXT_PUBLIC_REQUIRE_ACCOUNT="${NEXT_PUBLIC_REQUIRE_ACCOUNT}" \
+    npm run build
 
 
 # Stage 3: runtime.
