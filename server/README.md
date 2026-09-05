@@ -2,8 +2,9 @@
 
 Optional, and nothing in the app requires it. Bench keeps working exactly as it
 does today with this directory deleted: the data lives in IndexedDB, there is no
-account, and nothing is sent anywhere. This is here for one case, someone who
-wants their own copy on their own machine, reachable from a second device.
+account, and nothing is sent anywhere. This is here for two cases: someone who
+wants their own copy on their own machine reachable from a second device, and
+someone who wants to run a copy for a handful of people they know.
 
 It holds one encrypted blob per account and hands it back to whoever proves they
 know the password.
@@ -28,15 +29,14 @@ While the server has no account it prints a setup token:
       3f1c9a...
 ```
 
-Copy it into the app, create your account, and that is the end of setup.
-Registration closes by itself and stays closed; nothing to remember and nothing
-to turn off.
+Copy it into the app, create your account, and that is the end of setup. That
+first account is the **owner**. The token is spent, it is regenerated on every
+restart, and it is never written to disk.
 
-The token exists because closing after the first account still leaves a window
-between the server starting and you registering. On a machine reachable from
-the internet that window is the whole risk, and requiring a value that only
-appears in the server's own log removes it. It is regenerated on every restart
-and never written to disk.
+The token exists because the gap between the server starting and you registering
+is a gap in which somebody else could register instead. On a machine reachable
+from the internet that gap is the whole risk, and requiring a value that only
+appears in the server's own log removes it.
 
 To start over, delete the account file from `BENCH_DATA_DIR` and restart. The
 server will print a new token.
@@ -45,8 +45,70 @@ server will print a new token.
 | --- | --- | --- |
 | `PORT` | `8787` | Port to listen on |
 | `BENCH_DATA_DIR` | `server/data` | Where the blobs go |
-| `BENCH_SESSION_SECRET` | random | Signs session cookies. Set it, or a restart logs you out |
-| `BENCH_ORIGIN` | `http://localhost:3210` | The browser origin allowed to call it |
+| `BENCH_SESSION_SECRET` | random | Signs session cookies. Set it, or a restart signs everybody out at the same moment |
+| `BENCH_ORIGIN` | `http://localhost:3210` | Browser origins allowed to call it, comma separated |
+
+## More than one person
+
+Everyone after the owner arrives by invitation. There is no moment at which this
+address will make an account for a stranger: no open registration to turn off,
+and nothing to remember.
+
+```bash
+node server/admin.mjs invite --user tofs --base https://bench.example
+```
+
+That prints a link, good for seven days and for one use, that only makes the
+account `tofs`:
+
+```
+    https://bench.example/login?invite=Z_-sU7A2RNdHCbQ0mH9JL18d
+```
+
+Send it over something private. Whoever opens it chooses their own password, and
+nobody else ever learns it, you included. That is not politeness: the password is
+the encryption key, so an owner who knew it could read that person's history.
+
+Only a hash of the token is kept, so the link cannot be recovered later. Lose it
+and you cancel the invitation and make another.
+
+### The rest of `admin.mjs`
+
+```bash
+node server/admin.mjs list             # accounts, sizes, lockouts
+node server/admin.mjs invites          # what is outstanding
+node server/admin.mjs cancel ID        # cancel an unused invitation
+node server/admin.mjs unlock NAME      # clear a lockout
+node server/admin.mjs revoke NAME      # remove an account and its blob, permanently
+node server/admin.mjs promote NAME     # make somebody an owner
+```
+
+Under compose the data is in a named volume rather than on your disk, so this
+runs inside the container:
+
+```bash
+docker compose --profile sync exec sync node server/admin.mjs list
+```
+
+Most of this is also in the app, in Settings, for an owner. `promote` is not, and
+will not be. It is the only command that turns a guest into someone who can
+delete other people's data, and it should not be reachable by any form in any
+browser.
+
+### Guessing a password
+
+`POST /api/login` is the one endpoint worth attacking, so it is the one that
+counts. Every answer takes at least 300 ms, which slows guessing and also stops
+a name that exists being told from one that does not by how fast the refusal
+arrives. Eight wrong passwords inside fifteen minutes shut that account for five
+minutes, doubling for each repeat, capped at six hours.
+
+Two honest notes about that. The lock is per account rather than per address,
+because an address is changed in a second and blocking one blocks a whole
+household; the cost is that somebody who knows a username can deliberately lock
+its owner out, which is why the lock expires by itself and why `unlock` exists.
+And a locked account answers immediately with `429` rather than waiting, because
+a slow refusal is itself a thing to flood a server with.
 
 ## Or run it under compose
 
@@ -159,20 +221,48 @@ obscurely.
 ### 3. Set `BENCH_ORIGIN`
 
 The real address of the app. The default only suits a machine you are sitting
-at.
+at. It takes a list, because the app usually has more than one address that is
+legitimately its own: the domain, and a laptop on the LAN while something is
+being worked on.
 
-### 4. Back up `BENCH_DATA_DIR`
+```
+BENCH_ORIGIN=https://bench.example,http://192.168.1.44:3210
+```
+
+A caller on the list is handed its own address back, which is what lets the
+browser proceed. Everyone else is handed the first one, which is not theirs, so
+their browser refuses.
+
+### 4. Set `BENCH_SESSION_SECRET`
+
+Without it the server invents one at every start, and the next restart signs
+everybody out at the same moment. Survivable while you are the only account. Not
+survivable once other people are relying on it, because they will all ask you at
+once and none of them will know why.
+
+### 5. Back up `BENCH_DATA_DIR`
 
 It is the only copy on the server, and the app's own export is the only copy
 that is readable without the password.
 
+This stops being only your problem the moment there is a second account. A disk
+that dies takes several people's history with it, and no amount of encryption
+helps with that. Tell everyone you invite to keep their own export.
+
 ## What it stores
 
-Two files per account.
+Two files per account, and one per invitation.
 
-`<user>.account.json` holds the username, the browser's PBKDF2 salt, and a
-scrypt hash of the auth secret. The salt is not a secret; it is there so two
-people with the same password do not end up with the same key.
+`<user>.account.json` holds the username, the browser's PBKDF2 salt, a scrypt
+hash of the auth secret, whether this account is an owner, and the count of
+recent failed logins. The salt is not a secret; it is there so two people with
+the same password do not end up with the same key.
+
+`<id>.invite.json` holds the name the invitation is for, its expiry, whether it
+has been used, and a SHA-256 of the token. No stretching on that hash, and that
+is deliberate: stretching exists because passwords are short and human, while
+this token is 144 bits of randomness with no dictionary behind it. It is hashed
+at all so that reading the data directory does not hand over a live invitation.
 
 `<user>.blob.json` holds the sealed envelope and the timestamp of the device
 that wrote it. Writes go through a temporary file and a rename, because a crash
@@ -207,6 +297,10 @@ Which is also why it compares versions rather than clocks. Two devices disagree
 about the time and never disagree about which copy they last saw.
 
 No password reset. There is nobody to verify you, and the server could not
-re-encrypt the data even if there were.
+re-encrypt the data even if there were. This holds for the owner too: running the
+server does not make anyone able to recover a guest's password, because the
+password is the key and the key was never here.
 
-No multi-user features. Accounts are separate and that is the end of it.
+No sharing between accounts. Several accounts can live on one server, and that is
+as far as it goes. They cannot see each other, there is nothing to send between
+them, and the owner's view of them is a name, a size and a date.
