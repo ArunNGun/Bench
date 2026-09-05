@@ -83,6 +83,29 @@ NEXT_PUBLIC_REQUIRE_ACCOUNT=1 \
 npm run build
 ```
 
+Under compose they go in `.env` beside `BENCH_SESSION_SECRET`, and the `web`
+service passes them as build arguments:
+
+```
+NEXT_PUBLIC_SYNC_URL=https://bench.example
+NEXT_PUBLIC_REQUIRE_ACCOUNT=1
+```
+
+```bash
+docker compose up -d --build web
+```
+
+**`--build` is not optional, and neither is the placement.** Next inlines these
+into the JavaScript while it compiles, so a container that has already been
+built is serving an answer it decided earlier. Putting them under
+`environment:` instead of `args:` looks right, changes nothing, and produces no
+error, which is the most expensive kind of wrong. Changing either value later
+means another `--build`, not a restart.
+
+The `dev` service takes them as environment rather than build arguments, which
+is the same two names at a different moment: `next dev` compiles on demand and
+so reads them at startup.
+
 With them set: nobody is asked to type an address, there is no offer to set up a
 new server or to paste a setup token, and signing out returns to the login page
 rather than leaving somebody in an app they can no longer load. An owner also

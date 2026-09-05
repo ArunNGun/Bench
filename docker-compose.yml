@@ -16,6 +16,18 @@ services:
       args:
         # Override to pin a build id, for example BUILD_ID=1.9.0 docker compose build.
         BUILD_ID: ${BUILD_ID:-}
+        # Set these two in .env to make this image belong to one sync server.
+        # Leave them out and this is the ordinary Bench.
+        #
+        #   NEXT_PUBLIC_SYNC_URL=https://bench.example
+        #   NEXT_PUBLIC_REQUIRE_ACCOUNT=1
+        #
+        # Build arguments and not `environment:`, because Next inlines them
+        # while it compiles. Putting them below would look right, change
+        # nothing, and say nothing about it. Changing either one needs
+        # --build, not a restart.
+        NEXT_PUBLIC_SYNC_URL: ${NEXT_PUBLIC_SYNC_URL:-}
+        NEXT_PUBLIC_REQUIRE_ACCOUNT: ${NEXT_PUBLIC_REQUIRE_ACCOUNT:-}
     image: bench-web:local
     container_name: bench-web
     ports:
@@ -41,6 +53,12 @@ services:
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
+      # Here they are environment rather than build arguments, and that is not
+      # an inconsistency with the web service above. `next dev` compiles on
+      # demand, so it reads them at startup; `next build` does not exist to read
+      # anything later. Same two names, same effect, different moment.
+      NEXT_PUBLIC_SYNC_URL: ${NEXT_PUBLIC_SYNC_URL:-}
+      NEXT_PUBLIC_REQUIRE_ACCOUNT: ${NEXT_PUBLIC_REQUIRE_ACCOUNT:-}
     volumes:
       - .:/app
       # node_modules lives in a named volume rather than on the bind mount. Two
