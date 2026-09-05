@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import {
@@ -42,14 +42,17 @@ import {
 } from "@/lib/format";
 import {
   INJECTION_SITES,
+  ROUTE_LABEL,
   type InjectionSite,
   type Protocol,
+  type Route,
   type ProtocolPhase,
   type Schedule,
   type ScheduleKind,
   type TitrationStep,
 } from "@/lib/types";
 import { assignColors, colorSubjects } from "@/lib/calc/palette";
+import { routeChoices } from "@/lib/calc/spray";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
 import { TimesOfDay } from "@/components/TimesOfDay";
 import { DoseMarks } from "@/components/DoseMarks";
@@ -400,6 +403,9 @@ function ProtocolForm({
 }) {
   const custom = useStore((s) => s.customPeptides);
   const peptides = useMemo(() => allPeptides(custom), [custom]);
+  // Only to know whether a spray bottle of this compound exists, which is what
+  // puts intranasal on the list of routes.
+  const { vials } = useProfileData();
 
   const [peptideId, setPeptideId] = useState(initial?.peptideId ?? peptides[0]?.id ?? "");
   const [name, setName] = useState(initial?.name ?? "");
@@ -457,12 +463,30 @@ function ProtocolForm({
   // has nothing left to decide and says so rather than accepting a contradiction.
   const lockedDose = usingPhases ? phases[0]?.doseMcg : titrationSteps?.[0]?.doseMcg;
 
-  // Route is not asked about, so an unchanged peptide keeps whatever the
-  // protocol was saved with and a changed one takes the new default.
-  const route =
-    initial && peptideId === initial.peptideId
-      ? initial.route
-      : (peptide?.routes[0] ?? "subcutaneous");
+  /*
+   * The route is asked about now, and it has to be.
+   *
+   * It used to be inferred: an unchanged peptide kept what the protocol was
+   * saved with and a changed one took the library's first route. That was fine
+   * while every dose went through a syringe. Three compounds in the library name
+   * intranasal, so filling a spray bottle with any of the others produced a
+   * bottle that no protocol could be written against and no dose could be
+   * logged from.
+   *
+   * The choices are the library's, plus intranasal once a bottle of this
+   * compound exists. Evidence rather than permission.
+   */
+  const routes = useMemo(
+    () => routeChoices(peptide?.routes ?? [], vials, peptideId),
+    [peptide?.routes, vials, peptideId]);
+
+  const [route, setRoute] = useState<Route>(initial?.route ?? "subcutaneous");
+
+  // A route the new compound does not offer cannot stand, so it falls back to
+  // that compound's first rather than silently staying wrong.
+  useEffect(() => {
+    if (!routes.includes(route)) setRoute(routes[0] ?? "subcutaneous");
+  }, [routes, route]);
 
   const schedule: Schedule = useMemo(() => {
     // A half-typed or emptied field is not a time. Sorted here so that the
@@ -559,6 +583,25 @@ function ProtocolForm({
         </Select>
         <AddCompoundInline onCreated={(p) => pick(p.id)} />
       </Field>
+
+      {routes.length > 1 && (
+        <Field
+          label="Route"
+          hint={
+            route === "intranasal"
+              ? "Doses on this plan are counted in presses of the pump rather than in marks on a barrel."
+              : "How this compound is taken. Intranasal appears once you have filled a spray bottle with it."
+          }
+        >
+          <Select value={route} onChange={(e) => setRoute(e.target.value as Route)}>
+            {routes.map((r) => (
+              <option key={r} value={r}>
+                {ROUTE_LABEL[r]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <Field
         label="How the dose is decided"

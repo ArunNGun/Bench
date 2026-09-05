@@ -30,7 +30,7 @@ import {
   vialRemainingMcg,
   vialUsable,
 } from "@/lib/calc/inventory";
-import { mcgForSprays, mcgPerSpray, mlForSprays, spraysForDose } from "@/lib/calc/spray";
+import { mcgForSprays, mcgPerSpray, mlForSprays, routeChoices, spraysForDose } from "@/lib/calc/spray";
 import { suggestSite } from "@/lib/calc/sites";
 import {
   calculateDraw,
@@ -184,6 +184,16 @@ export function LogDoseSheet({
    * the notes and how you feel in one place.
    */
   const nasal = route === "intranasal";
+
+  /*
+   * What the library says, plus intranasal once a spray bottle of this compound
+   * exists. Three compounds name that route, so without this a bottle made from
+   * any of the others could not be logged from at all: the route it needs was
+   * never on offer.
+   */
+  const routes = useMemo(
+    () => routeChoices(peptide?.routes ?? [], vials, peptideId),
+    [peptide?.routes, vials, peptideId]);
 
   // Sites pinned to this protocol, if any were chosen when it was set up.
   // Memoised so the identity is stable across renders, it feeds hook deps.
@@ -561,7 +571,7 @@ export function LogDoseSheet({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Route">
               <Select value={route} onChange={(e) => setRoute(e.target.value as Route)}>
-                {(peptide?.routes ?? (["subcutaneous"] as Route[])).map((r) => (
+                {routes.map((r) => (
                   <option key={r} value={r}>
                     {ROUTE_LABEL[r]}
                   </option>
