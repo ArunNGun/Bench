@@ -101,7 +101,18 @@ export function LogDoseSheet({
    */
   function applyProtocol(proto: Protocol | undefined, forPeptideId: string, atMs: number) {
     const dose = proto ? scheduledDoseMcg(proto, atMs) : 0;
-    const nextRoute = proto?.route ?? "subcutaneous";
+    /*
+     * A protocol says how it is taken. Without one, the stock says it instead:
+     * if the only thing on the shelf for this compound is a spray bottle, the
+     * dose being recorded is a nasal one, and defaulting to a syringe would put
+     * the person in front of a form asking for units and a site with no vial to
+     * draw from.
+     */
+    const onlySpray =
+      !proto &&
+      !pickVialForDose(vials, forPeptideId, dose, atMs, "vial") &&
+      !!pickVialForDose(vials, forPeptideId, dose, atMs, "spray");
+    const nextRoute = proto?.route ?? (onlySpray ? "intranasal" : "subcutaneous");
     setDoseMcg(dose);
     setRoute(nextRoute);
     // A nasal protocol draws from a bottle and never from a vial, so the
@@ -121,6 +132,21 @@ export function LogDoseSheet({
     const proto = protocols.find((p) => p.active && p.peptideId === id);
     setProtocolId(proto?.id ?? NO_PROTOCOL);
     applyProtocol(proto, id, at);
+  }
+
+  /**
+   * Changing the route by hand, which also changes where the dose comes from.
+   *
+   * The container follows the route, and it has to follow it here rather than
+   * only at the moment a protocol is chosen. Switching to a nasal dose with a
+   * vial already selected used to leave that vial selected: it disappeared from
+   * the list, so the dropdown read blank, and saving drew an injection's worth
+   * of mass out of a vial for a dose that went up a nose.
+   */
+  function chooseRoute(next: Route) {
+    setRoute(next);
+    const want = next === "intranasal" ? "spray" : "vial";
+    setVialId(pickVialForDose(vials, peptideId, doseMcg, at, want)?.id ?? "");
   }
 
   /**
@@ -570,7 +596,7 @@ export function LogDoseSheet({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Route">
-              <Select value={route} onChange={(e) => setRoute(e.target.value as Route)}>
+              <Select value={route} onChange={(e) => chooseRoute(e.target.value as Route)}>
                 {routes.map((r) => (
                   <option key={r} value={r}>
                     {ROUTE_LABEL[r]}
