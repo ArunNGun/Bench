@@ -6,6 +6,7 @@ import {
   mcgPerSpray,
   mlForSprays,
   mlPerSpray,
+  routeChoices,
   spraysForDose,
   spraysRemaining,
   transferToSpray,
@@ -213,5 +214,47 @@ describe("telling the two containers apart", () => {
     expect(isSpray(vial())).toBe(false);
     expect(isSpray({ container: "vial" })).toBe(false);
     expect(isSpray({ container: "spray" })).toBe(true);
+  });
+});
+
+describe("which routes can be recorded", () => {
+  const spray = vial({ id: "b", container: "spray", peptideId: "bpc-157" });
+  const plain = vial({ id: "v", peptideId: "bpc-157" });
+
+  it("offers what the library says when there is no bottle", () => {
+    expect(routeChoices(["subcutaneous"], [plain], "bpc-157")).toEqual(["subcutaneous"]);
+  });
+
+  it("adds intranasal once a bottle of that compound exists", () => {
+    // The bug this fixes: three compounds in the library name intranasal, so a
+    // bottle of any of the others could not be logged from, because the route
+    // it needed was never on offer.
+    expect(routeChoices(["subcutaneous"], [spray], "bpc-157")).toEqual([
+      "subcutaneous",
+      "intranasal",
+    ]);
+  });
+
+  it("does not add it for a different compound's bottle", () => {
+    expect(routeChoices(["subcutaneous"], [spray], "kpv")).toEqual(["subcutaneous"]);
+  });
+
+  it("does not repeat a route the library already names", () => {
+    expect(routeChoices(["intranasal", "subcutaneous"], [spray], "bpc-157")).toEqual([
+      "intranasal",
+      "subcutaneous",
+    ]);
+  });
+
+  it("keeps the library's own order, with the added one last", () => {
+    expect(routeChoices(["subcutaneous", "intramuscular"], [spray], "bpc-157")).toEqual([
+      "subcutaneous",
+      "intramuscular",
+      "intranasal",
+    ]);
+  });
+
+  it("falls back to something rather than an empty dropdown", () => {
+    expect(routeChoices([], [], "bpc-157")).toEqual(["subcutaneous"]);
   });
 });

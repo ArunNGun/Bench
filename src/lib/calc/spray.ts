@@ -22,7 +22,7 @@
  * dose, and no arithmetic can know when a pump has stopped lifting liquid.
  */
 
-import type { DiluentKind, Vial } from "../types";
+import type { DiluentKind, Route, Vial } from "../types";
 import { MCG_PER_MG, vialConcentration, vialRemainingMcg, vialRemainingMl } from "./inventory";
 
 /** What a pump delivers when nobody has measured it. */
@@ -178,3 +178,27 @@ export function transferToSpray(
  * was made up and has been accounted for once already.
  */
 export const salineForTransfer = (addedMl: number) => Math.max(0, addedMl);
+
+/**
+ * The routes a person can record for a compound.
+ *
+ * The library's `routes` is a claim about how a compound is studied and used,
+ * and it is right for that. It is wrong as a list of what somebody is allowed
+ * to write down: three compounds in the library name intranasal, so filling a
+ * spray bottle with any of the others produced a bottle that could not be
+ * logged from, because the route it needed was not on offer.
+ *
+ * So a filled bottle adds the route. Evidence rather than permission: the
+ * bottle exists, it holds that compound, and the app does not tell anyone what
+ * to take. It only appears once there is a bottle, so nobody who does not use
+ * sprays sees an option that means nothing to them.
+ */
+export function routeChoices(
+  declared: Route[],
+  vials: Pick<Vial, "peptideId" | "container">[],
+  peptideId: string): Route[] {
+  const hasSpray = vials.some((v) => v.peptideId === peptideId && isSpray(v));
+  const out = declared.length ? [...declared] : (["subcutaneous"] as Route[]);
+  if (hasSpray && !out.includes("intranasal")) out.push("intranasal");
+  return out;
+}
