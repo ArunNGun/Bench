@@ -119,6 +119,24 @@ The address alone, without the requirement, is a real and useful middle state.
 The server is filled in, and somebody who wants to use the app without an
 account still can.
 
+With the requirement set, the account on the server is also the copy that
+counts, and that changes exactly one moment: the first contact between a
+browser and an account. On a server somebody set up for themselves, two sides
+holding different data is a real question, because either could be the real
+history. Signing in to an account is not that question, so the account's copy
+is taken rather than asked about.
+
+It does not extend past that moment. Once the two have agreed once, a device
+holding edits the server has not seen is holding work somebody did, and being
+the primary copy is not a reason to discard it unasked. The server wins at the
+start, the device wins during.
+
+Nothing is destroyed either way. A pull writes the whole document through the
+store, so the guard in the storage layer sees the collections shrink and sets
+the previous document aside exactly as it would for any other write that loses
+records. What was in the browser before is one press away in the notice on
+every page.
+
 With the requirement set, somebody joining is stopped once, at the start, and
 asked to save a backup file before the app opens. That is where they are told,
 at the only moment it can still be acted on, that their password is the key and

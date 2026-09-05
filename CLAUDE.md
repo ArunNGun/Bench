@@ -56,7 +56,7 @@ document/        project context
 
 ```bash
 npm run dev                      # port 3210
-npm test                         # 1493 tests
+npm test                         # 1499 tests
 TZ=America/New_York npm test     # DST has caught real bugs
 npx tsc --noEmit && npx next lint
 npm run build                    # web

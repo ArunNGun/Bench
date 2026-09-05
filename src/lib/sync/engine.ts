@@ -60,6 +60,8 @@ export interface SyncPorts {
   clearDirty(): void;
   /** Whether this device holds anything worth sending. */
   isEmpty(): boolean;
+  /** Whether the account on the server is the copy that counts. See decide.ts. */
+  serverPrimary?: boolean;
 
   /** The server version this device last agreed with. */
   getRemoteSeenAt(): number | null;
@@ -163,6 +165,7 @@ export function createSyncEngine(ports: SyncPorts) {
         remoteUpdatedAt: remote?.updatedAt ?? null,
         dirty: ports.isDirty(),
         localEmpty: ports.isEmpty(),
+        serverPrimary: ports.serverPrimary === true,
       });
 
       if (action.kind === "ask") {

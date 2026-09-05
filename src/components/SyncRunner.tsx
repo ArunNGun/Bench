@@ -18,7 +18,7 @@ import { useStore } from "@/lib/store";
 import { createSyncEngine, type SyncPorts } from "@/lib/sync/engine";
 import { fetchBlob, isNative, pushData, session, cryptoAvailable } from "@/lib/sync/client";
 import { open } from "@/lib/sync/crypto";
-import { HOSTED } from "@/lib/sync/hosted";
+import { accountRequired, HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { recallKey } from "@/lib/sync/vault";
 import type { AppData, Settings } from "@/lib/types";
@@ -135,6 +135,10 @@ export function SyncRunner() {
         dirty = false;
       },
       isEmpty: () => isEmptyData(useStore.getState()),
+      // Only where an account is the point of the build. An address on its own
+      // is somebody's own server, where two sides holding different data is a
+      // real question rather than a signed-in browser meeting its account.
+      serverPrimary: accountRequired(),
 
       getRemoteSeenAt: () => useStore.getState().settings.sync?.remoteSeenAt ?? null,
       setRemoteSeenAt: (at) => {
