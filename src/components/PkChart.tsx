@@ -271,26 +271,39 @@ export function PkChart({
         </g>
       )}
 
-      {/* Weight overlay dots — small labelled markers at the time axis */}
+      {/* Weight overlay — dot on the baseline with label above it, inside the chart */}
       {weightEntries
         ?.filter((w) => w.at >= fromMs && w.at <= toMs)
         .map((w) => {
           const wx = toX(w.at);
-          // Place the dot just above the baseline, with the label below it
-          // so it does not overlap the PK curves.
+          const baseY = H - PAD_B;          // the baseline
+          const dotY  = baseY - 1;          // sit on the baseline
+          const labelY = baseY - 8;         // label just above the dot, still inside chart
           return (
             <g key={w.at} pointerEvents="none">
+              {/* Stem: a short tick from the baseline up to the dot */}
+              <line
+                x1={wx}
+                y1={baseY}
+                x2={wx}
+                y2={dotY - 3}
+                stroke="var(--tangerine)"
+                strokeWidth={1}
+                opacity={0.6}
+              />
+              {/* Dot on the baseline */}
               <circle
                 cx={wx}
-                cy={H - PAD_B - 5}
-                r={2.8}
+                cy={dotY}
+                r={2.5}
                 fill="var(--tangerine)"
-                opacity={0.9}
+                opacity={0.95}
               />
+              {/* Label above the dot, inside the chart area */}
               <text
                 x={wx}
-                y={H - 3}
-                fontSize={9}
+                y={labelY}
+                fontSize={8.5}
                 fill="var(--tangerine)"
                 fontFamily="var(--font-mono)"
                 textAnchor="middle"
