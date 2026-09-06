@@ -6,7 +6,7 @@ import { TONE_BG, TONE_FG, TONE_SOLID } from "./ui";
 import { useActiveProfile, useStore } from "@/lib/store";
 import { accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
-import { useSignOut } from "./SignOutButton";
+import { useSignOut } from "@/lib/sync/useSignOut";
 import type { Profile } from "@/lib/types";
 
 /** Two initials, so a name of any length fits the same circle. */
@@ -175,11 +175,11 @@ export function ProfileSwitcher() {
           {/*
             Leaving the account, from the control a phone actually has.
 
-            The header carries the profile, a backup button, three links and a
-            theme toggle, and on a narrow screen there is not room for all of
-            them, so sign out was reported missing on a phone. This menu is
-            already open at full width there, and is where somebody looks for
-            their own name anyway.
+            This is the only place it lives on a phone, and the reason is a
+            failure worth recording: putting it in the header pushed that row
+            past the width of the screen and gave the whole app a sideways
+            scroll. The header is full. This menu is not, is already full width
+            on a phone, and is where somebody looks for their own name anyway.
 
             A profile and an account are different things, and putting them in
             one menu risks reading as though they were. They are together
@@ -231,7 +231,7 @@ export function AddFirstProfile() {
 /**
  * Sign out, inside the profile menu.
  *
- * The same `useSignOut` the header and the settings card use. The order of
+ * The same `useSignOut` the settings card uses. The order of
  * operations in a hosted sign out is delicate enough that a third copy of it
  * would eventually become a third version of it.
  */

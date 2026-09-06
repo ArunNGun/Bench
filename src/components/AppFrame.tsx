@@ -23,7 +23,6 @@ import { UnlockGate } from "./UnlockGate";
 import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
-import { SignOutButton } from "./SignOutButton";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
@@ -119,12 +118,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             {/*
-              Last but one, beside the theme toggle rather than beside Backup.
-              Leaving is not something anybody reaches for often, and putting it
-              next to a control that writes a file invites the wrong tap. It
-              renders nothing outside a hosted build.
+              No sign out here. It was tried, and on a phone it pushed the row
+              past the width of the screen, which gave the whole app a sideways
+              scroll. The header already carries a profile, a backup button,
+              three links and this toggle, and that is the ceiling.
+
+              It lives in the profile menu instead, which is the menu about who
+              is using the app and is full width on a phone, and in a card in
+              Settings.
             */}
-            <SignOutButton />
             <ThemeToggle />
           </div>
         </div>
