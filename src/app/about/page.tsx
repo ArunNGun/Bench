@@ -175,6 +175,25 @@ export default function AboutPage() {
                     ))}
                   </ul>
                 )}
+
+                {open && release.contributors && release.contributors.length > 0 && (
+                  <p className="mt-2 text-[11.5px] text-[var(--faint)]">
+                    Contributors:{" "}
+                    {release.contributors.map((name, i) => (
+                      <span key={name}>
+                        <a
+                          href={`https://github.com/${name}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-[var(--mint-ink)] hover:underline"
+                        >
+                          @{name}
+                        </a>
+                        {i < release.contributors!.length - 1 && ", "}
+                      </span>
+                    ))}
+                  </p>
+                )}
               </div>
             );
           })}
