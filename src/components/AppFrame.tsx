@@ -23,6 +23,7 @@ import { UnlockGate } from "./UnlockGate";
 import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
+import { LangDropdown } from "./LangDropdown";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
@@ -135,6 +136,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               Sign out is in the profile menu and in a card in Settings, for the
               same reason: nothing else fits here.
             */}
+            <LangDropdown />
             <SettingsMenu />
           </div>
         </div>
