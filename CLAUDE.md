@@ -62,7 +62,19 @@ npx tsc --noEmit && npx next lint
 npm run build                    # web
 npm run android:sync && (cd android && ./gradlew assembleRelease)
 node scripts/icons.mjs           # regenerate every icon
+
+# Deploy both containers. Always this one, never a shorter version of it.
+docker compose --profile sync up -d --build --force-recreate web sync
 ```
+
+**The deploy line above is the whole line for a reason**, and it has now cost
+an hour twice. `web` and `sync` are two processes and a change to one does
+nothing to the other. `--profile sync` because the sync service is behind a
+profile and is otherwise invisible to compose. `--build` because `web` compiles.
+`--force-recreate` because `sync` runs a stock image with `./server` mounted, so
+compose sees an unchanged configuration and leaves the old process running with
+the old file already in memory, silently. Editing `server.mjs` and reloading the
+page shows the previous version with no error anywhere.
 
 Android needs `JAVA_HOME` pointing at JDK 21. Package id is `app.bench.peptide`.
 

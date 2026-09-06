@@ -92,8 +92,19 @@ NEXT_PUBLIC_REQUIRE_ACCOUNT=1
 ```
 
 ```bash
-docker compose up -d --build web
+docker compose --profile sync up -d --build --force-recreate web sync
 ```
+
+That is the deploy line, and it is worth using every time rather than a shorter
+one. `web` and `sync` are two processes: a change under `src/` needs the first
+rebuilt, a change under `server/` needs the second replaced, and doing only one
+produces no error at all, just the previous behaviour.
+
+`--force-recreate` is the part that looks redundant and is not. The sync service
+runs a stock image with `./server` mounted, so compose sees an unchanged
+configuration and leaves the running process alone, holding the old file in
+memory. Without it, editing `server.mjs` and reloading the page shows the
+version from before the edit, silently.
 
 **`--build` is not optional, and neither is the placement.** Next inlines these
 into the JavaScript while it compiles, so a container that has already been
@@ -144,9 +155,13 @@ the password once on arrival, in front of everything, and derives the half it
 needs. Without that step it would come up authenticated, sync nothing, and give
 no clue why.
 
-Signing out is also different, and is in the header rather than buried in a
-settings card. It sends anything unsent to the server, and only then removes
-this browser's copy of the data along with the key that reads it. That is
+Signing out is also different. It lives in the profile menu, which is the menu
+about who is using the app and is full width on a phone, and in a card of its
+own in Settings. It was briefly in the header too, until that pushed the row
+past the width of a phone screen and gave the whole app a sideways scroll.
+
+It sends anything unsent to the server, and only then removes this browser's
+copy of the data along with the key that reads it. That is
 deliberate: a hosted server creates a situation Bench never had before, a
 browser one person used and another person opens, and the dose history sits in
 IndexedDB in plain text as it always has. Leaving it there would hand it to
