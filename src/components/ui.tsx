@@ -1,7 +1,10 @@
 "use client";
 
+import { useRef, useState } from "react";
+
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { shownValue } from "@/lib/calc/numberField";
 import { AlertTriangle, Info } from "lucide-react";
 
 /** Named hues. Every coloured thing in the app picks from this set. */
@@ -99,16 +102,47 @@ export function TextInput({ className, ...rest }: React.InputHTMLAttributes<HTML
   return <input className={cn(control, className)} {...rest} />;
 }
 
+/**
+ * A number field you can actually empty.
+ *
+ * Every caller holds a number and every caller turns the field's text into one
+ * with `Number(...)`, which makes an empty field mean zero. So clearing a field
+ * showing 0 wrote 0 back, React rendered "0" again, and the only way to type
+ * 250 was to type it after the nought and get 0250. Twenty call sites do it the
+ * same way, so the fix belongs here rather than in each of them.
+ *
+ * The rule itself is in `src/lib/calc/numberField.ts`, with its tests. It is one
+ * line of code and a paragraph of reasoning, which is the ratio that belongs in
+ * calc rather than in a component.
+ */
 export function NumberInput({
   className,
-  suffix, ...rest
+  suffix,
+  value,
+  onChange,
+  onBlur,
+  ...rest
 }: React.InputHTMLAttributes<HTMLInputElement> & { suffix?: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = shownValue(draft, value);
+
   return (
     <div className="relative">
       <input
         type="number"
         inputMode="decimal"
         className={cn(control, "tnum pr-14 font-semibold", className)}
+        value={shown}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          onChange?.(e);
+        }}
+        // Leaving an empty box shows the value it stands for, rather than a
+        // blank that says nothing about what was saved.
+        onBlur={(e) => {
+          setDraft(null);
+          onBlur?.(e);
+        }}
         {...rest}
       />
       {suffix && (
@@ -118,6 +152,40 @@ export function NumberInput({
       )}
     </div>
   );
+}
+
+/**
+ * Closing a sheet by clicking away from it, without closing it by accident.
+ *
+ * Reported from Linux and Brave, and it is a real bug on every platform: select
+ * the text in a field by dragging, let go a few pixels outside the sheet, and
+ * the sheet closed and took everything typed with it. No confirmation, no way
+ * back.
+ *
+ * The cause is that a `click` is delivered to the nearest common ancestor of
+ * where the button went down and where it came up. Press inside an input,
+ * release on the backdrop, and that ancestor is the backdrop, so the backdrop's
+ * own handler fired as though it had been clicked.
+ *
+ * So a press has to both start and end on the backdrop. Extending a selection
+ * out of the sheet is a gesture that began inside it, and this can no longer
+ * mistake one for the other. Pointer events rather than mouse, so a finger
+ * dragged off the edge of a phone behaves the same way.
+ */
+export function useBackdropDismiss(onClose: () => void) {
+  const startedOutside = useRef(false);
+
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      startedOutside.current = e.target === e.currentTarget;
+    },
+    onClick: (e: React.MouseEvent) => {
+      const ended = e.target === e.currentTarget;
+      if (ended && startedOutside.current) onClose();
+      startedOutside.current = false;
+    },
+    role: "presentation" as const,
+  };
 }
 
 export function Select({ className, children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {
