@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ProfileSwitcher } from "./ProfileSwitcher";
+import { SettingsMenu } from "./SettingsMenu";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
 import { FirstBackupGate } from "./FirstBackupGate";
@@ -44,10 +45,14 @@ const PRIMARY = [
  */
 const BARE_ROUTES = ["/landing"];
 
+/*
+  Settings is absent here on purpose. It is a menu now rather than a link, so
+  that the theme toggle has somewhere to live that is not the header itself,
+  and it is rendered after this list.
+*/
 const SECONDARY = [
   { href: "/labs", label: "Bloodwork", icon: Droplet },
   { href: "/library", label: "Library", icon: BookOpen },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -122,15 +127,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             {/*
-              Nothing else fits here. On a phone this row was already wider than
-              the screen, which gave the whole app a sideways scroll, and adding
-              a sign out made it worse rather than causing it.
+              Settings holds the theme now. On a phone this row was wider than
+              the screen and the whole app scrolled sideways, so the smallest
+              control moved under the header item that already means "how this
+              behaves" rather than sitting beside it.
 
-              What moved out: the theme toggle, into the profile menu, because
-              it is the least urgent control in the header. Sign out went to the
-              same menu and to a card in Settings. Both are one tap further away
-              and neither is something anybody does hourly.
+              Sign out is in the profile menu and in a card in Settings, for the
+              same reason: nothing else fits here.
             */}
+            <SettingsMenu />
           </div>
         </div>
       </header>
