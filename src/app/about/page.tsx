@@ -24,12 +24,12 @@ export default function AboutPage() {
       <header>
         <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("about_title")}</h1>
         <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-          What this is, who made it, and what it will not do.
+          {t("about_desc").slice(0, 60)}…
         </p>
       </header>
 
       <Card className="space-y-3 p-4">
-        <SectionLabel action={<Badge tone="mint">v{CURRENT_VERSION}</Badge>}>What it is</SectionLabel>
+        <SectionLabel action={<Badge tone="mint">v{CURRENT_VERSION}</Badge>}>{t("about_what_it_is")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
             A tracker for peptide, growth hormone and anabolic protocols. It holds what you are
@@ -80,7 +80,7 @@ export default function AboutPage() {
         ask afterwards is here, where there is room for it.
       */}
       <Card id="skipped" className="space-y-3 p-4 scroll-mt-24">
-        <SectionLabel>What a skipped dose does</SectionLabel>
+        <SectionLabel>{t("about_skipped_dose")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
             Ticking <strong className="text-[var(--ink)]">Record this as a skipped dose</strong>{" "}
@@ -123,7 +123,7 @@ export default function AboutPage() {
       </Card>
 
       <Card className="space-y-3 p-4">
-        <SectionLabel>What it tracks</SectionLabel>
+        <SectionLabel>{t("about_what_it_tracks")}</SectionLabel>
         <ul className="grid gap-x-6 gap-y-1.5 text-[13px] text-[var(--muted)] sm:grid-cols-2">
           <li>{COMPOUND_COUNT} compounds, with cited half-lives and dose ranges</li>
           <li>Protocols, titration ladders and adherence</li>
@@ -182,7 +182,7 @@ export default function AboutPage() {
       </Card>
 
       <Card className="space-y-3 p-4">
-        <SectionLabel>Who made it</SectionLabel>
+        <SectionLabel>{t("about_who_made_it")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
             Built by <strong className="text-[var(--ink)]">Arun</strong>, originally to track my own
@@ -204,7 +204,7 @@ export default function AboutPage() {
             rel="noopener noreferrer"
             className="press inline-flex items-center gap-2 rounded-[var(--r-btn)] bg-[var(--sunken)] px-3.5 py-2.5 text-[13.5px] font-semibold text-[var(--ink)]"
           >
-            <MessageCircle size={15} /> Join the Discord
+            <MessageCircle size={15} /> {t("about_join_discord")}
             <ExternalLink size={13} className="text-[var(--faint)]" />
           </a>
           <p className="text-[12.5px]">

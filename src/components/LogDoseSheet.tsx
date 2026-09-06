@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, X } from "lucide-react";
@@ -68,6 +69,7 @@ export function LogDoseSheet({
   /** Editing an existing dose rather than recording a new one. */
   editId?: string;
 }) {
+  const { t } = useLang();
   const custom = useStore((s) => s.customPeptides);
   const { protocols, vials, logs } = useProfileData();
   const settings = useStore((s) => s.settings);
@@ -408,7 +410,7 @@ export function LogDoseSheet({
         className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-b-none sm:rounded"
         role="dialog"
         aria-modal="true"
-        aria-label="Log a dose"
+        aria-label={t("log_dose_sheet_title")}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--card)] px-4 py-3">
@@ -418,7 +420,7 @@ export function LogDoseSheet({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("close")}
             className="ml-auto text-[var(--muted)] hover:text-[var(--ink)]"
           >
             <X size={18} />
@@ -442,7 +444,7 @@ export function LogDoseSheet({
               }
             >
               <Select value={protocolId} onChange={(e) => chooseProtocol(e.target.value)}>
-                <option value={NO_PROTOCOL}>No protocol, a one-off dose</option>
+                <option value={NO_PROTOCOL}>{t("log_no_protocol")}</option>
                 {activeProtocols.map((p) => (
                   <option key={p.id} value={p.id}>
                     {findPeptide(custom, p.peptideId)?.name ?? p.peptideId}, {p.name},{" "}
@@ -612,7 +614,7 @@ export function LogDoseSheet({
               }
             >
               <Select value={site} onChange={(e) => setSite(e.target.value as InjectionSite)}>
-                <option value="">Not recorded</option>
+                <option value="">{t("log_not_recorded")}</option>
                 {siteChoices.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
@@ -666,7 +668,7 @@ export function LogDoseSheet({
               }. Set it to “Not recorded” to log without touching stock.`}
             >
               <Select value={vialId} onChange={(e) => setVialId(e.target.value)}>
-                <option value="">Not recorded, leave stock alone</option>
+                <option value="">{t("log_not_recorded_stock")}</option>
                 {usableVials.map((v) => {
                   const st = vialStatus(v);
                   const left =
@@ -753,7 +755,7 @@ export function LogDoseSheet({
 
           {peptide && isBlend(peptide) && doseMcg > 0 && !skipped && (
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
-              <p className="mb-2 text-[12px] text-[var(--muted)]">This dose delivers:</p>
+              <p className="mb-2 text-[12px] text-[var(--muted)]">{t("log_this_dose_delivers")}</p>
               <BlendBreakdown
                 blend={peptide}
                 doseMcg={doseMcg}
@@ -767,7 +769,7 @@ export function LogDoseSheet({
           {!skipped && (
             <div className="space-y-3 rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
               <div>
-                <p className="mb-2 text-[13px] font-semibold text-[var(--ink)]">How do you feel?</p>
+                <p className="mb-2 text-[13px] font-semibold text-[var(--ink)]">{t("log_how_do_you_feel")}</p>
                 <div className="flex gap-1.5">
                   {[1, 2, 3, 4, 5].map((n) => {
                     const on = feeling === n;
@@ -795,7 +797,7 @@ export function LogDoseSheet({
               <div>
                 <p className="mb-2 text-[13px] font-semibold text-[var(--ink)]">
                   Anything to note?{" "}
-                  <span className="font-normal text-[var(--faint)]">optional</span>
+                  <span className="font-normal text-[var(--faint)]">{t("optional")}</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {COMMON_SIDE_EFFECTS.map((e) => {
@@ -829,7 +831,7 @@ export function LogDoseSheet({
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="How it went, any side effects…"
+              placeholder={t("log_notes_placeholder")}
             />
           </Field>
 

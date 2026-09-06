@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useRef, useState } from "react";
 import { AlertTriangle, Droplet, FileUp, Upload } from "lucide-react";
@@ -29,6 +30,7 @@ export function ImportPanel() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<ReadResult | null>(null);
+  const { t } = useLang();
   const [fileName, setFileName] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -133,7 +135,7 @@ export function ImportPanel() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Import from another app</SectionLabel>
+      <SectionLabel>{t("import_title")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
 Reads a CSV, TSV, JSON or .xlsx export from another tracker and merges the doses and
@@ -174,7 +176,7 @@ Reads a CSV, TSV, JSON or .xlsx export from another tracker and merges the doses
         <div className="space-y-3">
           <Callout tone="warn" title="This is one of your own exports">
             It contains everything, protocols, stock, settings and profiles, so importing it
-            <strong> replaces</strong> what is in the app rather than merging. {result.data.logs?.length ?? 0}{" "}
+            <strong> {t("import_replaces")}</strong> what is in the app rather than merging. {result.data.logs?.length ?? 0}{" "}
             doses and {result.data.protocols?.length ?? 0} protocols would take the place of your
             current {logs.length}.
           </Callout>
@@ -438,6 +440,7 @@ function LabPreview({
   onCancel: () => void;
   onApply: () => void;
 }) {
+  const { t } = useLang();
   const keeping = report.candidates.filter((c) => !skipped.has(c.markerId));
   const suspect = report.candidates.filter((c) => c.confidence === "unit-mismatch");
 
@@ -498,7 +501,7 @@ function LabPreview({
                       </span>
                     ) : null}
                     {bad && <Badge tone="tangerine">expects {c.expectedUnit}</Badge>}
-                    {c.confidence === "loose" && <Badge>matched loosely</Badge>}
+                    {c.confidence === "loose" && <Badge>{t("import_matched_loosely")}</Badge>}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-[11px] text-[var(--faint)]">
                     {c.source}

@@ -116,13 +116,10 @@ export default function PlanPage() {
         <EmptyState
           title={t("plan_no_protocols")}
           action={
-            <Button variant="primary" onClick={() => setAdding(true)}>
-              Create one
-            </Button>
+            <Button variant="primary" onClick={() => setAdding(true)}>{t("plan_create_one")}</Button>
           }
         >
-          A protocol ties a peptide to a dose and a schedule. It drives what shows as due on the Now
-          page and how your stock burns down.
+          {t("plan_no_protocols_desc")}
         </EmptyState>
       )}
 
@@ -172,10 +169,10 @@ export default function PlanPage() {
                     >
                       {peptide?.name ?? p.peptideId}
                     </Link>
-                    {!p.active && <Badge>paused</Badge>}
+                    {!p.active && <Badge>{t("plan_paused")}</Badge>}
                     {bands && current && (
                       <Badge tone="sky">
-                        {p.phases?.length ? "week band" : "step"} {current.index + 1} of{" "}
+                        {p.phases?.length ? t("plan_week_band") : t("plan_step")} {current.index + 1} of{" "}
                         {bands.length}
                       </Badge>
                     )}
@@ -193,15 +190,15 @@ export default function PlanPage() {
                     </span>
                     <span className="text-[var(--muted)]">{describeSchedule(showSchedule)}</span>
                     <span className="text-[var(--faint)]">
-                      {trim(protocolDosesPerWeek(p, now), 2)} per week
+                      {trim(protocolDosesPerWeek(p, now), 2)} {t("plan_per_week")}
                     </span>
                     {next && (
-                      <span className="text-[var(--muted)]">next {relativeTime(next, now)}</span>
+                      <span className="text-[var(--muted)]">{t("plan_next")} {relativeTime(next, now)}</span>
                     )}
                   </div>
                   <p className="mt-1.5 text-[12px] text-[var(--faint)]">
-                    Started {formatDate(p.startedAt)}
-                    {p.sites?.length ? ` · rotating ${p.sites.length} sites` : ""}
+                    {t("plan_started")} {formatDate(p.startedAt)}
+                    {p.sites?.length ? ` · ${t("plan_rotating_sites", { n: String(p.sites.length) })}` : ""}
                   </p>
                 </div>
 
@@ -249,8 +246,8 @@ export default function PlanPage() {
                   </div>
                   <p className="mt-2 text-[12px] text-[var(--faint)]">
                     {p.phases?.length
-                      ? `Your own plan, ${bands.length} bands by week.`
-                      : "Dose advances automatically with the plan."}
+                      ? t("plan_own_plan_bands", { n: String(bands.length) })
+                      : t("plan_dose_advances")}
                   </p>
                 </div>
               )}
@@ -260,7 +257,7 @@ export default function PlanPage() {
               {!bands && p.titration && p.titration.length > 0 && (
                 <div className="mt-3.5 border-t border-[var(--line)] pt-3">
                   <p className="text-[12px] text-[var(--faint)]">
-                    Fixed dose, the plan is shown for reference only.
+                    {t("plan_fixed_dose_reference")}
                   </p>
                 </div>
               )}
@@ -404,6 +401,7 @@ function ProtocolForm({
   onSave: (p: Omit<Protocol, "id" | "profileId">) => void;
 }) {
   const custom = useStore((s) => s.customPeptides);
+  const { t } = useLang();
   const peptides = useMemo(() => allPeptides(custom), [custom]);
   // Only to know whether a spray bottle of this compound exists, which is what
   // puts intranasal on the list of routes.
@@ -573,7 +571,7 @@ function ProtocolForm({
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>{initial ? "Edit protocol" : "New protocol"}</SectionLabel>
+      <SectionLabel>{initial ? t("plan_edit_protocol") : t("plan_new_protocol_form")}</SectionLabel>
 
       <Field label="Peptide">
         <Select value={peptideId} onChange={(e) => pick(e.target.value)}>
@@ -915,6 +913,7 @@ function ProtocolForm({
  * and grouped by day, so you can see a heavy day coming before it arrives.
  */
 function Upcoming() {
+  const { t } = useLang();
   const { protocols } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const now = Date.now();
@@ -962,7 +961,7 @@ function Upcoming() {
 
   return (
     <Card className="p-4">
-      <SectionLabel>Next two weeks</SectionLabel>
+      <SectionLabel>{t("plan_next_two_weeks")}</SectionLabel>
       <ul className="space-y-1">
         {days.map(([day, rows]) => (
           <li key={day} className="flex gap-3 rounded px-2 py-2 odd:bg-[var(--sunken)]/40">

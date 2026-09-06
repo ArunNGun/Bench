@@ -228,7 +228,7 @@ export default function StockPage() {
 
       {!vials.length && !adding && (
         <EmptyState
-          title="Nothing in stock"
+          title={t("stock_no_vials")}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
               Add a vial
@@ -242,7 +242,7 @@ export default function StockPage() {
 
       {onOrder.length > 0 && (
         <section>
-          <SectionLabel>On order</SectionLabel>
+          <SectionLabel>{t("stock_on_order")}</SectionLabel>
           <div className="space-y-2.5">
             {onOrder.map((v) => (
               <VialRow
@@ -270,7 +270,7 @@ export default function StockPage() {
 
       {open.length > 0 && (
         <section>
-          <SectionLabel>Open</SectionLabel>
+          <SectionLabel>{t("stock_open")}</SectionLabel>
           <div className="space-y-2.5">
             {open.map((v) => (
               <div key={v.id}>
@@ -319,7 +319,7 @@ export default function StockPage() {
 
       {sealed.length > 0 && (
         <section>
-          <SectionLabel>Sealed</SectionLabel>
+          <SectionLabel>{t("stock_sealed")}</SectionLabel>
           <div className="space-y-2.5">
             {(grouping
               ? sealedGroups.map((g) => ({ vial: g.vials[0], group: g }))
@@ -359,7 +359,7 @@ export default function StockPage() {
 
       {done.length > 0 && (
         <section>
-          <SectionLabel>Finished</SectionLabel>
+          <SectionLabel>{t("stock_finished")}</SectionLabel>
           <div className="space-y-1.5">
             {done.map((v) => (
               <Card key={v.id} className="flex items-center gap-3 p-2.5 opacity-55">
@@ -369,7 +369,7 @@ export default function StockPage() {
                 <button
                   type="button"
                   onClick={() => removeVial(v.id)}
-                  aria-label="Delete vial record"
+                  aria-label={t("stock_delete_vial")}
                   className="ml-auto p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                 >
                   <Trash2 size={14} />
@@ -380,7 +380,7 @@ export default function StockPage() {
         </section>
       )}
 
-      <Callout tone="info" title="About the 28-day date">
+      <Callout tone="info" title={t("stock_28_day_note")}>
         The beyond-use date this app applies from first puncture is the CDC and USP limit on how long
         a multi-dose container may be used. It is an infection-control rule about the vial, not a
         statement that the peptide inside is still potent, chemical stability is a separate,
@@ -669,6 +669,7 @@ function AddVialForm({
     vials: Omit<Vial, "id" | "profileId">[],
     shipping: { cost: number; currency: string } | null) => void;
 }) {
+  const { t } = useLang();
   const [peptideId, setPeptideId] = useState(peptides[0]?.id ?? "");
   const [strengthMg, setStrengthMg] = useState(10);
   const [count, setCount] = useState(1);
@@ -721,7 +722,7 @@ function AddVialForm({
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>New vial</SectionLabel>
+      <SectionLabel>{t("stock_new_vial")}</SectionLabel>
 
       <Field label="Peptide">
         <Select
@@ -945,6 +946,7 @@ function ReconstituteForm({
   onCancel: () => void;
   onSave: (ml: number, diluent: Vial["diluent"], fromBottleId?: string) => void;
 }) {
+  const { t } = useLang();
   const [ml, setMl] = useState(2);
   const [diluent, setDiluent] = useState<NonNullable<Vial["diluent"]>>("bacteriostatic");
   const conc = ml > 0 ? vial.strengthMg / ml : 0;
@@ -970,7 +972,7 @@ function ReconstituteForm({
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--tangerine)]/35 p-4">
-      <SectionLabel>Reconstitute</SectionLabel>
+      <SectionLabel>{t("stock_reconstitute")}</SectionLabel>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Water added" hint={`Makes ${trim(conc, 3)} mg/mL.`}>
@@ -1082,6 +1084,7 @@ function TransferToSprayForm({
   onCancel: () => void;
   onSave: (addedMl: number, mlPerSpray: number, diluent: DiluentKind, fromBottleId?: string) => void;
 }) {
+  const { t } = useLang();
   const [addedMl, setAddedMl] = useState(4);
   const [perSpray, setPerSpray] = useState(DEFAULT_ML_PER_SPRAY);
   /*
@@ -1106,7 +1109,7 @@ function TransferToSprayForm({
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--grape)]/35 p-4">
-      <SectionLabel>Transfer to a nasal spray</SectionLabel>
+      <SectionLabel>{t("stock_transfer_spray")}</SectionLabel>
 
       <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
         The whole contents go into the bottle and the vial is finished. What it cost goes with it,
@@ -1215,6 +1218,7 @@ function TopUpForm({
   onCancel: () => void;
   onSave: (addedMl: number, fromBottleId?: string) => void;
 }) {
+  const { t } = useLang();
   const [ml, setMl] = useState(0.5);
 
   /*
@@ -1237,7 +1241,7 @@ function TopUpForm({
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--sky)]/35 p-4">
-      <SectionLabel>Add diluent</SectionLabel>
+      <SectionLabel>{t("stock_add_diluent")}</SectionLabel>
 
       <Field
         label="Water added"

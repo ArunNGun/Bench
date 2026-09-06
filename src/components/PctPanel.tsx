@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ const DAY = 86_400_000;
  */
 export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
   const { logs } = useProfileData();
+  const { t } = useLang();
   const custom = useStore((s) => s.customPeptides);
   const library = useMemo(() => allPeptides(custom), [custom]);
   const resolve = useMemo(() => {

@@ -65,19 +65,19 @@ export default function LabsPage() {
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("labs_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-            The markers worth following, against the dates you took things.
+            {t("labs_subtitle")}
           </p>
         </div>
         {!adding && (
           <Button variant="primary" onClick={() => setAdding(true)}>
-            <Plus size={16} /> Add a result
+            <Plus size={16} /> {t("labs_add_result")}
           </Button>
         )}
       </header>
 
       {adding && <AddResult onDone={() => setAdding(false)} />}
 
-      <Callout tone="info" title="On reference ranges">
+      <Callout tone="info" title={t("labs_reference_ranges")}>
         A “normal” range belongs to the laboratory that ran the sample. It shifts with the assay,
         your sex and your age, and it is printed on your report. So enter it alongside the value and the app
         compares against yours. The exceptions are HbA1c, fasting glucose and blood pressure, where the
@@ -102,7 +102,7 @@ export default function LabsPage() {
 
       {!labs.length && !adding && (
         <EmptyState
-          title="No results yet"
+          title={t("labs_no_results")}
           icon={<Droplet size={22} />}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
@@ -311,6 +311,7 @@ function LabChart({
 }
 
 function AddResult({ onDone }: { onDone: () => void }) {
+  const { t } = useLang();
   const addLab = useStore((s) => s.addLab);
 
   const [markerId, setMarkerId] = useState(LAB_MARKERS[0].id);
@@ -349,7 +350,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Add a result</SectionLabel>
+      <SectionLabel>{t("labs_add_result")}</SectionLabel>
 
       <Field label="Marker">
         <Select value={markerId} onChange={(e) => setMarkerId(e.target.value)}>

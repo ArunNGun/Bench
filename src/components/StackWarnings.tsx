@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo } from "react";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
@@ -14,6 +15,7 @@ import { stackIssues, type StackIssue } from "@/lib/calc/stack";
  * whole value of this panel rests on trusting that it did look.
  */
 export function StackWarnings({ nowMs, compact = false }: { nowMs: number; compact?: boolean }) {
+  const { t } = useLang();
   const { protocols } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
 
@@ -72,7 +74,7 @@ export function StackWarnings({ nowMs, compact = false }: { nowMs: number; compa
 
   return (
     <Card className="space-y-3 p-4">
-      <SectionLabel>Running together</SectionLabel>
+      <SectionLabel>{t("warnings_title")}</SectionLabel>
       {issues.map((issue, i) => (
         <IssueRow key={`${issue.kind}-${i}`} issue={issue} />
       ))}

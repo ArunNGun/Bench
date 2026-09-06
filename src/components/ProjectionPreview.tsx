@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo } from "react";
 import { TrendingUp } from "lucide-react";
@@ -26,6 +27,7 @@ export function ProjectionPreview({
   protocol: Protocol;
   peptide: Peptide | undefined;
 }) {
+  const { t } = useLang();
   const projection = useMemo(() => {
     if (!peptide?.halfLifeHours) return null;
     return project({
@@ -137,7 +139,7 @@ export function ProjectionPreview({
           hint="same dose, higher level"
         />
         <Figure
-          label="Peak to trough"
+          label={t("projection_peak_trough")}
           value={swing == null ? "n/a" : `${trim(swing, 1)}x`}
           hint="between doses"
         />

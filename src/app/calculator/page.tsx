@@ -33,37 +33,38 @@ import { formatConcentration, formatDose, formatMl, trim } from "@/lib/format";
 
 type DoseUnit = "mcg" | "mg";
 
-const WARNING_COPY: Record<DrawWarning, { tone: "warn" | "danger"; title: string; body: string }> = {
+function useWarningCopy(t: (k: import("@/lib/i18n/translations").TranslationKey) => string): Record<DrawWarning, { tone: "warn" | "danger"; title: string; body: string }> { return {
   "exceeds-barrel": {
     tone: "danger",
-    title: "This draw will not fit the barrel",
+    title: t("calc_warn_wont_fit"),
     body: "Use a larger syringe, split the dose across two injections, or reconstitute with less water to make it more concentrated.",
   },
   "below-graduation": {
     tone: "danger",
-    title: "Smaller than the finest mark on this barrel",
+    title: t("calc_warn_below_mark"),
     body: "There is no way to measure this accurately. Add more water to dilute it, or use a barrel with finer graduations.",
   },
   "off-graduation": {
     tone: "warn",
-    title: "This lands between two marks",
+    title: t("calc_warn_between_marks"),
     body: "You will have to settle on the nearest mark. The delivered dose below reflects that.",
   },
   "low-volume": {
     tone: "warn",
-    title: "Very small draw",
+    title: t("calc_warn_very_small"),
     body: `Under about ${MIN_RELIABLE_UNITS} marks, reading error and the syringe's dead space start to rival the dose. Consider diluting further.`,
   },
   "exceeds-vial": {
     tone: "danger",
-    title: "More liquid than the vial holds",
+    title: t("calc_warn_too_much"),
     body: "The dose needs more solution than you put in. Check the vial strength and water volume.",
   },
-};
+}; }
 
 export default function CalculatorPage() {
   const custom = useStore((s) => s.customPeptides);
   const { t } = useLang();
+  const WARNING_COPY = useWarningCopy(t);
   const peptides = useMemo(() => allPeptides(custom), [custom]);
 
   const [vialMg, setVialMg] = useState(10);
@@ -118,7 +119,7 @@ export default function CalculatorPage() {
 
       {/* Scale choice comes first, because everything downstream depends on it. */}
       <Card className="p-4">
-        <SectionLabel>Which syringe are you holding?</SectionLabel>
+        <SectionLabel>{t("calc_which_syringe")}</SectionLabel>
         <Select
           value={syringeId}
           onChange={(e) => setSyringeId(e.target.value)}
@@ -152,7 +153,7 @@ export default function CalculatorPage() {
           <p className="mt-2.5 text-[12.5px] leading-relaxed text-[var(--faint)]">{syringe.note}</p>
         )}
 
-        <Callout tone="warn" className="mt-3" title="Check the barrel before you trust a number">
+        <Callout tone="warn" className="mt-3" title={t("calc_check_barrel")}>
           A U-40 barrel numbered 0 to 40 and a U-100 barrel numbered 0 to 100 look similar, but one mark is{" "}
           <strong className="text-[var(--ink)]">0.025 mL</strong> on U-40 against{" "}
           <strong className="text-[var(--ink)]">0.01 mL</strong> on U-100. Reading a U-40 barrel as
@@ -164,7 +165,7 @@ export default function CalculatorPage() {
 
       {/* Inputs */}
       <Card className="p-4">
-        <SectionLabel>The vial and the dose</SectionLabel>
+        <SectionLabel>{t("calc_vial_and_dose")}</SectionLabel>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Peptide (optional)" hint="Fills in a typical vial size and dose.">
@@ -234,7 +235,7 @@ export default function CalculatorPage() {
       {valid ? (
         <Card className="overflow-hidden">
           <div className="border-b border-[var(--line)] bg-[var(--sunken)]/45 px-4 py-3">
-            <SectionLabel className="mb-0">Draw to here</SectionLabel>
+            <SectionLabel className="mb-0">{t("calc_draw_to_here")}</SectionLabel>
           </div>
 
           <div className="px-3 pb-2 pt-5 sm:px-6">
@@ -328,7 +329,7 @@ export default function CalculatorPage() {
       {/* Better dilutions */}
       {suggestions.length > 0 && (
         <Card className="p-4">
-          <SectionLabel>Water volumes that read more cleanly</SectionLabel>
+          <SectionLabel>{t("calc_cleaner_volumes")}</SectionLabel>
           <p className="mb-3 text-[13px] leading-relaxed text-[var(--muted)]">
             Same vial, same dose, different amount of water. A draw that lands exactly on a printed
             mark is one you can repeat accurately every time.
@@ -370,7 +371,7 @@ export default function CalculatorPage() {
 
       {/* Reference */}
       <Card className="p-4">
-        <SectionLabel>How this is worked out</SectionLabel>
+        <SectionLabel>{t("calc_how_worked_out")}</SectionLabel>
         <div className="space-y-2.5 font-mono text-[12.5px] leading-relaxed text-[var(--muted)]">
           <p>
             concentration = {vialMg} mg ÷ {trim(diluentMl, 2)} mL ={" "}

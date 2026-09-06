@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useEffect, useMemo, useState } from "react";
 import { BellRing, CalendarPlus } from "lucide-react";
@@ -53,6 +54,7 @@ export function RemindersPanel() {
   const { protocols, logs } = useProfileData();
 
   const reminders = settings.reminders ?? DEFAULT_REMINDERS;
+  const { t } = useLang();
 
   const [state, setState] = useState<NotifyAvailability | "checking">("checking");
   const [busy, setBusy] = useState(false);
@@ -142,11 +144,11 @@ export function RemindersPanel() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Dose reminders</SectionLabel>
+      <SectionLabel>{t("reminders_title")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
         A reminder at the hour a dose is due. Scheduled by the phone itself, so it works with the app
-        closed and with no connection, and <strong>nothing is sent anywhere</strong>. A dose you log
+        closed and with no connection, and <strong>{t("reminders_desc")}</strong>. A dose you log
         early cancels its own reminder, so the phone does not ask for something already in the leg.
       </p>
 
@@ -171,7 +173,7 @@ export function RemindersPanel() {
                   : setEnabled(true, Number(e.target.value))
               }
             >
-              <option value="off">Never</option>
+              <option value="off">{t("reminders_never")}</option>
               {LEAD_OPTIONS.map((o) => (
                 <option key={o.minutes} value={o.minutes}>
                   {o.label}
@@ -209,8 +211,8 @@ export function RemindersPanel() {
             })
           }
         >
-          <option value="discreet">Say only that a dose is due</option>
-          <option value="named">Name the compound and dose</option>
+          <option value="discreet">{t("reminders_say_minimal")}</option>
+          <option value="named">{t("reminders_say_full")}</option>
         </Select>
       </Field>
 
@@ -264,7 +266,7 @@ export function RemindersPanel() {
 
         <p className="text-[12px] leading-relaxed text-[var(--faint)]">
           Each dose becomes an event with its own alarm, so your calendar does the reminding. Import
-          it into a <strong>calendar of its own</strong> rather than your main one: changing a plan
+          it into a <strong>{t("reminders_calendar_desc")}</strong> rather than your main one: changing a plan
           means exporting again, and a separate calendar can be emptied in one go instead of hunting
           for events one by one.
           {reminders.showCompound && (

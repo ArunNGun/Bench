@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import Link from "next/link";
 
@@ -24,7 +25,8 @@ import { dailyRestingHr, nightlySleep } from "@/lib/calc/healthsync";
  * Rating is optional per axis. Leaving one blank records that you did not
  * notice, which is different from and more honest than a middling three.
  */
-export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
+const { t } = useLang();
+  export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
   const { checkIns, protocols, measurements } = useProfileData();
   const saveCheckIn = useStore((s) => s.saveCheckIn);
   const recordVitals = useStore((s) => s.recordVitals);
@@ -177,7 +179,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
                 </p>
                 <p className="tnum mt-0.5 text-[17px] font-extrabold leading-none text-[var(--ink)]">
                   {m.mean == null ? (
-                    <span className="text-[13px] font-semibold text-[var(--faint)]">n/a</span>
+                    <span className="text-[13px] font-semibold text-[var(--faint)]">{t("checkin_na")}</span>
                   ) : (
                     trim(m.mean, 1)
                   )}
@@ -196,7 +198,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
 
           {shifts.length > 0 && (
             <div className="rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
-              <p className="text-[11.5px] font-bold text-[var(--ink)]">Since your newest protocol</p>
+              <p className="text-[11.5px] font-bold text-[var(--ink)]">{t("log_since_protocol")}</p>
               <ul className="mt-1.5 space-y-1">
                 {shifts.map((s) => {
                   const up = (s.delta ?? 0) > 0;

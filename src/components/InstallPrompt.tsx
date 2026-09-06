@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useEffect, useState } from "react";
 import { Download, Share, SquarePlus, X } from "lucide-react";
@@ -30,6 +31,7 @@ interface BeforeInstallPromptEvent extends Event {
  * rendered is an advert; one that appears after a few seconds of use is an offer.
  */
 export function InstallPrompt() {
+  const { t } = useLang();
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [route, setRoute] = useState<InstallRoute>("unsupported");
   const [visible, setVisible] = useState(false);
@@ -98,7 +100,7 @@ export function InstallPrompt() {
   return (
     <div
       role="dialog"
-      aria-label="Install Bench"
+      aria-label={t("install_title")}
       className="fixed inset-x-3 z-40 rounded-[var(--r-card)] p-3.5 shadow-[var(--shadow-lg)] sm:left-auto sm:right-4 sm:w-96"
       style={{
         // Clear of the mobile tab bar and the gesture area beneath it.
@@ -116,7 +118,7 @@ export function InstallPrompt() {
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-bold text-[var(--ink)]">Install Bench</p>
+          <p className="text-[14px] font-bold text-[var(--ink)]">{t("install_title")}</p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--muted)]">
             {route === "ios-other-browser"
               ? "Adding to the home screen only works from Safari on iPhone and iPad. Open this page in Safari and the option appears in the Share menu."
@@ -146,7 +148,7 @@ export function InstallPrompt() {
                   <li>
                     <span className="font-bold">2.</span> Scroll down and tap{" "}
                     <SquarePlus size={13} strokeWidth={2.2} className="inline align-[-2px]" />{" "}
-                    <span className="font-semibold">Add to Home Screen</span>
+                    <span className="font-semibold">{t("install_add_to_home")}</span>
                   </li>
                   <li>
                     <span className="font-bold">3.</span> Tap <span className="font-semibold">Add</span>
@@ -179,7 +181,7 @@ export function InstallPrompt() {
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Dismiss"
+          aria-label={t("install_dismiss")}
           className="press -mr-1 -mt-1 shrink-0 p-1 text-[var(--faint)] hover:text-[var(--ink)]"
         >
           <X size={16} />

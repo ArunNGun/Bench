@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, LogOut, Plus, UserRound } from "lucide-react";
@@ -48,6 +49,7 @@ export function ProfileSwitcher() {
   const addProfile = useStore((s) => s.addProfile);
 
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
@@ -134,7 +136,7 @@ export function ProfileSwitcher() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Name"
+                placeholder={t("profile_name_placeholder")}
                 aria-label="New profile name"
                 className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3 py-2 text-[14px] focus:border-[var(--mint)] focus:outline-none"
               />
@@ -168,7 +170,7 @@ export function ProfileSwitcher() {
               >
                 <Plus size={16} strokeWidth={2.6} />
               </span>
-              <span className="text-[14px] font-medium text-[var(--ink)]">Add a profile</span>
+              <span className="text-[14px] font-medium text-[var(--ink)]">{t("profile_add")}</span>
             </button>
           )}
 
@@ -195,6 +197,7 @@ export function ProfileSwitcher() {
 
 /** Shown in Settings when there is still only one profile. */
 export function AddFirstProfile() {
+  const { t } = useLang();
   const profiles = useStore((s) => s.profiles);
   const addProfile = useStore((s) => s.addProfile);
   const [name, setName] = useState("");
@@ -208,7 +211,7 @@ export function AddFirstProfile() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && name.trim() && (addProfile(name), setName(""))}
-          placeholder="Their name"
+          placeholder={t("profile_their_name")}
           aria-label="New profile name"
           className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3.5 py-3 text-[15px] focus:border-[var(--mint)] focus:outline-none"
         />

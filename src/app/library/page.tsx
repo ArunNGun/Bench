@@ -45,9 +45,7 @@ export default function LibraryPage() {
       <header>
         <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("library_title")}</h1>
         <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--muted)]">
-          {peptides.length} compounds, with half-lives, titration ladders and sources. Every dose
-          carries a tag saying where it came from, an approved label, a clinical trial, or community
-          practice with nothing behind it.
+          {t("library_subtitle", { n: String(peptides.length) })}
         </p>
       </header>
 
@@ -59,15 +57,15 @@ export default function LibraryPage() {
         <TextInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, alias or category…"
+          placeholder={t("library_search_placeholder")}
           className="pl-9"
-          aria-label="Search the library"
+          aria-label={t("search")}
         />
       </div>
 
       {!filtered.length && (
         <p className="py-10 text-center text-[14px] text-[var(--muted)]">
-          Nothing matches “{query}”.
+          {t("library_no_results", { query })}
         </p>
       )}
 
@@ -97,16 +95,16 @@ export default function LibraryPage() {
                                 ? "rose"
                                 : "neutral"
                         }
-                        title={`Strongest evidence behind any listed dose: ${EVIDENCE_LABEL[best]}`}
+                        title={EVIDENCE_LABEL[best]}
                       >
                         {EVIDENCE_LABEL[best]}
                       </Badge>
-                      {p.halfLifeHours == null && <Badge tone="rose">no PK data</Badge>}
+                      {p.halfLifeHours == null && <Badge tone="rose">{t("library_no_pk_data")}</Badge>}
                     </div>
                     <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">{p.summary}</p>
                     <p className="mt-1.5 text-[12px] text-[var(--faint)]">
-                      Half-life: {formatHalfLife(p.halfLifeHours)}
-                      {p.aka.length > 0 && ` · also ${p.aka.slice(0, 2).join(", ")}`}
+                      {t("library_half_life")} {formatHalfLife(p.halfLifeHours)}
+                      {p.aka.length > 0 && ` · ${t("library_also_known")} ${p.aka.slice(0, 2).join(", ")}`}
                     </p>
                   </Card>
                 </Link>

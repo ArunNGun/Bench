@@ -57,6 +57,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
+import { useLang } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -75,6 +76,7 @@ const DAY = 86_400_000;
 
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, logs, vials } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const overrides = useStore((s) => s.halfLifeOverrides);
@@ -372,7 +374,7 @@ export default function NowPage() {
       v.budAt - now < settings.budWarningDays * DAY);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading your data…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("now_loading")}</div>;
   }
 
   if (!protocols.length) {
@@ -502,7 +504,7 @@ export default function NowPage() {
       */}
       {laterToday.length > 0 && (
         <div>
-          <SectionLabel>Later today</SectionLabel>
+          <SectionLabel>{t("now_later_today")}</SectionLabel>
           <div className="divide-y divide-[var(--line)] rounded-[var(--r-card)] border border-[var(--line)]">
             {laterToday.map(({ track: t, at }) => {
               const key = `${t.protocol.id}:${at}`;
@@ -598,7 +600,7 @@ export default function NowPage() {
       {series.length > 0 && (
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-4 py-3">
-            <SectionLabel className="mb-0">Circulating now</SectionLabel>
+            <SectionLabel className="mb-0">{t("now_circulating")}</SectionLabel>
             <div className="ml-auto flex flex-wrap gap-x-3.5 gap-y-1">
               {series.map((s) => (
                 <span key={s.id} className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
@@ -613,9 +615,9 @@ export default function NowPage() {
                   />
                   {s.label}
                   {s.basis === "elsewhere" && (
-                    <span className="text-[var(--faint)]">estimated</span>
+                    <span className="text-[var(--faint)]">{t("now_estimated")}</span>
                   )}
-                  {s.basis === "yours" && <span className="text-[var(--faint)]">your figure</span>}
+                  {s.basis === "yours" && <span className="text-[var(--faint)]">{t("now_your_figure")}</span>}
                 </span>
               ))}
             </div>
@@ -679,7 +681,7 @@ export default function NowPage() {
       )}
 
       <section>
-        <SectionLabel>Active protocols</SectionLabel>
+        <SectionLabel>{t("now_active_protocols")}</SectionLabel>
         <div className="space-y-2.5">
           {tracks.map((t) => (
             <Card key={t.protocol.id} className="p-4">
@@ -858,7 +860,7 @@ export default function NowPage() {
 
       {(lowStock.length > 0 || expiringVials.length > 0) && (
         <section>
-          <SectionLabel>Worth sorting out</SectionLabel>
+          <SectionLabel>{t("now_worth_sorting")}</SectionLabel>
           <div className="space-y-2.5">
             {lowStock.map((t) => (
               <Callout key={t.protocol.id} tone="warn">
@@ -1051,6 +1053,7 @@ function Insights({
   logs: DoseLog[];
   now: number;
 }) {
+  const { t } = useLang();
   const weeks = useMemo(() => weeklyExposure(logs, now, 8), [logs, now]);
   const anyExposure = weeks.some((w) => w.totalMcg > 0);
   if (!tracks.length || !anyExposure) return null;
@@ -1059,12 +1062,12 @@ function Insights({
 
   return (
     <section>
-      <SectionLabel>Trends</SectionLabel>
+      <SectionLabel>{t("now_trends")}</SectionLabel>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <div className="mb-1 flex items-baseline justify-between gap-3">
             <h3 className="text-[14.5px] font-bold text-[var(--ink)]">Weekly exposure</h3>
-            <span className="text-[12px] text-[var(--muted)]">last 8 weeks, all compounds</span>
+            <span className="text-[12px] text-[var(--muted)]">{t("now_last_8_weeks")}</span>
           </div>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
             Total mass logged each week. A titration shows up as a staircase; a gap shows up as a
@@ -1108,7 +1111,7 @@ function Insights({
         </Card>
 
         <Card className="p-5">
-          <h3 className="mb-1 text-[14.5px] font-bold text-[var(--ink)]">Building to steady state</h3>
+          <h3 className="mb-1 text-[14.5px] font-bold text-[var(--ink)]">{t("now_building_steady")}</h3>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
             Levels keep rising for about five half-lives after you start. Until then, today is not
             what a steady week will feel like.

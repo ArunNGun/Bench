@@ -125,7 +125,7 @@ export default function LogPage() {
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">Every dose, and how each day went.</p>
         </div>
         <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
-          <Plus size={16} /> Log a dose
+          <Plus size={16} /> {t("log_new_dose")}
         </Button>
       </header>
 
@@ -152,7 +152,7 @@ export default function LogPage() {
 
       {logs.some((l) => l.site) && (
         <Card className="p-4">
-          <SectionLabel>Site rotation</SectionLabel>
+          <SectionLabel>{t("log_site_rotation")}</SectionLabel>
           <SiteMap logs={shown} nowMs={now} />
           {overused.length > 0 && (
             <Callout tone="warn" className="mt-3">
@@ -215,7 +215,7 @@ export default function LogPage() {
 
       {!grouped.length ? (
         <EmptyState
-          title="No doses logged"
+          title={t("log_no_logs")}
           action={
             <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
               Log your first dose

@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -31,7 +32,8 @@ const PREFILL_DAYS = 30;
  * is the outcome that matters, and putting the dose markers on the same axis
  * is what makes a titration step and the response to it legible together.
  */
-export function WeightCard({ nowMs }: { nowMs: number }) {
+const { t } = useLang();
+  export function WeightCard({ nowMs }: { nowMs: number }) {
   const { measurements, logs } = useProfileData();
   const settings = useStore((s) => s.settings);
   const addMeasurement = useStore((s) => s.addMeasurement);
@@ -270,7 +272,7 @@ function PrefillNote({
   }
 
   if (health === "checking") {
-    return <p className={`${base} text-[var(--faint)]`}>Looking for a reading in Health Connect…</p>;
+    return <p className={`${base} text-[var(--faint)]`}>{t("weight_health_connect")}</p>;
   }
 
   if (health === "available") {
