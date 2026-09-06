@@ -578,17 +578,38 @@ export default function NowPage() {
                         >
                           <Check size={15} /> Yes, log it
                         </Button>
+                        <Button
+                          title="Open the full form"
+                          onClick={() => {
+                            setConfirmEarly(null);
+                            setLogPeptideId(t.protocol.peptideId);
+                            setLogOpen(true);
+                          }}
+                        >
+                          Details
+                        </Button>
                         <Button variant="ghost" onClick={() => setConfirmEarly(null)}>
                           Cancel
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        title={`Log this ${formatTime(at)} dose ahead of time`}
-                        onClick={() => setConfirmEarly(key)}
-                      >
-                        <Check size={15} /> Taken
-                      </Button>
+                      <>
+                        <Button
+                          title={`Log this ${formatTime(at)} dose ahead of time`}
+                          onClick={() => setConfirmEarly(key)}
+                        >
+                          <Check size={15} /> Taken
+                        </Button>
+                        <Button
+                          title="Open the full form"
+                          onClick={() => {
+                            setLogPeptideId(t.protocol.peptideId);
+                            setLogOpen(true);
+                          }}
+                        >
+                          Details
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
