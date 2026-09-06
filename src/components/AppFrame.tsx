@@ -14,7 +14,6 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ThemeToggle } from "./ThemeToggle";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
@@ -87,7 +86,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
             <BenchMark />
-            <span className="text-[17px] font-extrabold tracking-tight text-[var(--ink)]">
+            {/*
+              Hidden on the narrowest screens. The mark beside it says the same
+              thing, and those fifty pixels are the difference between a header
+              that fits and one that scrolls.
+            */}
+            <span className="hidden text-[17px] font-extrabold tracking-tight text-[var(--ink)] sm:inline">
               Bench
             </span>
           </Link>
@@ -118,16 +122,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             {/*
-              No sign out here. It was tried, and on a phone it pushed the row
-              past the width of the screen, which gave the whole app a sideways
-              scroll. The header already carries a profile, a backup button,
-              three links and this toggle, and that is the ceiling.
+              Nothing else fits here. On a phone this row was already wider than
+              the screen, which gave the whole app a sideways scroll, and adding
+              a sign out made it worse rather than causing it.
 
-              It lives in the profile menu instead, which is the menu about who
-              is using the app and is full width on a phone, and in a card in
-              Settings.
+              What moved out: the theme toggle, into the profile menu, because
+              it is the least urgent control in the header. Sign out went to the
+              same menu and to a card in Settings. Both are one tap further away
+              and neither is something anybody does hourly.
             */}
-            <ThemeToggle />
           </div>
         </div>
       </header>
