@@ -755,6 +755,13 @@ export interface Settings {
    * migrated to add this.
    */
   reminders?: RemindersSettings;
+
+  /**
+   * When true, weight log entries are rendered as labelled dots on the PK
+   * chart, so you can see body weight alongside compound levels on the same
+   * timeline. Off by default; toggled from the Weight card.
+   */
+  plotWeightOnChart?: boolean;
 }
 
 /**

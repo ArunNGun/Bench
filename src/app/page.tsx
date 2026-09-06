@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import { toDisplayWeight } from "@/lib/calc/outcomes";
 import {
   dosesPerDoseDay,
   dueStatus,
@@ -77,7 +78,7 @@ const DAY = 86_400_000;
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { t } = useLang();
-  const { protocols, logs, vials } = useProfileData();
+  const { protocols, logs, vials, measurements } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const overrides = useStore((s) => s.halfLifeOverrides);
   const settings = useStore((s) => s.settings);
@@ -630,6 +631,18 @@ export default function NowPage() {
               nowMs={now}
               pickedMs={pickedMs}
               onPick={setPickedMs}
+              weightEntries={
+                settings.plotWeightOnChart
+                  ? measurements
+                      .filter((m) => m.weightKg != null)
+                      .map((m) => {
+                        const unit = settings.weightUnit ?? "kg";
+                        const val = toDisplayWeight(m.weightKg!, unit);
+                        const label = `${Math.round(val * 10) / 10}${unit}`;
+                        return { at: m.at, weightKg: m.weightKg!, displayLabel: label };
+                      })
+                  : undefined
+              }
             />
           </div>
           <PkReadout
@@ -639,12 +652,12 @@ export default function NowPage() {
             describeVial={describeVial}
           />
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
-            Relative levels, not concentrations. One normal dose peaks at 100%, so the line says how
-            much is on board compared with a single dose, bioavailability is unpublished for most of
-            these compounds, so a real ng/mL figure is not available. Triangles mark logged doses.
-            Where a reading names a vial, that vial&apos;s strength is read as it stands today:
-            adding diluent to an open vial rewrites the basis, so a dose drawn before a top up shows
-            the strength the vial has now rather than the one that was in the syringe.
+            Levels shown are estimated mass in circulation, not plasma concentration. The model uses
+            published half-lives and the one-compartment Bateman equation, scaled to the doses you
+            logged. Bioavailability and volume of distribution are unpublished for most of these
+            compounds, so the figure is a pharmacokinetic estimate, not a measured blood level.
+            Triangles mark logged doses.
+            Where a reading names a vial, that vial&apos;s strength is read as it stands today.
           </p>
 
           {estimatedFrom.length > 0 && (

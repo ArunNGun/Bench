@@ -17,7 +17,7 @@
 
 import { breakdownAt, type LevelBreakdown } from "@/lib/calc/pk";
 import type { PkSeries } from "./PkChart";
-import { formatDate, formatDose, formatTime, percent } from "@/lib/format";
+import { formatDate, formatDose, formatTime } from "@/lib/format";
 
 export interface VialNote {
   /** How to name the vial, for example "GHK-Cu, opened Aug 12". */
@@ -85,6 +85,11 @@ function Row({
   breakdown: LevelBreakdown;
   describeVial?: (vialId: string) => VialNote | null;
 }) {
+  // breakdown.total is normalised (1.0 = one reference dose). Multiply back to
+  // get the actual mass circulating now. referenceMcg is the dose the curve is
+  // scaled to, so total * referenceMcg gives mcg on board.
+  const actualMcg = breakdown.total * series.referenceMcg;
+
   return (
     <div>
       <p className="flex items-baseline gap-2 text-[12.5px]">
@@ -93,10 +98,10 @@ function Row({
           style={{ background: series.color }}
         />
         <span className="font-semibold text-[var(--ink)]">{series.label}</span>
-        <span className="ml-auto font-mono text-[12.5px] text-[var(--ink)]">
-          {percent(breakdown.total)}
+        <span className="ml-auto font-mono text-[13px] font-semibold text-[var(--ink)]">
+          {formatDose(actualMcg)}
         </span>
-        <span className="text-[11px] text-[var(--faint)]">of one dose</span>
+        <span className="text-[11px] text-[var(--faint)]">in system</span>
       </p>
 
       {/*
@@ -112,12 +117,13 @@ function Row({
       <ul className="mt-1 space-y-0.5 pl-4">
         {breakdown.contributions.map((c) => {
           const vial = c.dose.vialId ? describeVial?.(c.dose.vialId) : null;
+          const contributionMcg = c.share * actualMcg;
           return (
             <li key={`${c.dose.at}-${c.dose.amountMcg}`} className="text-[11.5px] text-[var(--muted)]">
               {formatDose(c.dose.amountMcg)} on {formatDate(c.dose.at)}
               <span className="text-[var(--faint)]"> at {formatTime(c.dose.at)}</span>
               {" · "}
-              <span className="font-mono">{percent(c.share)}</span> of this
+              <span className="font-mono">{formatDose(contributionMcg)}</span> remaining
               {vial && (
                 <span className="text-[var(--faint)]">
                   {" · "}
