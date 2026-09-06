@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, LogOut, Plus, UserRound } from "lucide-react";
 import { TONE_BG, TONE_FG, TONE_SOLID } from "./ui";
-import { ThemeToggle } from "./ThemeToggle";
 import { useActiveProfile, useStore } from "@/lib/store";
 import { accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
@@ -172,14 +171,6 @@ export function ProfileSwitcher() {
               <span className="text-[14px] font-medium text-[var(--ink)]">Add a profile</span>
             </button>
           )}
-
-          {/*
-            The theme lives here rather than in the header, because the header
-            ran out of width on a phone and started scrolling sideways, and of
-            everything in it this is the least urgent.
-          */}
-          <div className="my-1.5 h-px bg-[var(--line)]" />
-          <ThemeToggle menu />
 
           {/*
             Leaving the account, from the control a phone actually has.
