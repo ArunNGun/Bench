@@ -667,32 +667,98 @@ function loginPage(next, invite) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bench</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-         background: #0d1420; color: #e6edf7;
+  /*
+    Both themes, because a page that is only ever dark throws a black flash in
+    front of somebody whose app is light. One media query and two lists of
+    colours, taken from the app's own palette so the two cannot drift apart in
+    tone.
+  */
+  :root {
+    color-scheme: light dark;
+    --canvas: #f4f6fa; --card: #ffffff; --sunken: #f7f9fc; --line: #e8edf4;
+    --ink: #16202e; --muted: #667a92; --faint: #98a7ba;
+    --mint: #0fb5a5; --mint-soft: #e2f7f4; --mint-ink: #07786d;
+    --on-accent: #ffffff; --rose: #f4436b; --amber: #b4790a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas: #0d1420; --card: #16202e; --sunken: #111a26; --line: #233042;
+      --ink: #eef3f9; --muted: #93a4b9; --faint: #64768d;
+      --mint: #2dd4bf; --mint-soft: #10312f; --mint-ink: #6ee7d8;
+      --on-accent: #0d1420; --rose: #fb7185; --amber: #fbbf24;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; display: grid; grid-template-columns: 1fr;
+         background: var(--canvas); color: var(--ink);
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  form { width: min(22rem, calc(100vw - 3rem)); }
-  h1 { font-size: 20px; margin: 0 0 .25rem; letter-spacing: -.02em; }
-  p.sub { margin: 0 0 1.5rem; color: #8fa3bf; font-size: 13.5px; }
-  label { display: block; font-size: 12.5px; color: #8fa3bf; margin: 0 0 .35rem; }
-  input { width: 100%; box-sizing: border-box; padding: .7rem .8rem; margin: 0 0 1rem;
-          background: #131c2b; color: inherit; font: inherit;
-          border: 1px solid #24334a; border-radius: 8px; }
-  input:focus { outline: none; border-color: #4ea1a5; }
-  button { width: 100%; padding: .7rem; font: inherit; font-weight: 600;
-           background: #4ea1a5; color: #08131a; border: 0; border-radius: 8px; cursor: pointer; }
+
+  /*
+    The left panel on a wide screen, and the header on a narrow one. Same
+    element either way rather than two, so there is one thing to keep right.
+  */
+  .brand { display: flex; flex-direction: column; align-items: center; justify-content: center;
+           gap: .75rem; background: var(--mint-soft); padding: 2rem 1.5rem; text-align: center; }
+  .brand img { width: 64px; height: 64px; border-radius: 18px; }
+  .brand h1 { font-size: 22px; margin: 0; letter-spacing: -.02em; color: var(--ink); }
+  .brand p { margin: 0; max-width: 22rem; color: var(--muted); font-size: 13.5px; }
+  .pitch { display: none; }
+
+  .pane { display: grid; place-items: center; padding: 2rem 1.5rem; }
+  form { width: min(22rem, 100%); }
+  h2 { font-size: 19px; margin: 0 0 .25rem; letter-spacing: -.02em; }
+  p.sub { margin: 0 0 1.5rem; color: var(--muted); font-size: 13.5px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 0 0 .35rem; }
+  input { width: 100%; padding: .7rem .8rem; margin: 0 0 1rem;
+          background: var(--sunken); color: inherit; font: inherit;
+          border: 1px solid var(--line); border-radius: 10px; }
+  input:focus { outline: none; border-color: var(--mint); }
+  input[readonly] { color: var(--muted); }
+  button { width: 100%; padding: .75rem; font: inherit; font-weight: 600;
+           background: var(--mint); color: var(--on-accent);
+           border: 0; border-radius: 10px; cursor: pointer; }
   button[disabled] { opacity: .6; cursor: default; }
-  .err { color: #e0798b; font-size: 13px; min-height: 1.4em; margin: .75rem 0 0; }
-  .warn { color: #cfa24e; font-size: 12.5px; line-height: 1.55; margin: 0 0 1.25rem;
-          border-left: 2px solid #cfa24e; padding: .1rem 0 .1rem .7rem; }
-  input[readonly] { color: #8fa3bf; }
+  .err { color: var(--rose); font-size: 13px; min-height: 1.4em; margin: .75rem 0 0; }
+  .warn { color: var(--amber); font-size: 12.5px; line-height: 1.55; margin: 0 0 1.25rem;
+          border-left: 2px solid var(--amber); padding: .1rem 0 .1rem .7rem; }
   [hidden] { display: none; }
+
+  /*
+    Split at 52rem, which is where the form stops looking stranded beside the
+    panel. Below it the panel becomes a band across the top, which is the same
+    information in the order a phone reads it.
+  */
+  @media (min-width: 52rem) {
+    body { grid-template-columns: 1fr 1fr; }
+    .brand { min-height: 100dvh; gap: 1.25rem; }
+    .brand img { width: 96px; height: 96px; border-radius: 26px; }
+    .brand h1 { font-size: 30px; }
+    .pitch { display: block; }
+  }
 </style>
 </head>
 <body>
-<form id="f">
+<!--
+  The mark is the same /icon.svg the app and the launcher use, rather than a
+  hand copy, so it cannot drift from the generated one. This page is served by
+  the sync server, which has no access to the app's public folder, so it works
+  only where both sit behind one proxy on one origin. That is the arrangement
+  this build is for. Where it is not, the image simply removes itself and the
+  wordmark carries the panel, which is why nothing below depends on it.
+-->
+<div class="brand">
+  <img src="/icon.svg" alt="" onerror="this.remove()">
   <h1>Bench</h1>
-  <p class="sub" id="sub">Sign in to continue.</p>
+  <p class="pitch">
+    Your protocol, your doses, your bloodwork. Encrypted on this device before
+    it is stored, with a key only you hold.
+  </p>
+</div>
+
+<div class="pane">
+<form id="f">
+  <h2 id="sub">Sign in to continue.</h2>
   <p class="warn" id="warn" hidden>
     Your password is the key to your data. It never leaves this device, and it is
     not stored anywhere. Nobody can reset it for you, so if you lose it your
@@ -709,6 +775,7 @@ function loginPage(next, invite) {
   <button id="b" type="submit">Sign in</button>
   <p class="err" id="e"></p>
 </form>
+</div>
 <script type="module">
 const enc = new TextEncoder();
 const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
