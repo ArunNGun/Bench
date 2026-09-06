@@ -271,35 +271,48 @@ export function PkChart({
         </g>
       )}
 
-      {/* Weight overlay — dot on the baseline with label above it, inside the chart */}
+      {/* Weight overlay — dot plotted on the highest active curve at that moment */}
       {weightEntries
         ?.filter((w) => w.at >= fromMs && w.at <= toMs)
         .map((w) => {
           const wx = toX(w.at);
-          const baseY = H - PAD_B;          // the baseline
-          const dotY  = baseY - 1;          // sit on the baseline
-          const labelY = baseY - 8;         // label just above the dot, still inside chart
+          const baseY = H - PAD_B;
+
+          // Find the level of the tallest series at this timestamp.
+          // Plot the marker there so it sits on the curve rather than the baseline.
+          const levels = paths.map((p) =>
+            levelAt(w.at, p.doses, p.params, p.referenceMcg)
+          );
+          const maxLevel = Math.max(...levels, 0);
+
+          // If nothing is circulating at this point, fall back to just above baseline.
+          const curveY = maxLevel > 0.005 ? yFor(maxLevel) : baseY - 14;
+
+          // Stem from the dot straight down to the baseline.
+          const labelY = curveY - 6;
+
           return (
             <g key={w.at} pointerEvents="none">
-              {/* Stem: a short tick from the baseline up to the dot */}
+              {/* Vertical stem from baseline up to the dot */}
               <line
                 x1={wx}
                 y1={baseY}
                 x2={wx}
-                y2={dotY - 3}
+                y2={curveY + 3}
                 stroke="var(--tangerine)"
                 strokeWidth={1}
-                opacity={0.6}
+                strokeDasharray="2 2"
+                opacity={0.5}
               />
-              {/* Dot on the baseline */}
+              {/* Dot sitting on the curve */}
               <circle
                 cx={wx}
-                cy={dotY}
-                r={2.5}
+                cy={curveY}
+                r={3}
                 fill="var(--tangerine)"
                 opacity={0.95}
               />
-              {/* Label above the dot, inside the chart area */}
+              {/* Label above the dot */}
               <text
                 x={wx}
                 y={labelY}
@@ -307,6 +320,7 @@ export function PkChart({
                 fill="var(--tangerine)"
                 fontFamily="var(--font-mono)"
                 textAnchor="middle"
+                fontWeight="600"
               >
                 {w.displayLabel}
               </text>
