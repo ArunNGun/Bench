@@ -29,11 +29,11 @@ Most trackers in this space either want an account or get the arithmetic wrong. 
 | **Library** | 49 compounds across metabolic, repair, growth hormone, anabolic, ancillary and blends. Cited half-lives, dose ranges, titration ladders, side effects, contraindications, legal status |
 | **Plan** | Protocols with schedules, titration ladders, pinned injection sites, adherence |
 | **Log** | Doses with site, units, syringe scale, how you felt, side effects |
-| **Stock** | Vials sealed → reconstituted → empty, tracked by mass, with beyond-use dates and cost per dose |
+| **Stock** | Vials sealed → reconstituted → empty, tracked by mass, with beyond-use dates and cost per dose. A made-up vial can be emptied into a nasal spray bottle, which then doses in presses rather than in marks |
 | **Calculator** | Reconstitution and dose ↔ units for U-100 and U-40 |
 | **Bloodwork** | 16 markers charted against dose history, with prompts for what your compounds make worth watching |
 | **Outcomes** | Weight, waist, body fat, plus sleep and resting heart rate read from Android Health |
-| **Check-ins** | A daily rating for energy, mood, libido, sleep, recovery and appetite, compared either side of a protocol change |
+| **Check-ins** | A daily rating for energy, mood, libido, sleep, recovery, physical hunger and food noise, compared either side of a protocol change. Hunger and food noise are rated apart because they move apart: a GLP-1 can quieten the head while the stomach behaves normally |
 | **Safety** | Interaction checks across compounds running at the same time |
 | **Projection** | What a protocol will do before you run it: time to steady state, accumulation, peak to trough |
 | **Recovery** | When suppressive compounds clear, from ester half-lives, with cited protocols. No date is given where no human half-life exists |
@@ -47,13 +47,19 @@ Compounds the library does not carry can be added yourself, from any compound pi
 There is no backend for your data. Lab report PDFs are parsed on the device, never uploaded. The application makes two network requests in total:
 
 1. A startup check of `/version.json` to notice a new deploy.
-2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)) — the raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
+2. A one-time ping to `/api/ping` with a random UUID generated on your device. This increments a unique-install counter. The UUID is stored only in your browser's `localStorage` and is never linked to any personal information. The server stores a probabilistic sketch ([HyperLogLog](https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglolog/)). The raw UUIDs are never persisted and cannot be reconstructed from it. If you are offline or using the Android APK without a connection, the ping is silently skipped and the last known count is read from `localStorage`.
 
 No analytics, no telemetry, no error reporting beyond these two calls. Fonts are self-hosted at build time, so the browser never contacts a third party.
 
 There is a third, and it is off unless you turn it on. Sync talks to a server address you enter yourself in Settings, and to nothing else. There is no hosted option and no default address, deliberately: this project does not want to be the custodian of anyone's dose history. What is sent is sealed in your browser first, with a key derived from your password, so the machine you point it at stores something it cannot read. Leave the field empty and no request is ever made. See [`server/`](server/README.md).
 
-Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
+That server holds several accounts if you want it to, by invitation only, which is how someone runs a copy for people they know. It changes nothing about what is sent or who can read it: each account is sealed with its own password, and whoever runs the machine can see a name, a size and a date. They cannot reset anybody's password, because the password is the key and the key was never on the server.
+
+A build made for such a server, with `NEXT_PUBLIC_SYNC_URL` set, knows that one address and no other. Whoever owns the server gets a panel in Settings listing the accounts on it, with sizes and dates and nothing else, and a way to invite somebody or remove them. Those calls go to the same server as sync and to nowhere else, and every one of them is refused by the server unless the account asking owns it, so hiding the panel is tidiness rather than the lock.
+
+Dose reminders add no fourth request. The alarm is handed to Android's own scheduler and raised on the device, offline, with the app closed. They are off until you switch them on, and by default the notification says only that a dose is due rather than naming the compound, because a lock screen is read by whoever is beside you. The calendar export is the one place that can carry anything off the device, and only if you choose to name the compound and to import the file into a calendar that syncs somewhere; the Settings panel says so at the moment that choice is made.
+
+Data lives in **IndexedDB** (`keyval-store`, key `peptide-log-v1`). A second key, `peptide-log-v1:rescue`, holds a copy of the previous document whenever a save would empty a whole collection, so a loss can be undone rather than discovered months later. It never leaves the device either, it is not part of an export, and Settings offers to put the rows back or to throw the copy away. Two non-sensitive values sit in `localStorage`: the theme, and whether the install banner was dismissed.
 
 The trade-off is stated plainly in the app: nobody can read your data, and nobody can recover it for you either.
 

@@ -18,9 +18,32 @@ export interface Release {
   /** One line on what this release was about. */
   summary: string;
   changes: string[];
+  /** GitHub usernames of contributors beyond the main author. */
+  contributors?: string[];
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "2.1",
+    date: "2026-09-06",
+    summary: "German language support, weight on the PK chart, actual mg in the readout, and a wave of fixes and features from the community.",
+    changes: [
+      "German language support throughout the app. Switch between EN and DE from the header. Everything from nav labels to descriptions, section headers, buttons and empty states is translated. Compound names and units stay in English.",
+      "The circulating-levels readout now shows actual estimated mass on board (e.g. 1.2 mg) instead of a percentage of one dose. Each contributing dose also shows how much of it is still remaining.",
+      "Weight entries can be overlaid on the PK chart. Toggle it from the Weight card. Each entry appears as a dot on the highest active curve at that moment, with a dashed stem to the baseline, so you can see body weight alongside compound levels on the same timeline.",
+      "Details button added to Later Today dose rows, so you can open the full logging form before confirming an early log.",
+      "Delete button on protocol cards is now always visible on mobile, not hidden behind a hover.",
+      "Nasal sprays: track a vial transferred to a spray bottle, log doses in presses, and see marks alongside the dose.",
+      "Dose reminders, scheduled on the device. Off by default, calendar export for the web.",
+      "Bacteriostatic water tracked in millilitres, drawn from a bottle you open once.",
+      "Rate physical hunger and food noise as separate check-in axes.",
+      "Correct, remove or backfill any day's rating.",
+      "The account wins at the start of a session in hosted builds, local data wins after.",
+      "A save that empties a collection now keeps a copy before writing, catching a data-loss bug that had appeared twice.",
+      "Settings is now a menu rather than a tab, freeing up the header for the theme toggle and the backup button.",
+    ],
+    contributors: ["suskozaver", "tofus"],
+  },
   {
     version: "2.0",
     date: "2026-08-24",

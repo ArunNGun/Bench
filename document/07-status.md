@@ -84,5 +84,7 @@ screen at all.
 2. Run the check gate in [04-runbook.md](04-runbook.md) before changing
    anything, so you know the baseline is green and any breakage is yours.
 3. Do not touch GitHub or Vercel. Arun handles both.
-4. Do not add a network call, a reminder, or a Health Connect write. All three
-   are deliberate exclusions, not oversights.
+4. Do not add a network call or a Health Connect write. Both are deliberate
+   exclusions, not oversights. Reminders were the third of these until they
+   were asked for again and allowed; the local kind is in, scheduled on the
+   device, and push is still out. See [05-decisions.md](05-decisions.md).

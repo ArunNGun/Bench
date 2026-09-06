@@ -16,7 +16,7 @@ Thanks for looking. Contributions are welcome, but this is a precision tool, so 
 
 These were considered and deliberately excluded. Please do not open PRs for them.
 
-- **Reminders or push notifications.** Declined explicitly.
+- **Push notifications, or anything that reminds you from a server.** Local dose reminders now exist, scheduled by the device and off until you turn them on. Push is a different thing: it needs a server, and this project does not have one. See [`document/05-decisions.md`](document/05-decisions.md).
 - **Any backend, account, sync or analytics.** The privacy claim on the landing page is absolute and verifiable. Adding a network call makes a published promise false.
 - **Writing to Android Health.** Read only, by design.
 - **Medical advice, dose recommendations, or any gating of what a user can log.** The app checks arithmetic. It does not tell anyone what to take.

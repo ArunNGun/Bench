@@ -16,8 +16,9 @@
 import { useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { createSyncEngine, type SyncPorts } from "@/lib/sync/engine";
-import { fetchBlob, isNative, pushData, cryptoAvailable } from "@/lib/sync/client";
+import { fetchBlob, isNative, pushData, session, cryptoAvailable } from "@/lib/sync/client";
 import { open } from "@/lib/sync/crypto";
+import { accountRequired, HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { recallKey } from "@/lib/sync/vault";
 import type { AppData, Settings } from "@/lib/types";
@@ -58,9 +59,38 @@ function isEmptyData(s: AppData) {
 }
 
 export function SyncRunner() {
-  const url = useStore((s) => s.settings.sync?.url);
+  const stored = useStore((s) => s.settings.sync?.url);
+  // A hosted build knows where its server is and does not ask.
+  const url = HOSTED?.url ?? stored;
   const key = useSyncState((s) => s.key);
   const setKey = useSyncState((s) => s.setKey);
+  const setSession = useSyncState((s) => s.setSession);
+  const phase = useSyncState((s) => s.status.phase);
+
+  /*
+   * Ask the server who this is, and whether they own it.
+   *
+   * Asked again when the phase changes because the two answers that matter are
+   * the two that move it: signing in makes a session where there was none, and
+   * an expired one takes it away. Anything else here would either be a poll or
+   * a stale badge.
+   */
+  useEffect(() => {
+    if (isNative() || !url) return;
+    let cancelled = false;
+    void session(url)
+      .then((who) => {
+        if (!cancelled) setSession(who);
+      })
+      .catch(() => {
+        // Unreachable is not the same as signed out, and neither is worth an
+        // error here. The status line already says the server cannot be
+        // reached; this only decides whether to draw one panel.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url, phase, setSession]);
 
   /*
    * Bring back the key a previous visit stored, once, at startup. Without this
@@ -105,13 +135,38 @@ export function SyncRunner() {
         dirty = false;
       },
       isEmpty: () => isEmptyData(useStore.getState()),
+      // Only where an account is the point of the build. An address on its own
+      // is somebody's own server, where two sides holding different data is a
+      // real question rather than a signed-in browser meeting its account.
+      serverPrimary: accountRequired(),
 
       getRemoteSeenAt: () => useStore.getState().settings.sync?.remoteSeenAt ?? null,
+      /**
+       * Remember which version of the server's copy this device last agreed
+       * with, creating the record if there is not one yet.
+       *
+       * The `if (!sync) return` this replaces was the worst bug in the project
+       * so far. `settings.sync` is written by the panel in Settings, and in a
+       * hosted build nobody goes near that panel: they sign in on the login
+       * page and unlock. So there was no record to update, this did nothing,
+       * and `remoteSeenAt` stayed null for ever.
+       *
+       * Which meant every single run looked like first contact. With the
+       * account treated as the copy that counts, every run therefore pulled the
+       * server's copy over the top of this device, and anything logged since
+       * the last successful push was destroyed within seconds of being typed.
+       * The rescue guard caught it every time, which is the only reason it was
+       * noticed rather than silently endured.
+       */
       setRemoteSeenAt: (at) => {
-        const sync = useStore.getState().settings.sync;
-        if (!sync) return;
-        useStore.getState().updateSettings({
-          sync: { ...sync, remoteSeenAt: at ?? undefined },
+        const state = useStore.getState();
+        const sync = state.settings.sync;
+        state.updateSettings({
+          sync: {
+            url: sync?.url ?? url,
+            username: sync?.username ?? useSyncState.getState().session?.username ?? "",
+            remoteSeenAt: at ?? undefined,
+          },
         });
       },
 

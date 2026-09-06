@@ -52,6 +52,7 @@ export function PkChart({
   animate = true,
   pickedMs = null,
   onPick,
+  weightEntries,
 }: {
   series: PkSeries[];
   fromMs: number;
@@ -59,13 +60,14 @@ export function PkChart({
   nowMs: number;
   className?: string;
   animate?: boolean;
-  /**
-   * The moment being read, or null for none. Controlled by the parent, which
-   * owns the readout: the chart knows where the finger is, the parent knows
-   * what to say about it.
-   */
   pickedMs?: number | null;
   onPick?: (ms: number | null) => void;
+  /**
+   * Optional weight entries to render as labelled dots on the chart.
+   * Each entry is a timestamp + weight in kg. Rendered at the bottom of the
+   * chart so they sit on the time axis without interfering with the curves.
+   */
+  weightEntries?: { at: number; weightKg: number; displayLabel: string }[];
 }) {
   const uid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement>(null);
@@ -181,19 +183,16 @@ export function PkChart({
 
       {/* Day gridlines */}
       {ticks.map((t) => (
-        <line
+        <path
           key={t.x}
-          x1={t.x}
-          y1={PAD_T - 4}
-          x2={t.x}
-          y2={H - PAD_B}
+          d={`M ${t.x} ${PAD_T - 4} V ${H - PAD_B}`}
           stroke="var(--line)"
           strokeWidth={1}
         />
       ))}
 
       {/* Baseline */}
-      <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="var(--line)" strokeWidth={1} />
+      <path d={`M ${PAD_L} ${H - PAD_B} H ${W - PAD_R}`} stroke="var(--line)" strokeWidth={1} />
 
       {/* Curves */}
       {paths.map((p) => (
@@ -235,11 +234,8 @@ export function PkChart({
       {/* Now */}
       {inWindow && (
         <g>
-          <line
-            x1={nowX}
-            y1={PAD_T - 8}
-            x2={nowX}
-            y2={H - PAD_B}
+          <path
+            d={`M ${nowX} ${PAD_T - 8} V ${H - PAD_B}`}
             stroke="var(--ink)"
             strokeWidth={1.2}
             strokeDasharray="2 3"
@@ -256,11 +252,8 @@ export function PkChart({
       */}
       {pickedMs != null && (
         <g pointerEvents="none">
-          <line
-            x1={pickedX}
-            y1={PAD_T - 8}
-            x2={pickedX}
-            y2={H - PAD_B}
+          <path
+            d={`M ${pickedX} ${PAD_T - 8} V ${H - PAD_B}`}
             stroke="var(--muted)"
             strokeWidth={1}
           />
@@ -277,6 +270,63 @@ export function PkChart({
           ))}
         </g>
       )}
+
+      {/* Weight overlay — dot plotted on the highest active curve at that moment */}
+      {weightEntries
+        ?.filter((w) => w.at >= fromMs && w.at <= toMs)
+        .map((w) => {
+          const wx = toX(w.at);
+          const baseY = H - PAD_B;
+
+          // Find the level of the tallest series at this timestamp.
+          // Plot the marker there so it sits on the curve rather than the baseline.
+          const levels = paths.map((p) =>
+            levelAt(w.at, p.doses, p.params, p.referenceMcg)
+          );
+          const maxLevel = Math.max(...levels, 0);
+
+          // If nothing is circulating at this point, fall back to just above baseline.
+          const curveY = maxLevel > 0.005 ? yFor(maxLevel) : baseY - 14;
+
+          // Stem from the dot straight down to the baseline.
+          const labelY = curveY - 6;
+
+          return (
+            <g key={w.at} pointerEvents="none">
+              {/* Vertical stem from baseline up to the dot */}
+              <line
+                x1={wx}
+                y1={baseY}
+                x2={wx}
+                y2={curveY + 3}
+                stroke="var(--tangerine)"
+                strokeWidth={1}
+                strokeDasharray="2 2"
+                opacity={0.5}
+              />
+              {/* Dot sitting on the curve */}
+              <circle
+                cx={wx}
+                cy={curveY}
+                r={3}
+                fill="var(--tangerine)"
+                opacity={0.95}
+              />
+              {/* Label above the dot */}
+              <text
+                x={wx}
+                y={labelY}
+                fontSize={8.5}
+                fill="var(--tangerine)"
+                fontFamily="var(--font-mono)"
+                textAnchor="middle"
+                fontWeight="600"
+              >
+                {w.displayLabel}
+              </text>
+            </g>
+          );
+        })}
 
       {/* Date labels */}
       {ticks.map((t) => (

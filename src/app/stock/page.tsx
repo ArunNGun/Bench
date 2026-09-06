@@ -1,7 +1,8 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
-import { Droplet, PackageCheck, Plus, Trash2 } from "lucide-react";
+import { Droplet, PackageCheck, Plus, SprayCan, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -33,7 +34,15 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { dosesPerDoseDay, phaseSpanAt, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle } from "@/lib/calc/diluent";
+import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle, shelfOrder } from "@/lib/calc/diluent";
+import {
+  DEFAULT_ML_PER_SPRAY,
+  MEASURE_A_PRESS,
+  isSpray,
+  mcgPerSpray,
+  spraysRemaining,
+  transferToSpray,
+} from "@/lib/calc/spray";
 import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, formatDosePerDay, trim } from "@/lib/format";
 import {
@@ -55,6 +64,7 @@ import {
 
 export default function StockPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, vials, orders, diluents } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const addOrder = useStore((s) => s.addOrder);
@@ -62,6 +72,7 @@ export default function StockPage() {
   const removeVial = useStore((s) => s.removeVial);
   const reconstituteVial = useStore((s) => s.reconstituteVial);
   const topUpVial = useStore((s) => s.topUpVial);
+  const transferSpray = useStore((s) => s.transferToSpray);
   const settings = useStore((s) => s.settings);
   const currency = settings.currency ?? DEFAULT_SETTINGS.currency;
 
@@ -69,6 +80,8 @@ export default function StockPage() {
   const [adding, setAdding] = useState(false);
   const [reconstituting, setReconstituting] = useState<string | null>(null);
   const [toppingUp, setToppingUp] = useState<string | null>(null);
+  /** Which vial is being emptied into a nasal spray bottle. */
+  const [transferring, setTransferring] = useState<string | null>(null);
 
   const now = Date.now();
   /*
@@ -154,7 +167,7 @@ export default function StockPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Stock</h1>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("stock_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
             What is in the fridge and how long it has left.
           </p>
@@ -215,7 +228,7 @@ export default function StockPage() {
 
       {!vials.length && !adding && (
         <EmptyState
-          title="Nothing in stock"
+          title={t("stock_no_vials")}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
               Add a vial
@@ -229,7 +242,7 @@ export default function StockPage() {
 
       {onOrder.length > 0 && (
         <section>
-          <SectionLabel>On order</SectionLabel>
+          <SectionLabel>{t("stock_on_order")}</SectionLabel>
           <div className="space-y-2.5">
             {onOrder.map((v) => (
               <VialRow
@@ -257,7 +270,7 @@ export default function StockPage() {
 
       {open.length > 0 && (
         <section>
-          <SectionLabel>Open</SectionLabel>
+          <SectionLabel>{t("stock_open")}</SectionLabel>
           <div className="space-y-2.5">
             {open.map((v) => (
               <div key={v.id}>
@@ -273,8 +286,20 @@ export default function StockPage() {
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
                   onTopUp={() => setToppingUp(v.id)}
+                  onTransfer={isSpray(v) ? undefined : () => setTransferring(v.id)}
                   onFinish={() => updateVial(v.id, { state: "finished" })}
                 />
+                {transferring === v.id && (
+                  <TransferToSprayForm
+                    vial={v}
+                    bottles={diluents}
+                    onCancel={() => setTransferring(null)}
+                    onSave={(addedMl, mlPerSpray, diluent, fromBottleId) => {
+                      transferSpray(v.id, { addedMl, mlPerSpray, diluent, fromBottleId });
+                      setTransferring(null);
+                    }}
+                  />
+                )}
                 {toppingUp === v.id && (
                   <TopUpForm
                     vial={v}
@@ -294,7 +319,7 @@ export default function StockPage() {
 
       {sealed.length > 0 && (
         <section>
-          <SectionLabel>Sealed</SectionLabel>
+          <SectionLabel>{t("stock_sealed")}</SectionLabel>
           <div className="space-y-2.5">
             {(grouping
               ? sealedGroups.map((g) => ({ vial: g.vials[0], group: g }))
@@ -334,7 +359,7 @@ export default function StockPage() {
 
       {done.length > 0 && (
         <section>
-          <SectionLabel>Finished</SectionLabel>
+          <SectionLabel>{t("stock_finished")}</SectionLabel>
           <div className="space-y-1.5">
             {done.map((v) => (
               <Card key={v.id} className="flex items-center gap-3 p-2.5 opacity-55">
@@ -344,7 +369,7 @@ export default function StockPage() {
                 <button
                   type="button"
                   onClick={() => removeVial(v.id)}
-                  aria-label="Delete vial record"
+                  aria-label={t("stock_delete_vial")}
                   className="ml-auto p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                 >
                   <Trash2 size={14} />
@@ -355,7 +380,7 @@ export default function StockPage() {
         </section>
       )}
 
-      <Callout tone="info" title="About the 28-day date">
+      <Callout tone="info" title={t("stock_28_day_note")}>
         The beyond-use date this app applies from first puncture is the CDC and USP limit on how long
         a multi-dose container may be used. It is an infection-control rule about the vial, not a
         statement that the peptide inside is still potent, chemical stability is a separate,
@@ -380,6 +405,7 @@ function VialRow({
   onReconstitute,
   onArrived,
   onTopUp,
+  onTransfer,
   onFinish,
 }: {
   vial: Vial;
@@ -409,12 +435,17 @@ function VialRow({
   onArrived?: () => void;
   /** Only ever passed for an open vial, since there is nothing to dilute before that. */
   onTopUp?: () => void;
+  /** Only for a made-up vial, and never for a bottle that is already a spray. */
+  onTransfer?: () => void;
   onFinish?: () => void;
 }) {
   const st = vialStatus(vial, now);
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
   const scale = useSyringeScale();
-  const marks = doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
+  const spray = isSpray(vial);
+  // Marks are a reading off a barrel, and a nasal dose never meets one.
+  const marks = !spray && doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
+  const perPress = spray ? mcgPerSpray(vial) : 0;
 
   const many = (group?.count ?? 1) > 1;
   // One row, one set of numbers: either this vial's or the whole group's.
@@ -442,6 +473,7 @@ function VialRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[14.5px] text-[var(--ink)]">{peptideName}</span>
           <span className="tnum font-mono text-[13px] text-[var(--muted)]">{vial.strengthMg} mg</span>
+          {spray && <Badge tone="grape">nasal spray</Badge>}
           {many && <Badge tone="sky">{group!.count} vials</Badge>}
           {st.expired && <Badge tone="rose">past date</Badge>}
           {!st.expired && budSoon && <Badge tone="tangerine">use soon</Badge>}
@@ -474,7 +506,23 @@ function VialRow({
                 {trim(marks, 2)} marks per {formatDose(doseMcg)}
               </span>
             )}
-            {vial.budAt != null && (
+            {spray && perPress > 0 && (
+              <span className="tnum font-mono">{formatDose(perPress)} a press</span>
+            )}
+            {/*
+              About, and the word is doing work. The last millilitre cannot be
+              lifted by the pump and priming costs some of it, none of which is
+              knowable from here, so this reads high and says so.
+            */}
+            {spray && <span>about {spraysRemaining(vial)} presses left</span>}
+            {/*
+              A spray carries no use-by date, deliberately, so the only clock it
+              has is the day it was filled. See calc/spray.ts.
+            */}
+            {spray && vial.reconstitutedAt != null && (
+              <span>filled {formatDate(vial.reconstitutedAt)}</span>
+            )}
+            {!spray && vial.budAt != null && (
               <span className={budSoon ? "text-[var(--rose)]" : ""}>
                 use by {formatDate(vial.budAt)}
               </span>
@@ -582,6 +630,11 @@ function VialRow({
               <Droplet size={13} /> Add diluent
             </Button>
           )}
+          {onTransfer && (
+            <Button onClick={onTransfer} className="px-3 py-1.5 text-[13px]">
+              <SprayCan size={13} /> To a nasal spray
+            </Button>
+          )}
           {onFinish && (
             <Button onClick={onFinish} variant="ghost" className="px-3 py-1.5 text-[13px]">
               Mark empty
@@ -616,6 +669,7 @@ function AddVialForm({
     vials: Omit<Vial, "id" | "profileId">[],
     shipping: { cost: number; currency: string } | null) => void;
 }) {
+  const { t } = useLang();
   const [peptideId, setPeptideId] = useState(peptides[0]?.id ?? "");
   const [strengthMg, setStrengthMg] = useState(10);
   const [count, setCount] = useState(1);
@@ -668,7 +722,7 @@ function AddVialForm({
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>New vial</SectionLabel>
+      <SectionLabel>{t("stock_new_vial")}</SectionLabel>
 
       <Field label="Peptide">
         <Select
@@ -862,6 +916,24 @@ function AddVialForm({
   );
 }
 
+/**
+ * One name per diluent, and every screen uses it.
+ *
+ * Three forms named the same thing three ways: a reconstitution offered "0.9%
+ * sodium chloride", a transfer offered "Sterile saline 0.9%", and the shelf
+ * called it something else again. Somebody went looking for saline in a list
+ * that had it and could not see it, which is what a synonym costs.
+ */
+const DILUENT_LABEL: Record<DiluentKind, string> = {
+  bacteriostatic: "Bacteriostatic water",
+  sterile: "Sterile water (single use)",
+  saline: "Saline 0.9% (sodium chloride)",
+  oil: "Carrier oil",
+};
+
+/** The kinds a vial or a bottle can actually be made up with. Oil is not one. */
+const DILUENT_CHOICES: DiluentKind[] = ["bacteriostatic", "sterile", "saline"];
+
 function ReconstituteForm({
   vial,
   bottles,
@@ -874,12 +946,13 @@ function ReconstituteForm({
   onCancel: () => void;
   onSave: (ml: number, diluent: Vial["diluent"], fromBottleId?: string) => void;
 }) {
+  const { t } = useLang();
   const [ml, setMl] = useState(2);
   const [diluent, setDiluent] = useState<NonNullable<Vial["diluent"]>>("bacteriostatic");
   const conc = ml > 0 ? vial.strengthMg / ml : 0;
 
   const now = Date.now();
-  const available = bottles.filter((b) => b.kind === diluent && bottleUsable(b, now));
+  const available = shelfOrder(bottles.filter((b) => b.kind === diluent && bottleUsable(b, now)), now);
 
   /**
    * Which bottle the water came from.
@@ -899,7 +972,7 @@ function ReconstituteForm({
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--tangerine)]/35 p-4">
-      <SectionLabel>Reconstitute</SectionLabel>
+      <SectionLabel>{t("stock_reconstitute")}</SectionLabel>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Water added" hint={`Makes ${trim(conc, 3)} mg/mL.`}>
@@ -916,9 +989,11 @@ function ReconstituteForm({
             value={diluent}
             onChange={(e) => setDiluent(e.target.value as NonNullable<Vial["diluent"]>)}
           >
-            <option value="bacteriostatic">Bacteriostatic water</option>
-            <option value="sterile">Sterile water (single use)</option>
-            <option value="saline">0.9% sodium chloride</option>
+            {DILUENT_CHOICES.map((k) => (
+              <option key={k} value={k}>
+                {DILUENT_LABEL[k]}
+              </option>
+            ))}
           </Select>
         </Field>
       </div>
@@ -991,6 +1066,147 @@ function ReconstituteForm({
  * the reason someone is here is that the first number was too high and the
  * question they are answering is how far it has come down.
  */
+/**
+ * Empty a made-up vial into a nasal spray bottle.
+ *
+ * The one step the app had no model for. Everything about a bottle afterwards
+ * is a mass in a volume, which is a vial, so the only thing this form has to
+ * get right is the arithmetic of the transfer and the volume one press gives.
+ */
+function TransferToSprayForm({
+  vial,
+  bottles,
+  onCancel,
+  onSave,
+}: {
+  vial: Vial;
+  bottles: DiluentBottle[];
+  onCancel: () => void;
+  onSave: (addedMl: number, mlPerSpray: number, diluent: DiluentKind, fromBottleId?: string) => void;
+}) {
+  const { t } = useLang();
+  const [addedMl, setAddedMl] = useState(4);
+  const [perSpray, setPerSpray] = useState(DEFAULT_ML_PER_SPRAY);
+  /*
+   * Saline rather than bacteriostatic water, and not as a default that can be
+   * changed away lightly. The preservative in bacteriostatic water stings a
+   * nose, which is why the person who asked for this specified 0.9% NaCl.
+   */
+  const [kind, setKind] = useState<DiluentKind>("saline");
+
+  const now = Date.now();
+  const available = shelfOrder(bottles.filter((b) => b.kind === kind && bottleUsable(b, now)), now);
+  const [bottleId, setBottleId] = useState(pickBottle(bottles, "saline", 4, now)?.id ?? "");
+  const chosen = available.find((b) => b.id === bottleId) ?? null;
+
+  const plan = transferToSpray(vial, {
+    addedMl,
+    mlPerSpray: perSpray,
+    diluent: kind,
+    atMs: now,
+  });
+  const perPress = plan ? mcgPerSpray(plan.bottle) : 0;
+
+  return (
+    <Card className="mt-1.5 space-y-4 border-[var(--grape)]/35 p-4">
+      <SectionLabel>{t("stock_transfer_spray")}</SectionLabel>
+
+      <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
+        The whole contents go into the bottle and the vial is finished. What it cost goes with it,
+        so the purchase is still counted once.
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Saline added"
+          hint={
+            plan
+              ? `${trim(plan.bottle.diluentMl ?? 0, 2)} mL in the bottle, at ${formatConcentration(
+                  vialConcentration(plan.bottle))}.`
+              : "There is nothing left in this vial to pour."
+          }
+        >
+          <NumberInput
+            value={addedMl}
+            min={0}
+            step={0.5}
+            suffix="mL"
+            onChange={(e) => setAddedMl(Number(e.target.value))}
+          />
+        </Field>
+
+        <Field
+          label="One press delivers"
+          hint={perPress > 0 ? `${formatDose(perPress)} a press.` : MEASURE_A_PRESS}
+        >
+          <NumberInput
+            value={perSpray}
+            min={0.01}
+            step={0.01}
+            suffix="mL"
+            onChange={(e) => setPerSpray(Number(e.target.value))}
+          />
+        </Field>
+      </div>
+
+      <p className="text-[12px] leading-relaxed text-[var(--faint)]">{MEASURE_A_PRESS}</p>
+
+      <Field label="What went in">
+        <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
+          {/* Saline first, because a nose does not take the preservative in
+              bacteriostatic water. */}
+          {(["saline", "sterile", "bacteriostatic"] as DiluentKind[]).map((k) => (
+            <option key={k} value={k}>
+              {DILUENT_LABEL[k]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {available.length > 0 && (
+        <Field
+          label="From which ampoule"
+          hint={
+            chosen
+              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
+              : "Recorded as not coming from tracked stock, so nothing is drawn down."
+          }
+        >
+          <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
+            {available.map((b) => (
+              <option key={b.id} value={b.id}>
+                {trim(b.volumeMl, 2)} mL · {trim(bottleRemainingMl(b), 2)} mL left
+                {b.state === "sealed" ? " · sealed" : ""}
+              </option>
+            ))}
+            <option value="">Not from tracked stock</option>
+          </Select>
+        </Field>
+      )}
+
+      <p className="text-[12px] leading-relaxed text-[var(--faint)]">
+        No use-by date is set. The twenty-eight days used for a punctured vial comes from a
+        convention that says nothing about a preservative-free solution in a pump, and how long
+        yours lasts depends on whether it lives in a pocket or a fridge. The day it was filled is
+        recorded and the judgement is yours.
+      </p>
+
+      <div className="flex gap-2.5">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => onSave(addedMl, perSpray, kind, bottleId || undefined)}
+          disabled={!plan}
+        >
+          Fill the bottle
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function TopUpForm({
   vial,
   bottles,
@@ -1002,6 +1218,7 @@ function TopUpForm({
   onCancel: () => void;
   onSave: (addedMl: number, fromBottleId?: string) => void;
 }) {
+  const { t } = useLang();
   const [ml, setMl] = useState(0.5);
 
   /*
@@ -1024,7 +1241,7 @@ function TopUpForm({
 
   return (
     <Card className="mt-1.5 space-y-4 border-[var(--sky)]/35 p-4">
-      <SectionLabel>Add diluent</SectionLabel>
+      <SectionLabel>{t("stock_add_diluent")}</SectionLabel>
 
       <Field
         label="Water added"
@@ -1088,13 +1305,6 @@ function TopUpForm({
   );
 }
 
-const DILUENT_LABEL: Record<DiluentKind, string> = {
-  bacteriostatic: "Bacteriostatic water",
-  sterile: "Sterile water",
-  saline: "0.9% sodium chloride",
-  oil: "Carrier oil",
-};
-
 /**
  * Water, on its own shelf.
  *
@@ -1120,7 +1330,11 @@ function DiluentShelf() {
   const [usedMl, setUsedMl] = useState(1);
 
   const now = Date.now();
-  const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
+  // Ordered the way the app itself would reach for them, so the bottle at the
+  // top of the shelf is the one reconstituting will suggest.
+  const live = shelfOrder(
+    diluents.filter((b) => b.state !== "finished" && b.state !== "discarded"),
+    now);
   const stock = diluentStock(diluents, "bacteriostatic", now);
 
   if (!live.length && !adding) {

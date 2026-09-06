@@ -40,6 +40,26 @@ export class SyncConflict extends SyncError {
 /** Distinguishes "the network is down" from "the server said no". */
 export class SyncOffline extends SyncError {}
 
+/**
+ * The session is gone, so the server does not know who is asking.
+ *
+ * Its own type because it is neither a failure to retry nor a reason to throw
+ * anything away, and it was being treated as the first and repaired as the
+ * second. The cookie has a life of its own: it expires after thirty days, and
+ * every cookie on a server dies at once if its signing secret is changed. Both
+ * are ordinary events, and neither says anything about the data on either side.
+ *
+ * What went wrong before this existed: the panel still held the key, so it drew
+ * itself as connected with every field disabled, and the only control that
+ * could have helped was Sign out, which also discarded the address, the
+ * username and the key that were all still perfectly good.
+ */
+export class SyncSignedOut extends SyncError {
+  constructor() {
+    super("Your session on the server has expired. Enter your password to sign in again.");
+  }
+}
+
 /** True inside the Android build, where this whole feature is switched off. */
 export function isNative() {
   if (typeof window === "undefined") return false;
@@ -101,6 +121,14 @@ async function call(baseUrl: string, path: string, init: RequestInit = {}) {
     const current = (body as { current?: StoredBlob | null } | null)?.current ?? null;
     throw new SyncConflict(current && isSealedEnvelope(current.envelope) ? current : null);
   }
+
+  /*
+   * Everywhere except signing in, a 401 means the cookie is gone rather than
+   * that anything is wrong. Signing in is the exception and has to stay one:
+   * there, 401 is a wrong password, and reporting that as an expired session
+   * would send somebody looking for a problem they do not have.
+   */
+  if (res.status === 401 && !path.startsWith("/api/login")) throw new SyncSignedOut();
 
   if (!res.ok) {
     throw new SyncError((body as { error?: string } | null)?.error ?? `Server said ${res.status}`);
@@ -177,6 +205,114 @@ export async function fetchBlob(baseUrl: string): Promise<StoredBlob | null> {
  */
 export async function putBlob(baseUrl: string, blob: StoredBlob, ifMatch: number | null) {
   await call(baseUrl, "/api/data", { method: "PUT", body: JSON.stringify({ ...blob, ifMatch }) });
+}
+
+// ---------------------------------------------------------------------------
+// Who am I, and the parts only an owner can reach
+// ---------------------------------------------------------------------------
+
+export interface SessionInfo {
+  username: string;
+  /** Whether this account may see and change the others. Decided by the server. */
+  admin: boolean;
+}
+
+/**
+ * Who the server thinks is asking, or null for nobody.
+ *
+ * `admin` comes from here rather than from anything this app works out for
+ * itself. The panel it controls is only drawn for an owner, and that drawing is
+ * decoration: every endpoint behind it asks the same question again, because a
+ * hidden button is not a lock when the request it would have sent can be typed
+ * by hand.
+ */
+export async function session(baseUrl: string): Promise<SessionInfo | null> {
+  try {
+    const body = (await call(baseUrl, "/api/session")) as SessionInfo | null;
+    return body?.username ? { username: body.username, admin: body.admin === true } : null;
+  } catch (err) {
+    if (err instanceof SyncSignedOut) return null;
+    throw err;
+  }
+}
+
+export interface AccountSummary {
+  username: string;
+  admin: boolean;
+  createdAt: number | null;
+  lastSyncAt: number | null;
+  /** Size of the sealed blob. Never its contents, which the server cannot read. */
+  bytes: number;
+  failures: number;
+  lockedUntil: number | null;
+}
+
+export interface InviteSummary {
+  id: string;
+  username: string;
+  createdAt: number;
+  createdBy: string;
+  expiresAt: number;
+  usedAt: number | null;
+  usedBy: string | null;
+}
+
+export async function listAccounts(baseUrl: string): Promise<AccountSummary[]> {
+  const body = (await call(baseUrl, "/api/accounts")) as { accounts?: AccountSummary[] } | null;
+  return body?.accounts ?? [];
+}
+
+export async function listInvites(baseUrl: string): Promise<InviteSummary[]> {
+  const body = (await call(baseUrl, "/api/invites")) as { invites?: InviteSummary[] } | null;
+  return body?.invites ?? [];
+}
+
+export interface NewInvite {
+  id: string;
+  username: string;
+  /** Shown once and never again. Only its hash reaches the disk. */
+  token: string;
+  expiresAt: number;
+}
+
+export async function createInvite(
+  baseUrl: string,
+  username: string,
+  days?: number): Promise<NewInvite> {
+  const body = (await call(baseUrl, "/api/invites", {
+    method: "POST",
+    body: JSON.stringify({ username, days }),
+  })) as NewInvite | null;
+  if (!body?.token) throw new SyncError("The server did not return an invitation");
+  return body;
+}
+
+export async function revokeInvite(baseUrl: string, id: string): Promise<void> {
+  await call(baseUrl, `/api/invites/${encodeURIComponent(id)}/revoke`, { method: "POST" });
+}
+
+/**
+ * Remove an account and the only copy of that person's history.
+ *
+ * Asks for the owner's password again rather than riding on the session. A
+ * cookie left open on a borrowed laptop is now a cookie that can delete a
+ * friend's dose history, and one prompt closes that whole class of accident.
+ *
+ * The password is turned into the same auth secret used to sign in, here, and
+ * the password itself is not sent.
+ */
+export async function removeAccount(
+  baseUrl: string,
+  owner: string,
+  ownerPassword: string,
+  target: string): Promise<void> {
+  requireCrypto();
+  const salt = await fetchSalt(baseUrl, owner);
+  const { authSecret } = await deriveKeys(ownerPassword, salt);
+  await call(baseUrl, `/api/accounts/${encodeURIComponent(target)}/remove`, {
+    method: "POST",
+    body: JSON.stringify({ authSecret }),
+  });
 }
 
 /** Encrypt here, upload the result. The server never holds the plain payload. */

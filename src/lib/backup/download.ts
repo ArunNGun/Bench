@@ -13,9 +13,9 @@ export function exportFileName(atMs: number = Date.now()): string {
   return `bench-export-${new Date(atMs).toISOString().slice(0, 10)}.json`;
 }
 
-/** Trigger a download of the app's own export format. */
-export function downloadJson(data: AppData, filename: string): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+/** Save any text file through the browser. */
+export function downloadText(text: string, filename: string, mime: string): void {
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -26,4 +26,9 @@ export function downloadJson(data: AppData, filename: string): void {
   // Revoking immediately can cancel the download in some browsers, so give the
   // click a moment to be picked up first.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Trigger a download of the app's own export format. */
+export function downloadJson(data: AppData, filename: string): void {
+  downloadText(JSON.stringify(data, null, 2), filename, "application/json");
 }

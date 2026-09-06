@@ -27,6 +27,7 @@ src/lib/calc/       pure logic. No React, no I/O. Exhaustively tested
 src/lib/data/       the compound and blood marker libraries
 src/lib/import/     CSV/TSV/JSON/XLSX/PDF readers and per-source profiles
 src/lib/health/     Health Connect adapter (read only)
+src/lib/notify/     local notification adapter (Android schedules, web reports itself unavailable)
 src/lib/backup/     filesystem backups and retention
 src/lib/migrate.ts  version migration, shared by persist and by import
 src/lib/store.ts    Zustand store, persistence, profile-scoped selectors
@@ -62,6 +63,10 @@ compute doses.**
 | `pct.ts` | When suppressive compounds clear, and published recovery protocols. Refuses to give a date where the half-life is unknown |
 | `project.ts` | What a protocol will do before it runs: accumulation, time to steady state, peak to trough swing |
 | `healthsync.ts` | Plans a read from Health Connect, and aggregates sleep and resting heart rate. Has no write path, by design and by test |
+| `spray.ts` | Filling a nasal spray bottle from a vial, and what one press of the pump delivers |
+| `rescue.ts` | Which collections lost rows, whether that looks like an accident, and how to union them back |
+| `reminders.ts` | Which dose reminders should be armed, and what each one says. Shares `unloggedDoseTimes` with the Today page so the two cannot disagree |
+| `ics.ts` | The dose schedule as a calendar file, for the surfaces that cannot raise an alarm of their own |
 
 ## Data model
 

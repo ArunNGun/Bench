@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useState } from "react";
 import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react";
@@ -23,6 +24,7 @@ export function CustomCompounds() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const { t } = useLang();
 
   /** How much of the app would lose its reference if this were deleted. */
   const usage = (id: string) => ({
@@ -36,19 +38,15 @@ export function CustomCompounds() {
         action={
           !open && (
             <Button variant="soft" onClick={() => setOpen(true)} className="px-2.5 py-1 text-[12px]">
-              <Plus size={13} strokeWidth={2.6} /> Add your own
+              <Plus size={13} strokeWidth={2.6} /> {t("library_add_your_own")}
             </Button>
           )
         }
       >
-        Your own compounds
+        {t("library_your_own")}
       </SectionLabel>
 
-      <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        Anything the library does not carry. Your entries work everywhere a built-in one does, protocols, logging, stock and cost, but they are never shown as researched: dose ranges are
-        tagged as yours, there are no citations, and no curve is drawn unless you give a half-life.
-        You can also add one straight from any compound dropdown.
-      </p>
+      <p className="text-[13px] leading-relaxed text-[var(--muted)]">{t("library_your_own_desc")}</p>
 
       {custom.length > 0 && (
         <ul className="space-y-1.5">
@@ -58,9 +56,9 @@ export function CustomCompounds() {
               <li key={p.id} className="rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[14px] font-bold text-[var(--ink)]">{p.name}</span>
-                  <Badge tone="grape">yours</Badge>
+                  <Badge tone="grape">{t("library_your_badge")}</Badge>
                   <Badge tone="neutral">{CATEGORY_LABEL[p.category]}</Badge>
-                  {p.halfLifeHours == null && <Badge tone="tangerine">no half-life</Badge>}
+                  {p.halfLifeHours == null && <Badge tone="tangerine">{t("library_no_half_life")}</Badge>}
                   {/*
                     The badge above used to be a dead end: it named a gap and
                     offered no way to fill it, and the only route to a half-life
@@ -90,8 +88,7 @@ export function CustomCompounds() {
                 </div>
 
                 <p className="mt-1 text-[11.5px] text-[var(--faint)]">
-                  {used.protocols} protocol{used.protocols === 1 ? "" : "s"} · {used.logs} logged dose
-                  {used.logs === 1 ? "" : "s"}
+                  {t("library_usage", { protocols: String(used.protocols), logs: String(used.logs) })}
                 </p>
 
                 {editingId === p.id && (
@@ -108,20 +105,13 @@ export function CustomCompounds() {
                   <div className="mt-2.5 rounded-[var(--r-inner)] bg-[var(--rose-soft)] p-3">
                     <p className="text-[13px] leading-relaxed" style={{ color: "var(--rose-ink)" }}>
                       {used.logs > 0 || used.protocols > 0 ? (
-                        <>
-                          {used.logs} dose{used.logs === 1 ? "" : "s"} and {used.protocols} protocol
-                          {used.protocols === 1 ? "" : "s"} reference {p.name}. Deleting the compound
-                          leaves those records in place but with nothing to name them, so they will
-                          show as an unknown id. Deleting the protocols first is usually what you want.
-                        </>
+                        <>{t("library_delete_in_use", { logs: String(used.logs), protocols: String(used.protocols), name: p.name })}</>
                       ) : (
-                        <>Nothing references {p.name}, so this is safe to remove.</>
+                        <>{t("library_delete_safe", { name: p.name })}</>
                       )}
                     </p>
                     <div className="mt-2.5 flex flex-wrap gap-2">
-                      <Button variant="soft" onClick={() => setConfirming(null)}>
-                        Keep it
-                      </Button>
+                      <Button variant="soft" onClick={() => setConfirming(null)}>{t("library_keep_it")}</Button>
                       <Button
                         variant="danger"
                         onClick={() => {
@@ -129,7 +119,7 @@ export function CustomCompounds() {
                           setConfirming(null);
                         }}
                       >
-                        Delete {p.name}
+                        {t("library_delete_compound", { name: p.name })}
                       </Button>
                     </div>
                   </div>
@@ -142,7 +132,7 @@ export function CustomCompounds() {
 
       {!open && !custom.length && (
         <p className="flex items-center gap-2 text-[12.5px] text-[var(--faint)]">
-          <FlaskConical size={14} /> None yet.
+          <FlaskConical size={14} /> {t("library_none_yet")}
         </p>
       )}
 
@@ -150,8 +140,7 @@ export function CustomCompounds() {
 
       {custom.length > 0 && (
         <p className="text-[11.5px] leading-relaxed text-[var(--faint)]">
-          Your compounds are stored on this device with the rest of your data, and travel with your
-          exports and backups.
+          {t("library_stored_on_device")}
         </p>
       )}
     </Card>

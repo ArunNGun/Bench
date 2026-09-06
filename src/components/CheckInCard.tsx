@@ -1,12 +1,14 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, HeartPulse, Minus, Moon, TrendingDown, TrendingUp } from "lucide-react";
-import { Button, Card, SectionLabel, Textarea } from "./ui";
+import { Check, HeartPulse, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Button, Card, SectionLabel } from "./ui";
+import { CheckInEditor, ratedCount, type RatingDraft } from "./CheckInEditor";
 import { useProfileData, useStore } from "@/lib/store";
-import { SYMPTOMS, SYMPTOM_SCALE_MAX, type SymptomId } from "@/lib/types";
+import { SYMPTOMS } from "@/lib/types";
 import { averages, checkInFor, isTrendworthy, shiftAround, streak } from "@/lib/calc/checkins";
 import { startOfLocalDay } from "@/lib/calc/schedule";
 import { trim } from "@/lib/format";
@@ -24,6 +26,7 @@ import { dailyRestingHr, nightlySleep } from "@/lib/calc/healthsync";
  * notice, which is different from and more honest than a middling three.
  */
 export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
+  const { t } = useLang();
   const { checkIns, protocols, measurements } = useProfileData();
   const saveCheckIn = useStore((s) => s.saveCheckIn);
   const recordVitals = useStore((s) => s.recordVitals);
@@ -32,7 +35,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
   const existing = useMemo(() => checkInFor(checkIns, today), [checkIns, today]);
 
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Partial<Record<SymptomId, number>>>({});
+  const [draft, setDraft] = useState<RatingDraft>({});
   const [notes, setNotes] = useState("");
 
   const coverage = useMemo(() => streak(checkIns, nowMs), [checkIns, nowMs]);
@@ -110,7 +113,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
     setOpen(false);
   }
 
-  const rated = Object.keys(draft).length;
+  const rated = ratedCount(draft);
 
   return (
     <Card className="p-5">
@@ -135,65 +138,27 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
 
       {open ? (
         <div className="mt-3 space-y-3">
-          {SYMPTOMS.map((s) => (
-            <div key={s.id}>
-              <div className="flex items-baseline justify-between">
-                <span className="text-[13px] font-semibold text-[var(--ink)]">{s.label}</span>
-                <span className="text-[11px] text-[var(--faint)]">
-                  {draft[s.id] ? `${s.low} to ${s.high}` : "not rated"}
-                </span>
-              </div>
-              <div className="mt-1.5 flex gap-1.5">
-                {Array.from({ length: SYMPTOM_SCALE_MAX }, (_, i) => i + 1).map((n) => {
-                  const on = draft[s.id] === n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-label={`${s.label} ${n} of ${SYMPTOM_SCALE_MAX}`}
-                      aria-pressed={on}
-                      onClick={() =>
-                        setDraft((d) => {
-                          // Tapping the current value clears it, so a rating
-                          // given by accident can be taken back rather than
-                          // being stuck at whatever was pressed first.
-                          const next = { ...d };
-                          if (next[s.id] === n) delete next[s.id];
-                          else next[s.id] = n;
-                          return next;
-                        })
-                      }
-                      className="press h-8 flex-1 rounded-[var(--r-btn)] text-[12px] font-bold"
-                      style={{
-                        background: on ? "var(--mint)" : "var(--sunken)",
-                        color: on ? "var(--on-accent)" : "var(--muted)",
-                      }}
-                    >
-                      {n}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {(vitals?.sleepHours != null || vitals?.restingHrBpm != null) && (
-            <p className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-              <Moon size={12} strokeWidth={2.4} />
-              Your phone recorded
-              {vitals.sleepHours != null ? ` ${trim(vitals.sleepHours, 1)} h asleep` : ""}
-              {vitals.sleepHours != null && vitals.restingHrBpm != null ? " and" : ""}
-              {vitals.restingHrBpm != null ? ` a resting pulse of ${Math.round(vitals.restingHrBpm)}` : ""}
-              .
-            </p>
-          )}
-
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything worth remembering about today"
-            className="text-[13px]"
+          <CheckInEditor
+            draft={draft}
+            onDraft={setDraft}
+            notes={notes}
+            onNotes={setNotes}
+            vitals={vitals}
+            notePlaceholder="Anything worth remembering about today"
           />
+          {/*
+            Where it goes afterwards, said here rather than left to be
+            discovered. Somebody wrote a note about a bad night, went looking
+            for it the next week, and found no screen that showed it.
+          */}
+          <p className="text-[11.5px] text-[var(--faint)]">
+            Saved days show up in the{" "}
+            <Link href="/log" className="underline hover:text-[var(--ink)]">
+              Log
+            </Link>
+            , beside the doses from that day.
+          </p>
+
           {/*
             Where it goes afterwards, said here rather than left to be
             discovered. Somebody wrote a note about a bad night, went looking
@@ -226,7 +191,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
                 </p>
                 <p className="tnum mt-0.5 text-[17px] font-extrabold leading-none text-[var(--ink)]">
                   {m.mean == null ? (
-                    <span className="text-[13px] font-semibold text-[var(--faint)]">n/a</span>
+                    <span className="text-[13px] font-semibold text-[var(--faint)]">{t("checkin_na")}</span>
                   ) : (
                     trim(m.mean, 1)
                   )}
@@ -245,7 +210,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
 
           {shifts.length > 0 && (
             <div className="rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
-              <p className="text-[11.5px] font-bold text-[var(--ink)]">Since your newest protocol</p>
+              <p className="text-[11.5px] font-bold text-[var(--ink)]">{t("log_since_protocol")}</p>
               <ul className="mt-1.5 space-y-1">
                 {shifts.map((s) => {
                   const up = (s.delta ?? 0) > 0;

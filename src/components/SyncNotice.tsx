@@ -20,6 +20,7 @@
  * belong on the settings card, where someone has gone looking.
  */
 
+import Link from "next/link";
 import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button, Callout } from "./ui";
 import { useSyncState } from "@/lib/sync/state";
@@ -75,6 +76,33 @@ export function SyncNotice() {
             this device for now.
           </p>
           <ConflictChoices />
+        </Callout>
+      </div>
+    );
+  }
+
+  /*
+   * Its own banner rather than the failure one, because the failure one offers
+   * Try again, and trying again with no session is the one thing guaranteed not
+   * to help. This says what happened and points at the only control that can
+   * fix it.
+   */
+  if (status.phase === "signedout") {
+    return (
+      <div className="mb-4">
+        <Callout tone="warn" title="Signed out of the server">
+          <p className="flex items-start gap-2">
+            <CloudOff size={15} className="mt-0.5 shrink-0" />
+            <span>
+              Your session has expired, so nothing is being sent. Everything you do here is safe on
+              this device. Sign in again in Settings, under Sync, and it will catch up.
+            </span>
+          </p>
+          <div className="mt-3">
+            <Link href="/settings">
+              <Button>Go to Settings</Button>
+            </Link>
+          </div>
         </Callout>
       </div>
     );

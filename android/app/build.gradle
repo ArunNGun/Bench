@@ -9,8 +9,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Must exceed whatever is installed for Android to treat this as an
         // upgrade rather than refusing it. The debug builds shipped as 1.
-        versionCode 12
-        versionName "2.0"
+        versionCode 13
+        versionName "2.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

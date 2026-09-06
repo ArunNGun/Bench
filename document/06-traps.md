@@ -128,6 +128,63 @@ Related: a reveal condition that requires the element to still be **in** view
 will strand anything the reader flew past between two events, via a fast flick,
 the End key, or an anchor jump. Test the top edge only.
 
+## Containers
+
+- **A spray bottle is a `Vial` with `container: "spray"`.** Anything that asks
+  which container a dose comes from has to say which kind it means.
+  `pickVialForDose`, `stockFor` and `marksForDose` take one and default to
+  `"vial"`, which is what every row was before sprays existed.
+- **Never let a spray answer a syringe question.** Marks, units, barrel scale
+  and injection site are all meaningless for a nasal dose, and a bottle has a
+  concentration so it will happily produce numbers for all of them. `draw` in
+  the log sheet is gated on the route for exactly this reason.
+- **A spray carries no `budAt`, on purpose.** If you find yourself adding one,
+  read the decision first. The same goes for making presses remaining look
+  precise.
+
+## Records that vanish
+
+- **A collection emptying itself is a real failure mode here, not a
+  hypothesis.** It has happened twice, both times to the same three bottles of
+  water, both times found days later by accident. The first cause was an older
+  build naming the fields it wrote; the second is still unknown.
+- **The storage layer keeps a copy** when a write empties a collection or takes
+  most of it. Settings shows it and offers the rows back. If you are chasing a
+  loss, look there first: the previous document may still be sitting under
+  `peptide-log-v1:rescue`.
+- **Do not raise the bar by lowering the threshold.** The check has to stay
+  quiet for ordinary deleting, or it becomes noise and gets dismissed by habit,
+  which is worse than not having it.
+- **Putting rows back is a union.** Never restore the whole document from the
+  copy: days of doses can sit between the loss and the repair, and a wholesale
+  restore trades one silent loss for another.
+
+## Reminders
+
+- **The web has no way to raise a notification at a set time while it is
+  closed.** Do not spend an afternoon looking. Notification Triggers, the API
+  written for exactly this, was abandoned by Chrome before it shipped and is
+  filed under "no longer pursuing". Periodic Background Sync decides its own
+  cadence, in hours. Push needs a server. This is why reminders are an Android
+  feature and the browser is offered a calendar export instead.
+- **Never reconcile alarms one at a time.** Cancel every pending one and re-arm
+  the whole set from `remindersFor`. Editing a phase, pausing a protocol or
+  switching profile moves many doses at once, and incremental reconciliation is
+  how a notification survives for a dose that no longer exists.
+- **A dose logged early has to stop its own reminder.** Both the Today page and
+  the reminder list go through `unloggedDoseTimes` for this reason. If one of
+  them ever grows its own idea of what counts as covered, the phone will ask for
+  a dose that is already in the leg.
+- **In an `.ics` file, do not write UTC.** A dose at seven o'clock is seven
+  o'clock, and UTC pins it to an instant that drifts by an hour twice a year.
+  Floating local time, no `Z` and no `TZID`, is the correct form and matches how
+  `schedule.ts` reasons. A `TZID` without a `VTIMEZONE` block is not valid, and a
+  `VTIMEZONE` naming only today's offset is wrong in exactly the way this avoids.
+- **Do not take `USE_EXACT_ALARM`.** It is granted without asking, and Google
+  Play restricts it to apps whose whole purpose is alarms. Taking it to save one
+  tap makes the app unpublishable there. `SCHEDULE_EXACT_ALARM` is the
+  requestable form and is what the manifest declares.
+
 ## Cascade layers
 
 **An unlayered rule in `globals.css` beats every Tailwind utility, whatever the
@@ -174,3 +231,73 @@ The same sweep also:
 
 If you must sweep: bound the regex to a single line, never let `\s` cross a
 newline, review the diff, and run the full suite plus a build afterwards.
+
+## A record nobody wrote, and a rule that trusted it
+
+`settings.sync` holds the address, the username and `remoteSeenAt`, which is
+the version of the server's copy this device last agreed with. It is written in
+exactly one place: the panel in Settings, when somebody signs in there.
+
+A hosted build has nobody who does that. They arrive through the server's own
+login page and unlock in front of the app, and never open that panel. So
+`setRemoteSeenAt` found no record, returned early, and `remoteSeenAt` stayed
+null permanently.
+
+Null is how the app says "this device and this server have never agreed", which
+is true exactly once and was now true always. Every run looked like first
+contact. Once the account became the copy that counts, every run therefore
+pulled the server's copy over the top of the device, and anything logged since
+the last successful push was destroyed within seconds of being typed.
+
+Two things made it survivable rather than a catastrophe. The rescue guard
+caught every one of those writes, so nothing was actually lost. And it happened
+instantly and repeatedly, which is the one kind of data loss that gets reported
+on the first day instead of found months later.
+
+Both halves are fixed and either alone would have been enough, which is why
+both are there.
+
+- The runner creates the record when there is not one, rather than giving up.
+- Adopting the account is refused while this device holds anything unsent. The
+  leftovers that case exists for were read from disk at startup and are not
+  dirty; an edit made seconds ago is, and is never adopted over.
+
+The general lesson, worth more than the specific bug: **a piece of state that
+only one screen ever writes is a piece of state that some path will find
+missing.** The early return that hid it read as defensive. It was the failure.
+
+## A click is delivered to an ancestor, and it closed the sheet
+
+Reported from outside: select the text in a dose field by dragging, release a
+few pixels past the edge of the sheet, and the sheet closed and took everything
+typed with it. No confirmation, no way back.
+
+The backdrop closed on `onClick` and the card stopped propagation, which reads
+as airtight and is not. A `click` is delivered to the nearest common ancestor of
+where the button went down and where it came up. Press inside the input, release
+on the backdrop, and that ancestor is the backdrop itself, so its handler fires
+with `e.target` genuinely equal to `e.currentTarget`. The card never saw the
+event to stop.
+
+`useBackdropDismiss` requires the press to both start and end on the backdrop.
+Pointer events rather than mouse, so a finger dragged off the edge of a phone
+behaves the same. The card's `stopPropagation` came out with it: two mechanisms
+for one job is one more place to look when it goes wrong.
+
+The general lesson: **`e.target === e.currentTarget` answers where a click
+landed, not where the gesture happened.** Anything that dismisses on a click
+outside itself has this bug until it asks about the press as well as the
+release.
+
+## A number field that could not be emptied
+
+Every caller of `NumberInput` holds a number and turns the field's text into one
+with `Number(...)`. `Number("")` is 0, so clearing a field showing 0 stored 0,
+React rendered "0" again, and the nought could not be removed. Reaching 250
+meant typing it after the nought and getting 0250.
+
+Fixed in the component rather than at twenty call sites, by keeping the text as
+typed and showing it for as long as it still means the number the caller holds.
+Empty means zero, so an empty box over a zero is truthful and stays. The rule is
+in `src/lib/calc/numberField.ts` with its tests, because it is one line of code
+and a paragraph of reasoning.

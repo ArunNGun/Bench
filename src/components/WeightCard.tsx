@@ -1,8 +1,9 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Activity, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, LineChart, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { Button, Card, Field, NumberInput, SectionLabel, Stat } from "./ui";
 import { useProfileData, useStore } from "@/lib/store";
 import {
@@ -35,6 +36,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
   const { measurements, logs } = useProfileData();
   const settings = useStore((s) => s.settings);
   const addMeasurement = useStore((s) => s.addMeasurement);
+  const updateSettings = useStore((s) => s.updateSettings);
 
   const unit = settings.weightUnit ?? "kg";
   const toDisplay = (kg: number) => toDisplayWeight(kg, unit);
@@ -127,15 +129,31 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
     <Card className="p-5">
       <SectionLabel
         action={
-          !adding && (
+          <div className="flex items-center gap-2">
+            {/* Toggle: plot weight on the circulating-levels chart */}
             <button
               type="button"
-              onClick={open}
-              className="press flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--mint-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--mint-ink)]"
+              onClick={() => updateSettings({ plotWeightOnChart: !settings.plotWeightOnChart })}
+              className={`press flex items-center gap-1 rounded-[var(--r-pill)] px-2.5 py-1 text-[12px] font-bold transition-colors ${
+                settings.plotWeightOnChart
+                  ? "bg-[var(--tangerine)] text-white"
+                  : "bg-[var(--sunken)] text-[var(--muted)]"
+              }`}
+              title={settings.plotWeightOnChart ? "Hide weight on chart" : "Show weight on chart"}
             >
-              <Plus size={13} strokeWidth={2.6} /> Add
+              <LineChart size={11} strokeWidth={2.5} />
+              {settings.plotWeightOnChart ? "On chart" : "Chart"}
             </button>
-          )
+            {!adding && (
+              <button
+                type="button"
+                onClick={open}
+                className="press flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--mint-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--mint-ink)]"
+              >
+                <Plus size={13} strokeWidth={2.6} /> Add
+              </button>
+            )}
+          </div>
         }
       >
         Weight
@@ -252,6 +270,7 @@ function PrefillNote({
   unit: string;
   toDisplay: (kg: number) => number;
 }) {
+  const { t } = useLang();
   const base = "mt-2.5 flex items-start gap-1.5 text-[12px] leading-relaxed";
 
   if (prefilled) {
@@ -270,7 +289,7 @@ function PrefillNote({
   }
 
   if (health === "checking") {
-    return <p className={`${base} text-[var(--faint)]`}>Looking for a reading in Health Connect…</p>;
+    return <p className={`${base} text-[var(--faint)]`}>{t("weight_health_connect")}</p>;
   }
 
   if (health === "available") {

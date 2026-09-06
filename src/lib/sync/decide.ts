@@ -32,6 +32,8 @@ export type SyncAction =
   | { kind: "ask"; reason: "both-changed" }
   /** Never synced with this server, and both sides hold something. */
   | { kind: "ask"; reason: "first-contact" }
+  /** Signing in to an account whose copy is the one that counts. */
+  | { kind: "pull"; reason: "adopt-account" }
   /** Neither side has moved. */
   | { kind: "none"; reason: "in-step" }
   /** Two empty sides. Pushing would publish emptiness as though it were data. */
@@ -51,6 +53,24 @@ export interface SyncInput {
   dirty: boolean;
   /** Whether this device holds anything at all worth sending. */
   localEmpty: boolean;
+  /**
+   * Whether the account on the server is the copy that counts.
+   *
+   * True in a build made for a server that requires an account. It changes one
+   * case and one only: the first contact between a browser and an account.
+   *
+   * On a copy of Bench that syncs to a server somebody set up for themselves,
+   * two sides holding different data is a genuine question, because either one
+   * could be the real history. Signing in to an account is not that question.
+   * The account has a history, this browser has whatever was in it before,
+   * and the reason somebody signed in is to see the account.
+   *
+   * It deliberately does not extend past that moment. Once the two have agreed
+   * once, a device that has edits the server has not seen is holding work
+   * somebody did, and "the server is primary" is not a reason to throw it away
+   * without asking. Server wins at the start, device wins during.
+   */
+  serverPrimary?: boolean;
 }
 
 export function decideSync({
@@ -58,6 +78,7 @@ export function decideSync({
   remoteUpdatedAt,
   dirty,
   localEmpty,
+  serverPrimary = false,
 }: SyncInput): SyncAction {
   if (remoteUpdatedAt == null) {
     /*
@@ -76,9 +97,25 @@ export function decideSync({
     // Nothing has been agreed with this server yet, so there is no version to
     // compare against and no way to tell which side is the continuation of the
     // other. Taking the server's copy is only safe when there is nothing here.
-    return localEmpty
-      ? { kind: "pull", reason: "local-empty" }
-      : { kind: "ask", reason: "first-contact" };
+    if (localEmpty) return { kind: "pull", reason: "local-empty" };
+
+    /*
+     * Where the account is the copy that counts, this is not a question.
+     * Somebody signed in to see their account, and whatever this browser held
+     * before was never part of it.
+     *
+     * Only when nothing is waiting to be sent, and that condition is the whole
+     * lesson of the bug that followed the first version of this. `dirty` means
+     * this device holds an edit nobody else has seen, made by somebody in this
+     * session, seconds ago. Adopting over the top of that is not "the server is
+     * primary", it is destroying work that was typed while the app was open.
+     *
+     * The leftovers this case exists for are not dirty: they were read from
+     * IndexedDB at startup, not edited. So the narrow rule catches the case it
+     * was written for and cannot reach the one it must never touch.
+     */
+    if (serverPrimary && !dirty) return { kind: "pull", reason: "adopt-account" };
+    return { kind: "ask", reason: "first-contact" };
   }
 
   if (remoteUpdatedAt !== remoteSeenAt) {
@@ -107,6 +144,8 @@ export function describeSync(action: SyncAction): string {
       return "This device and another one both changed. Choose which copy to keep.";
     case "first-contact":
       return "This device and the server both hold data. Choose which copy to keep.";
+    case "adopt-account":
+      return "Taking your account's data. What was in this browser before is set aside.";
     case "in-step":
       return "Up to date.";
     case "nothing-to-send":

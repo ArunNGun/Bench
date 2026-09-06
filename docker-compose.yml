@@ -16,6 +16,18 @@ services:
       args:
         # Override to pin a build id, for example BUILD_ID=1.9.0 docker compose build.
         BUILD_ID: ${BUILD_ID:-}
+        # Set these two in .env to make this image belong to one sync server.
+        # Leave them out and this is the ordinary Bench.
+        #
+        #   NEXT_PUBLIC_SYNC_URL=https://bench.example
+        #   NEXT_PUBLIC_REQUIRE_ACCOUNT=1
+        #
+        # Build arguments and not `environment:`, because Next inlines them
+        # while it compiles. Putting them below would look right, change
+        # nothing, and say nothing about it. Changing either one needs
+        # --build, not a restart.
+        NEXT_PUBLIC_SYNC_URL: ${NEXT_PUBLIC_SYNC_URL:-}
+        NEXT_PUBLIC_REQUIRE_ACCOUNT: ${NEXT_PUBLIC_REQUIRE_ACCOUNT:-}
     image: bench-web:local
     container_name: bench-web
     ports:
@@ -41,6 +53,12 @@ services:
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
+      # Here they are environment rather than build arguments, and that is not
+      # an inconsistency with the web service above. `next dev` compiles on
+      # demand, so it reads them at startup; `next build` does not exist to read
+      # anything later. Same two names, same effect, different moment.
+      NEXT_PUBLIC_SYNC_URL: ${NEXT_PUBLIC_SYNC_URL:-}
+      NEXT_PUBLIC_REQUIRE_ACCOUNT: ${NEXT_PUBLIC_REQUIRE_ACCOUNT:-}
     volumes:
       - .:/app
       # node_modules lives in a named volume rather than on the bind mount. Two
@@ -76,17 +94,24 @@ services:
     environment:
       PORT: "8787"
       BENCH_DATA_DIR: /data
-      # The browser origin allowed to call this. Not the server's own address:
-      # the request comes from whatever machine the browser is on, so reaching
-      # the app from another device means naming that address here.
-      #   $env:BENCH_ORIGIN="http://192.168.1.20:3210"
+      # The browser origins allowed to call this, comma separated. Not the
+      # server's own address: the request comes from whatever machine the
+      # browser is on, so reaching the app from another device means naming that
+      # address here. A list, because the domain and a laptop on the LAN are
+      # both legitimately the app.
+      #   BENCH_ORIGIN=https://bench.example,http://192.168.1.20:3210
       BENCH_ORIGIN: ${BENCH_ORIGIN:-http://localhost:3210}
-      # Set this for anything beyond a look, or every restart logs you out.
-      # Registration needs no switch: the server prints a setup token while it
-      # has no account, and closes itself once it has one.
+      # Set this. Without it the server invents one at every start, so the next
+      # restart signs everybody out at the same moment. Survivable while you are
+      # the only account, and not once other people rely on it.
+      #   BENCH_SESSION_SECRET=$(openssl rand -hex 32)
       BENCH_SESSION_SECRET: ${BENCH_SESSION_SECRET:-}
     volumes:
       - ./server:/app/server:ro
+      # The generated app icon, for the login page. Read only, and the only
+      # thing this server ever reads from outside its own directory. Without it
+      # the page still renders; the mark simply is not there.
+      - ./public:/app/public:ro
       - bench_sync_data:/data
     restart: unless-stopped
 

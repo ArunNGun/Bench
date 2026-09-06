@@ -11,28 +11,32 @@ import {
   Info,
   ListChecks,
   NotebookPen,
-  Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ThemeToggle } from "./ThemeToggle";
 import { ProfileSwitcher } from "./ProfileSwitcher";
+import { SettingsMenu } from "./SettingsMenu";
 import { SystemBarsSync } from "./SystemBarsSync";
 import { AutoBackup } from "./AutoBackup";
+import { FirstBackupGate } from "./FirstBackupGate";
+import { UnlockGate } from "./UnlockGate";
+import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
+import { LangDropdown } from "./LangDropdown";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Six destinations reachable by thumb on mobile, the same six in a rail on
  * desktop. Reference and settings sit in the header on small screens, since
  * they are read occasionally rather than tapped constantly.
  */
-const PRIMARY = [
-  { href: "/", label: "Now", icon: Activity },
-  { href: "/plan", label: "Plan", icon: ListChecks },
-  { href: "/log", label: "Log", icon: NotebookPen },
-  { href: "/stock", label: "Stock", icon: FlaskConical },
-  { href: "/calculator", label: "Calc", icon: Calculator },
-  { href: "/about", label: "About", icon: Info },
+const PRIMARY_ROUTES = [
+  { href: "/", labelKey: "nav_now" as const, icon: Activity },
+  { href: "/plan", labelKey: "nav_plan" as const, icon: ListChecks },
+  { href: "/log", labelKey: "nav_log" as const, icon: NotebookPen },
+  { href: "/stock", labelKey: "nav_stock" as const, icon: FlaskConical },
+  { href: "/calculator", labelKey: "nav_calc" as const, icon: Calculator },
+  { href: "/about", labelKey: "nav_about" as const, icon: Info },
 ];
 
 /**
@@ -42,10 +46,14 @@ const PRIMARY = [
  */
 const BARE_ROUTES = ["/landing"];
 
-const SECONDARY = [
-  { href: "/labs", label: "Bloodwork", icon: Droplet },
-  { href: "/library", label: "Library", icon: BookOpen },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+/*
+  Settings is absent here on purpose. It is a menu now rather than a link, so
+  that the theme toggle has somewhere to live that is not the header itself,
+  and it is rendered after this list.
+*/
+const SECONDARY_ROUTES = [
+  { href: "/labs", labelKey: "nav_bloodwork" as const, icon: Droplet },
+  { href: "/library", labelKey: "nav_library" as const, icon: BookOpen },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -54,6 +62,7 @@ function isActive(pathname: string, href: string) {
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useLang();
 
   if (BARE_ROUTES.some((r) => pathname.startsWith(r))) {
     return <div className="min-h-dvh">{children}</div>;
@@ -63,6 +72,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh">
       <SystemBarsSync />
       <AutoBackup />
+      <ReminderRunner />
+      {/*
+        Before the backup gate, which asks for a file this browser cannot yet
+        produce: without the key there is nothing to export.
+      */}
+      <UnlockGate />
+      <FirstBackupGate />
 
       {/*
         The padding pushes the content row clear of the status bar while the
@@ -77,7 +93,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
             <BenchMark />
-            <span className="text-[17px] font-extrabold tracking-tight text-[var(--ink)]">
+            {/*
+              Hidden on the narrowest screens. The mark beside it says the same
+              thing, and those fifty pixels are the difference between a header
+              that fits and one that scrolls.
+            */}
+            <span className="hidden text-[17px] font-extrabold tracking-tight text-[var(--ink)] sm:inline">
               Bench
             </span>
           </Link>
@@ -91,11 +112,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               both answer "whose data is this and where is my copy of it".
             */}
             <BackupButton />
-            {SECONDARY.map((item) => (
+            {SECONDARY_ROUTES.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                aria-label={item.label}
+                aria-label={t(item.labelKey)}
                 aria-current={isActive(pathname, item.href) ? "page" : undefined}
                 className={cn(
                   "press flex h-10 items-center gap-2 rounded-[var(--r-pill)] px-3 text-[14px] font-medium transition-colors",
@@ -104,10 +125,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                     : "text-[var(--muted)] hover:bg-[var(--card)] hover:text-[var(--ink)]")}
               >
                 <item.icon size={18} strokeWidth={2.1} />
-                <span className="hidden lg:inline">{item.label}</span>
+                <span className="hidden lg:inline">{t(item.labelKey)}</span>
               </Link>
             ))}
-            <ThemeToggle />
+            {/*
+              Settings holds the theme now. On a phone this row was wider than
+              the screen and the whole app scrolled sideways, so the smallest
+              control moved under the header item that already means "how this
+              behaves" rather than sitting beside it.
+
+              Sign out is in the profile menu and in a card in Settings, for the
+              same reason: nothing else fits here.
+            */}
+            <LangDropdown />
+            <SettingsMenu />
           </div>
         </div>
       </header>
@@ -123,7 +154,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           }}
         >
           <ul className="space-y-1.5">
-            {PRIMARY.map((item) => {
+            {PRIMARY_ROUTES.map((item) => {
               const active = isActive(pathname, item.href);
               return (
                 <li key={item.href}>
@@ -141,7 +172,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                       strokeWidth={active ? 2.4 : 2}
                       style={{ color: active ? "var(--mint)" : undefined }}
                     />
-                    {item.label}
+                    {t(item.labelKey)}
                   </Link>
                 </li>
               );
@@ -171,7 +202,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <ul className="grid grid-cols-6">
-          {PRIMARY.map((item) => {
+          {PRIMARY_ROUTES.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <li key={item.href}>
@@ -194,7 +225,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                     className="text-[10.5px] font-semibold"
                     style={{ color: active ? "var(--mint-ink)" : "var(--faint)" }}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </span>
                 </Link>
               </li>

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
 import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import { toDisplayWeight } from "@/lib/calc/outcomes";
 import {
   dosesPerDoseDay,
   dueStatus,
@@ -57,6 +58,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
+import { useLang } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -75,7 +77,8 @@ const DAY = 86_400_000;
 
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
-  const { protocols, logs, vials } = useProfileData();
+  const { t } = useLang();
+  const { protocols, logs, vials, measurements } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const overrides = useStore((s) => s.halfLifeOverrides);
   const settings = useStore((s) => s.settings);
@@ -372,7 +375,7 @@ export default function NowPage() {
       v.budAt - now < settings.budWarningDays * DAY);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading your data…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("now_loading")}</div>;
   }
 
   if (!protocols.length) {
@@ -446,6 +449,7 @@ export default function NowPage() {
                     peptideId={t.protocol.peptideId}
                     doseMcg={t.targetMcg}
                     nowMs={now}
+                    route={t.protocol.route}
                     className="text-[12px] text-[var(--faint)]"
                   />
                 </div>
@@ -501,7 +505,7 @@ export default function NowPage() {
       */}
       {laterToday.length > 0 && (
         <div>
-          <SectionLabel>Later today</SectionLabel>
+          <SectionLabel>{t("now_later_today")}</SectionLabel>
           <div className="divide-y divide-[var(--line)] rounded-[var(--r-card)] border border-[var(--line)]">
             {laterToday.map(({ track: t, at }) => {
               const key = `${t.protocol.id}:${at}`;
@@ -530,6 +534,7 @@ export default function NowPage() {
                         peptideId={t.protocol.peptideId}
                         doseMcg={t.targetMcg}
                         nowMs={now}
+                        route={t.protocol.route}
                         className="text-[12px] text-[var(--faint)]"
                       />
                     </span>
@@ -573,17 +578,38 @@ export default function NowPage() {
                         >
                           <Check size={15} /> Yes, log it
                         </Button>
+                        <Button
+                          title="Open the full form"
+                          onClick={() => {
+                            setConfirmEarly(null);
+                            setLogPeptideId(t.protocol.peptideId);
+                            setLogOpen(true);
+                          }}
+                        >
+                          Details
+                        </Button>
                         <Button variant="ghost" onClick={() => setConfirmEarly(null)}>
                           Cancel
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        title={`Log this ${formatTime(at)} dose ahead of time`}
-                        onClick={() => setConfirmEarly(key)}
-                      >
-                        <Check size={15} /> Taken
-                      </Button>
+                      <>
+                        <Button
+                          title={`Log this ${formatTime(at)} dose ahead of time`}
+                          onClick={() => setConfirmEarly(key)}
+                        >
+                          <Check size={15} /> Taken
+                        </Button>
+                        <Button
+                          title="Open the full form"
+                          onClick={() => {
+                            setLogPeptideId(t.protocol.peptideId);
+                            setLogOpen(true);
+                          }}
+                        >
+                          Details
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -596,7 +622,7 @@ export default function NowPage() {
       {series.length > 0 && (
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-4 py-3">
-            <SectionLabel className="mb-0">Circulating now</SectionLabel>
+            <SectionLabel className="mb-0">{t("now_circulating")}</SectionLabel>
             <div className="ml-auto flex flex-wrap gap-x-3.5 gap-y-1">
               {series.map((s) => (
                 <span key={s.id} className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
@@ -611,9 +637,9 @@ export default function NowPage() {
                   />
                   {s.label}
                   {s.basis === "elsewhere" && (
-                    <span className="text-[var(--faint)]">estimated</span>
+                    <span className="text-[var(--faint)]">{t("now_estimated")}</span>
                   )}
-                  {s.basis === "yours" && <span className="text-[var(--faint)]">your figure</span>}
+                  {s.basis === "yours" && <span className="text-[var(--faint)]">{t("now_your_figure")}</span>}
                 </span>
               ))}
             </div>
@@ -626,6 +652,18 @@ export default function NowPage() {
               nowMs={now}
               pickedMs={pickedMs}
               onPick={setPickedMs}
+              weightEntries={
+                settings.plotWeightOnChart
+                  ? measurements
+                      .filter((m) => m.weightKg != null)
+                      .map((m) => {
+                        const unit = settings.weightUnit ?? "kg";
+                        const val = toDisplayWeight(m.weightKg!, unit);
+                        const label = `${Math.round(val * 10) / 10}${unit}`;
+                        return { at: m.at, weightKg: m.weightKg!, displayLabel: label };
+                      })
+                  : undefined
+              }
             />
           </div>
           <PkReadout
@@ -635,12 +673,12 @@ export default function NowPage() {
             describeVial={describeVial}
           />
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
-            Relative levels, not concentrations. One normal dose peaks at 100%, so the line says how
-            much is on board compared with a single dose, bioavailability is unpublished for most of
-            these compounds, so a real ng/mL figure is not available. Triangles mark logged doses.
-            Where a reading names a vial, that vial&apos;s strength is read as it stands today:
-            adding diluent to an open vial rewrites the basis, so a dose drawn before a top up shows
-            the strength the vial has now rather than the one that was in the syringe.
+            Levels shown are estimated mass in circulation, not plasma concentration. The model uses
+            published half-lives and the one-compartment Bateman equation, scaled to the doses you
+            logged. Bioavailability and volume of distribution are unpublished for most of these
+            compounds, so the figure is a pharmacokinetic estimate, not a measured blood level.
+            Triangles mark logged doses.
+            Where a reading names a vial, that vial&apos;s strength is read as it stands today.
           </p>
 
           {estimatedFrom.length > 0 && (
@@ -677,7 +715,7 @@ export default function NowPage() {
       )}
 
       <section>
-        <SectionLabel>Active protocols</SectionLabel>
+        <SectionLabel>{t("now_active_protocols")}</SectionLabel>
         <div className="space-y-2.5">
           {tracks.map((t) => (
             <Card key={t.protocol.id} className="p-4">
@@ -723,6 +761,7 @@ export default function NowPage() {
                       peptideId={t.protocol.peptideId}
                       doseMcg={t.targetMcg}
                       nowMs={now}
+                      route={t.protocol.route}
                       className="text-[12px] text-[var(--faint)]"
                     />
                     <span>· {t.protocol.name}</span>
@@ -855,7 +894,7 @@ export default function NowPage() {
 
       {(lowStock.length > 0 || expiringVials.length > 0) && (
         <section>
-          <SectionLabel>Worth sorting out</SectionLabel>
+          <SectionLabel>{t("now_worth_sorting")}</SectionLabel>
           <div className="space-y-2.5">
             {lowStock.map((t) => (
               <Callout key={t.protocol.id} tone="warn">
@@ -1048,6 +1087,7 @@ function Insights({
   logs: DoseLog[];
   now: number;
 }) {
+  const { t } = useLang();
   const weeks = useMemo(() => weeklyExposure(logs, now, 8), [logs, now]);
   const anyExposure = weeks.some((w) => w.totalMcg > 0);
   if (!tracks.length || !anyExposure) return null;
@@ -1056,12 +1096,12 @@ function Insights({
 
   return (
     <section>
-      <SectionLabel>Trends</SectionLabel>
+      <SectionLabel>{t("now_trends")}</SectionLabel>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <div className="mb-1 flex items-baseline justify-between gap-3">
             <h3 className="text-[14.5px] font-bold text-[var(--ink)]">Weekly exposure</h3>
-            <span className="text-[12px] text-[var(--muted)]">last 8 weeks, all compounds</span>
+            <span className="text-[12px] text-[var(--muted)]">{t("now_last_8_weeks")}</span>
           </div>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
             Total mass logged each week. A titration shows up as a staircase; a gap shows up as a
@@ -1105,7 +1145,7 @@ function Insights({
         </Card>
 
         <Card className="p-5">
-          <h3 className="mb-1 text-[14.5px] font-bold text-[var(--ink)]">Building to steady state</h3>
+          <h3 className="mb-1 text-[14.5px] font-bold text-[var(--ink)]">{t("now_building_steady")}</h3>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
             Levels keep rising for about five half-lives after you start. Until then, today is not
             what a steady week will feel like.

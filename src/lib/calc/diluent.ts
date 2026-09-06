@@ -75,6 +75,39 @@ export function pickBottle(
 }
 
 /**
+ * The shelf, in the order a person would reach along it.
+ *
+ * The list used to be in the order bottles were entered, which put an open
+ * bottle, a sealed one and another open one in a row and made the shelf read
+ * like a drawer rather than a shelf.
+ *
+ * Sorted by the same preference `pickBottle` already applies, deliberately, so
+ * that the bottle at the top is the one the app will suggest next. Two orders
+ * for one shelf would be worse than an arbitrary one: the eye would learn the
+ * wrong first bottle.
+ *
+ * Open before sealed, because finishing what is already open is the point.
+ * Within each, the soonest deadline first, so water gets used rather than
+ * thrown away. Anything unusable, expired or emptied, sinks to the bottom,
+ * where it reads as something to deal with rather than something to draw from.
+ */
+export function shelfOrder(bottles: DiluentBottle[], nowMs: number): DiluentBottle[] {
+  const rank = (b: DiluentBottle) => {
+    if (!bottleUsable(b, nowMs)) return 2;
+    return OPEN_STATES.includes(b.state) ? 0 : 1;
+  };
+  const deadline = (b: DiluentBottle) => b.budAt ?? b.expiresAt ?? Infinity;
+
+  return [...bottles].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      deadline(a) - deadline(b) ||
+      // A stable last resort, so two bottles with neither date never swap
+      // places between renders.
+      a.id.localeCompare(b.id));
+}
+
+/**
  * Open a bottle without taking anything out of it yet.
  *
  * Opening used to be a side effect of drawing, which is true only for water

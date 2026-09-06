@@ -53,8 +53,11 @@ seriously:
 
 Each of these was considered and rejected. Do not add them without asking.
 
-- **Reminders and notifications.** Asked for explicitly, declined explicitly:
-  "do all except the reminder I don't need that."
+- **Push notifications.** Not local reminders, which now exist: a dose reminder
+  is scheduled on the device and fires there. Push means a server deciding when
+  your phone should buzz, and that is a backend by another name. See
+  [05-decisions.md](05-decisions.md) for how the local kind came to be allowed
+  after being declined.
 - **Any backend, account, sync or analytics.** The privacy claim on the landing
   page is absolute and is verifiable by `grep -r "fetch(" src/`. The only
   network request the app makes is one fetch of `/version.json` at startup on

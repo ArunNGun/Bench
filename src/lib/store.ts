@@ -20,14 +20,18 @@ import {
   type Settings,
   type Vial,
   type DiluentBottle,
+  type DiluentKind,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged, documentFrom } from "./calc/document";
 import { withoutProfile } from "./calc/profiles";
+import { alarmingLosses, countRecords, restoreLost, type Rescue } from "./calc/rescue";
 import { PEPTIDES } from "./data/peptides";
 import { beyondUseDate, SYRINGES, syringeById } from "./calc/reconstitution";
 import { drawFromBottle, openBottle } from "./calc/diluent";
+import { transferToSpray } from "./calc/spray";
 import { startOfLocalDay } from "./calc/schedule";
+import { ratableDay } from "./calc/checkins";
 import {
   diluentAfterTopUp,
   drawFromVial,
@@ -60,17 +64,126 @@ import {
  */
 const hasIndexedDB = () => typeof globalThis !== "undefined" && "indexedDB" in globalThis;
 
+export const STORAGE_KEY = "peptide-log-v1";
+
+/**
+ * Where a copy is kept when a write destroys records.
+ *
+ * A second key rather than a field in the document. Inside, it would ride along
+ * in every export and every sync payload, and a copy of your data folded into
+ * your data grows without anybody deciding that it should.
+ */
+export const RESCUE_KEY = `${STORAGE_KEY}:rescue`;
+
+/**
+ * The last document this device wrote, so the next write has something to
+ * compare against. Held in memory only: the point of comparison is the write
+ * before this one, and after a reload the stored copy serves that purpose.
+ */
+let lastWritten: AppData | null = null;
+
+/**
+ * Read the state out of what the persist middleware is about to store.
+ *
+ * The middleware hands this layer a string, because it has already serialised.
+ * Parsing it back is the price of standing at the one point every write passes
+ * through, which is worth paying: a check anywhere higher can be bypassed by
+ * the next screen that writes without knowing about it.
+ */
+function documentIn(serialised: string): AppData | null {
+  try {
+    return (JSON.parse(serialised) as { state?: AppData }).state ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep a copy of what is about to be lost.
+ *
+ * Never blocks the write. Refusing would fight legitimate deletion, and a
+ * person is entitled to delete their own records; deciding which deletions are
+ * meant is not something this layer can know. So the write goes through and the
+ * previous document is set aside, which turns a silent loss into an offer.
+ *
+ * Written before the document it is protecting, so a failure between the two
+ * leaves the copy rather than losing both.
+ */
+async function keepRescue(previous: AppData, next: AppData) {
+  const lost = alarmingLosses(countRecords(previous), countRecords(next));
+  if (!lost.length) return;
+
+  const rescue: Rescue = { at: Date.now(), losses: lost, document: previous };
+  try {
+    await idbSet(RESCUE_KEY, JSON.stringify(rescue));
+  } catch {
+    // A rescue copy that cannot be written must not take the write with it.
+  }
+}
+
 const idbStorage: StateStorage = {
-  getItem: async (name) => (hasIndexedDB() ? ((await idbGet(name)) ?? null) : null),
+  getItem: async (name) => {
+    if (!hasIndexedDB()) return null;
+    const raw = (await idbGet(name)) ?? null;
+    // What was read is the baseline for the first write of this session.
+    if (typeof raw === "string") lastWritten = documentIn(raw);
+    return raw;
+  },
   setItem: async (name, value) => {
-    if (hasIndexedDB()) await idbSet(name, value);
+    if (!hasIndexedDB()) return;
+
+    const next = documentIn(value);
+    if (next && lastWritten) await keepRescue(lastWritten, next);
+    if (next) lastWritten = next;
+
+    await idbSet(name, value);
   },
   removeItem: async (name) => {
     if (hasIndexedDB()) await idbDel(name);
   },
 };
 
-export const STORAGE_KEY = "peptide-log-v1";
+/** The set-aside copy, if a write has destroyed records since it was cleared. */
+export async function readRescue(): Promise<Rescue | null> {
+  if (!hasIndexedDB()) return null;
+  try {
+    const raw = await idbGet(RESCUE_KEY);
+    return typeof raw === "string" ? (JSON.parse(raw) as Rescue) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Forget the copy, for when the loss was meant. */
+export async function clearRescue(): Promise<void> {
+  if (hasIndexedDB()) await idbDel(RESCUE_KEY);
+}
+
+/**
+ * Erase this browser's copy of everything, document and rescue together.
+ *
+ * The one place in the app that deletes without setting anything aside, and it
+ * has to be. It exists for signing out of a hosted server, which is the only
+ * situation where a browser passes from one person to another, and where a
+ * rescue copy would not be a safety net but a way of handing the next person
+ * the previous one's dose history.
+ *
+ * Deleting the keys rather than writing an empty document through the store,
+ * for the same reason: a write would go through the guard and produce exactly
+ * the rescue copy this is trying not to leave. It also avoids a race between
+ * that write and the deletion that would have to chase it.
+ *
+ * Only ever called after the server has confirmed it holds everything. The
+ * caller is responsible for that, and refuses if it cannot.
+ */
+export async function wipeLocal(): Promise<void> {
+  if (!hasIndexedDB()) return;
+  // So a later write in this tab does not compare against a document that is
+  // no longer there and report the whole thing as an alarming loss.
+  lastWritten = null;
+  await idbDel(RESCUE_KEY);
+  await idbDel(STORAGE_KEY);
+}
 
 // Re-exported so existing importers keep working; it is defined alongside the
 // migration that has to agree with it.
@@ -104,7 +217,11 @@ interface StoreState extends AppData {
 
   /**
    * Record how a day went. Upserts on the local day, so re-rating an evening
-   * after rating the morning corrects the entry rather than adding a second.
+   * after rating the morning corrects the entry rather than adding a second,
+   * and so correcting a day from the Log edits it rather than adding a second.
+   *
+   * Returns the id, or an empty string for a day that has not happened, which
+   * is the one input it refuses. See `ratableDay`.
    */
   saveCheckIn: (at: number, ratings: CheckIn["ratings"], notes?: string) => string;
   removeCheckIn: (id: string) => void;
@@ -161,6 +278,23 @@ interface StoreState extends AppData {
     atMs?: number,
     fromBottleId?: string) => void;
 
+  /**
+   * Empty a made-up vial into a nasal spray bottle, making it up with saline.
+   *
+   * One action rather than a delete and an add, because it is one physical
+   * event and doing it in two steps would leave a window where the mass exists
+   * twice or not at all. Returns the new bottle's id, or null when there was
+   * nothing left in the vial to pour.
+   */
+  transferToSpray: (
+    vialId: string,
+    options: {
+      addedMl: number;
+      mlPerSpray: number;
+      diluent?: DiluentKind;
+      fromBottleId?: string;
+    }) => string | null;
+
   addDiluent: (b: Omit<DiluentBottle, "id" | "profileId">) => string;
   updateDiluent: (id: string, patch: Partial<DiluentBottle>) => void;
   removeDiluent: (id: string) => void;
@@ -213,6 +347,15 @@ interface StoreState extends AppData {
   }) => { logs: number; measurements: number };
   exportData: () => AppData;
   resetAll: () => void;
+  /**
+   * Union the rows of a rescue copy back in.
+   *
+   * Not a restore of the whole document. Days may have passed between the loss
+   * and someone noticing it, and replacing wholesale would trade one silent
+   * loss for another. Only the collections that shrank are touched, and only
+   * rows the live document does not already have.
+   */
+  putRecordsBack: (rescue: Rescue) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -389,7 +532,10 @@ export const useStore = create<StoreState>()(
       removeLab: (id) => set((s) => ({ labs: s.labs.filter((x) => x.id !== id) })),
 
       saveCheckIn: (at, ratings, notes) => {
-        const day = startOfLocalDay(at);
+        // A day that has not happened cannot be reported on. The rule and its
+        // reasoning live in calc so the screens ask the same question.
+        const day = ratableDay(at);
+        if (day == null) return "";
         const existing = get().checkIns.find(
           (c) => c.profileId === get().activeProfileId && c.at === day);
         const id = existing?.id ?? nanoid();
@@ -481,6 +627,34 @@ export const useStore = create<StoreState>()(
             orders: orphaned ? s.orders.filter((o) => o.id !== orphaned) : s.orders,
           };
         }),
+      transferToSpray: (vialId, options) => {
+        const source = get().vials.find((v) => v.id === vialId);
+        if (!source) return null;
+
+        const plan = transferToSpray(source, {
+          addedMl: options.addedMl,
+          mlPerSpray: options.mlPerSpray,
+          diluent: options.diluent,
+          diluentBottleId: options.fromBottleId,
+          atMs: Date.now(),
+        });
+        if (!plan) return null;
+
+        const id = nanoid(10);
+        set((s) => ({
+          vials: [
+            ...s.vials.map((v) => (v.id === vialId ? plan.source : v)),
+            { ...plan.bottle, id, profileId: s.activeProfileId },
+          ],
+          // The saline added on top comes out of the ampoule it was named from.
+          // What was already in the vial was drawn when the vial was made up.
+          diluents: options.fromBottleId
+            ? drawFromBottle(s.diluents, options.fromBottleId, plan.drawnMl, Date.now())
+            : s.diluents,
+        }));
+        return id;
+      },
+
       addDiluent: (b) => {
         const id = nanoid(10);
         set((s) => ({ diluents: [...s.diluents, { ...b, id, profileId: s.activeProfileId }] }));
@@ -623,6 +797,10 @@ export const useStore = create<StoreState>()(
         return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
+
+      putRecordsBack: (rescue) => {
+        set((s) => restoreLost(documentFrom(s), rescue));
+      },
     }),
     {
       name: STORAGE_KEY,

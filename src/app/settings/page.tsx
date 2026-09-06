@@ -45,13 +45,19 @@ import { doseCsv } from "@/lib/calc/dosecsv";
 import type { WeightUnit } from "@/lib/types";
 import { AddFirstProfile, Avatar } from "@/components/ProfileSwitcher";
 import { ImportPanel } from "@/components/ImportPanel";
+import { AccountCard } from "@/components/AccountCard";
+import { AdminPanel } from "@/components/AdminPanel";
 import { SyncPanel } from "@/components/SyncPanel";
+import { RemindersPanel } from "@/components/RemindersPanel";
+import { RescueNotice } from "@/components/RescueNotice";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
+import { useLang } from "@/lib/i18n";
 
 export default function SettingsPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, logs, vials } = useProfileData();
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
@@ -91,12 +97,20 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Settings</h1>
+        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("settings_title")}</h1>
       </header>
 
       {message && <Callout tone={message.tone}>{message.text}</Callout>}
 
+      {/*
+        First, and above everything else on the page. If records have gone
+        missing, that is the most important thing this screen has to say.
+      */}
+      <RescueNotice />
+
       <Profiles />
+
+      <RemindersPanel />
 
       <HealthConnect />
 
@@ -104,10 +118,14 @@ export default function SettingsPage() {
 
       <ImportPanel />
 
+      <AccountCard />
+
       <SyncPanel />
 
+      <AdminPanel />
+
       <Card className="space-y-4 p-4">
-        <SectionLabel>Defaults</SectionLabel>
+        <SectionLabel>{t("settings_defaults")}</SectionLabel>
 
         <Field
           label="Usual syringe"
@@ -192,7 +210,7 @@ export default function SettingsPage() {
       </Card>
 
       <Card className="space-y-4 p-4">
-        <SectionLabel>Your data</SectionLabel>
+        <SectionLabel>{t("settings_your_data")}</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
           Everything lives in this browser on this device. Unless you set up sync below, there is no
           account and no server, so nothing is uploaded and nothing is backed up for you. Clearing
@@ -229,7 +247,7 @@ export default function SettingsPage() {
       </Card>
 
       <Card className="space-y-3 border-[var(--rose)]/35 p-4">
-        <SectionLabel>Erase everything</SectionLabel>
+        <SectionLabel>{t("settings_erase")}</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
           Deletes every protocol, dose and vial on this device. There is no undo and no copy
           anywhere else, export first if there is any chance you want this back.
@@ -300,6 +318,7 @@ export default function SettingsPage() {
  * stock, plus the body weight that lets the app work in mcg/kg.
  */
 function Profiles() {
+  const { t } = useLang();
   const profiles = useStore((s) => s.profiles);
   const active = useActiveProfile();
   const updateProfile = useStore((s) => s.updateProfile);
@@ -315,7 +334,7 @@ function Profiles() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Profiles</SectionLabel>
+      <SectionLabel>{t("settings_profiles")}</SectionLabel>
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
         Each profile keeps its own protocols, doses and stock. Nothing is shared between them, and
         a dose can only ever draw from the stock of the profile that logged it.
@@ -500,6 +519,7 @@ function Backups() {
     }
   }
 
+  const { t } = useLang(); // backup section
   async function restore(name: string) {
     setBusy(true);
     setNote(null);
@@ -527,7 +547,7 @@ function Backups() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Automatic backups</SectionLabel>
+      <SectionLabel>{t("settings_backups")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
         Writes a full copy into <strong>Documents/Bench</strong> on this device, keeping the most
@@ -693,6 +713,7 @@ function HealthConnect() {
     (await getHealthAdapter()).openSettings();
   }
 
+  const { t } = useLang(); // health section
   async function sync() {
     setBusy(true);
     setResult(null);
@@ -722,7 +743,7 @@ function HealthConnect() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Health Connect</SectionLabel>
+      <SectionLabel>{t("settings_health_connect")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
         Reads weight from Android Health so a reading off your scale shows up here, and prefills the

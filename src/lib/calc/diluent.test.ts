@@ -9,6 +9,7 @@ import {
   drawFromBottle,
   pickBottle,
   returnToBottle,
+  shelfOrder,
 } from "./diluent";
 import type { DiluentBottle } from "../types";
 
@@ -213,5 +214,70 @@ describe("diluentStock", () => {
       bottles: 0,
       openBottles: 0,
     });
+  });
+});
+
+describe("shelfOrder", () => {
+  const ids = (rows: DiluentBottle[]) => rows.map((b) => b.id);
+
+  it("puts open bottles before sealed ones", () => {
+    // The order they were entered in, which is what the shelf used to show:
+    // an open bottle, a sealed one, and another open one, in a row.
+    const shelf = [
+      bottle({ id: "open-1", state: "open", budAt: NOW + 20 * DAY }),
+      bottle({ id: "sealed", state: "sealed" }),
+      bottle({ id: "open-2", state: "open", budAt: NOW + 10 * DAY }),
+    ];
+    expect(ids(shelfOrder(shelf, NOW))).toEqual(["open-2", "open-1", "sealed"]);
+  });
+
+  it("agrees with the bottle the app would pick", () => {
+    // The point of sorting this way rather than any other: the top of the
+    // shelf is the one reconstituting will suggest. Two orders for one shelf
+    // would teach the eye the wrong first bottle.
+    const shelf = [
+      bottle({ id: "sealed", state: "sealed", expiresAt: NOW + 5 * DAY }),
+      bottle({ id: "open-late", state: "open", budAt: NOW + 25 * DAY }),
+      bottle({ id: "open-soon", state: "open", budAt: NOW + 3 * DAY }),
+    ];
+    expect(shelfOrder(shelf, NOW)[0].id).toBe(pickBottle(shelf, "bacteriostatic", 1, NOW)!.id);
+  });
+
+  it("brings the soonest deadline forward, so water gets used rather than binned", () => {
+    const shelf = [
+      bottle({ id: "later", state: "open", budAt: NOW + 20 * DAY }),
+      bottle({ id: "sooner", state: "open", budAt: NOW + 2 * DAY }),
+    ];
+    expect(ids(shelfOrder(shelf, NOW))).toEqual(["sooner", "later"]);
+  });
+
+  it("sinks anything that cannot be drawn from to the bottom", () => {
+    const shelf = [
+      bottle({ id: "expired", state: "open", budAt: NOW - DAY }),
+      bottle({ id: "empty", state: "open", drawnMl: 30, budAt: NOW + DAY }),
+      bottle({ id: "good", state: "open", budAt: NOW + 10 * DAY }),
+      bottle({ id: "sealed", state: "sealed" }),
+    ];
+    const out = ids(shelfOrder(shelf, NOW));
+    expect(out.slice(0, 2)).toEqual(["good", "sealed"]);
+    expect(out.slice(2).sort()).toEqual(["empty", "expired"]);
+  });
+
+  it("keeps a stable order for bottles with no dates at all", () => {
+    const shelf = [bottle({ id: "b", state: "open" }), bottle({ id: "a", state: "open" })];
+    expect(ids(shelfOrder(shelf, NOW))).toEqual(["a", "b"]);
+    // Twice, because an order that changes between renders makes the list jump
+    // under the cursor.
+    expect(ids(shelfOrder(shelfOrder(shelf, NOW), NOW))).toEqual(["a", "b"]);
+  });
+
+  it("leaves the array it was given alone", () => {
+    const shelf = [bottle({ id: "sealed", state: "sealed" }), bottle({ id: "open", state: "open" })];
+    shelfOrder(shelf, NOW);
+    expect(ids(shelf)).toEqual(["sealed", "open"]);
+  });
+
+  it("handles an empty shelf", () => {
+    expect(shelfOrder([], NOW)).toEqual([]);
   });
 });

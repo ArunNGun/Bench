@@ -1,9 +1,13 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Plus, UserRound } from "lucide-react";
+import { Check, ChevronDown, LogOut, Plus, UserRound } from "lucide-react";
 import { TONE_BG, TONE_FG, TONE_SOLID } from "./ui";
 import { useActiveProfile, useStore } from "@/lib/store";
+import { accountRequired } from "@/lib/sync/hosted";
+import { useSyncState } from "@/lib/sync/state";
+import { useSignOut } from "@/lib/sync/useSignOut";
 import type { Profile } from "@/lib/types";
 
 /** Two initials, so a name of any length fits the same circle. */
@@ -45,6 +49,7 @@ export function ProfileSwitcher() {
   const addProfile = useStore((s) => s.addProfile);
 
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
@@ -131,7 +136,7 @@ export function ProfileSwitcher() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Name"
+                placeholder={t("profile_name_placeholder")}
                 aria-label="New profile name"
                 className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3 py-2 text-[14px] focus:border-[var(--mint)] focus:outline-none"
               />
@@ -165,9 +170,25 @@ export function ProfileSwitcher() {
               >
                 <Plus size={16} strokeWidth={2.6} />
               </span>
-              <span className="text-[14px] font-medium text-[var(--ink)]">Add a profile</span>
+              <span className="text-[14px] font-medium text-[var(--ink)]">{t("profile_add")}</span>
             </button>
           )}
+
+          {/*
+            Leaving the account, from the control a phone actually has.
+
+            This is the only place it lives on a phone, and the reason is a
+            failure worth recording: putting it in the header pushed that row
+            past the width of the screen and gave the whole app a sideways
+            scroll. The header is full. This menu is not, is already full width
+            on a phone, and is where somebody looks for their own name anyway.
+
+            A profile and an account are different things, and putting them in
+            one menu risks reading as though they were. They are together
+            because this is the menu about who is using the app, and one place
+            to look beats two. Renders nothing outside a hosted build.
+          */}
+          <SignOutMenuItem onDone={() => setOpen(false)} />
         </div>
       )}
     </div>
@@ -176,6 +197,7 @@ export function ProfileSwitcher() {
 
 /** Shown in Settings when there is still only one profile. */
 export function AddFirstProfile() {
+  const { t } = useLang();
   const profiles = useStore((s) => s.profiles);
   const addProfile = useStore((s) => s.addProfile);
   const [name, setName] = useState("");
@@ -189,7 +211,7 @@ export function AddFirstProfile() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && name.trim() && (addProfile(name), setName(""))}
-          placeholder="Their name"
+          placeholder={t("profile_their_name")}
           aria-label="New profile name"
           className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3.5 py-3 text-[15px] focus:border-[var(--mint)] focus:outline-none"
         />
@@ -206,5 +228,46 @@ export function AddFirstProfile() {
         <UserRound size={16} /> Add profile
       </button>
     </div>
+  );
+}
+
+/**
+ * Sign out, inside the profile menu.
+ *
+ * The same `useSignOut` the settings card uses. The order of
+ * operations in a hosted sign out is delicate enough that a third copy of it
+ * would eventually become a third version of it.
+ */
+function SignOutMenuItem({ onDone }: { onDone: () => void }) {
+  const session = useSyncState((s) => s.session);
+  const { go, busy, refused } = useSignOut();
+
+  if (!accountRequired() || !session) return null;
+
+  return (
+    <>
+      <div className="my-1.5 h-px bg-[var(--line)]" />
+      <button
+        type="button"
+        role="menuitem"
+        disabled={busy}
+        onClick={() => void go().then(onDone)}
+        className="press flex w-full items-center gap-2.5 rounded-[var(--r-inner)] px-2.5 py-2 text-left hover:bg-[var(--sunken)] disabled:opacity-50"
+      >
+        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--sunken)] text-[var(--muted)]">
+          <LogOut size={16} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--ink)]">
+          {busy ? "Signing out..." : "Sign out"}
+        </span>
+        <span className="truncate text-[12px] text-[var(--faint)]">{session.username}</span>
+      </button>
+      {/*
+        A refusal has to stay on screen, and this menu closes. It does not close
+        on a refusal, which is why `onDone` runs after `go` rather than beside
+        it: nothing was signed out, so nothing should look as though it was.
+      */}
+      {refused && <p className="px-2.5 py-2 text-[12px] text-[var(--rose)]">{refused}</p>}
+    </>
   );
 }

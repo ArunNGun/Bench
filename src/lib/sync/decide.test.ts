@@ -105,3 +105,104 @@ describe("decideSync", () => {
     }
   });
 });
+
+describe("when the account is the copy that counts", () => {
+  const joining = { remoteSeenAt: null, remoteUpdatedAt: 500, dirty: false, localEmpty: false };
+
+  it("takes the account rather than asking a question nobody can answer", () => {
+    // Somebody signed in to see their account. Whatever this browser held
+    // before was never part of it.
+    expect(decideSync({ ...joining, serverPrimary: true })).toEqual({
+      kind: "pull",
+      reason: "adopt-account",
+    });
+  });
+
+  it("still asks on a server somebody set up for themselves", () => {
+    // There, two sides holding different data is a real question: either one
+    // could be the real history.
+    expect(decideSync(joining)).toEqual({ kind: "ask", reason: "first-contact" });
+    expect(decideSync({ ...joining, serverPrimary: false })).toEqual({
+      kind: "ask",
+      reason: "first-contact",
+    });
+  });
+
+  it("still asks once the two have agreed once", () => {
+    /*
+     * The rule is that the server wins at the start and the device wins during.
+     * After first contact, a device with unsent edits is holding work somebody
+     * did, and being the primary copy is not a reason to discard it unasked.
+     */
+    expect(decideSync({
+      remoteSeenAt: 100,
+      remoteUpdatedAt: 500,
+      dirty: true,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "ask", reason: "both-changed" });
+  });
+
+  it("does not publish emptiness to an empty server", () => {
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: null,
+      dirty: false,
+      localEmpty: true,
+      serverPrimary: true,
+    })).toEqual({ kind: "none", reason: "nothing-to-send" });
+  });
+
+  it("still sends a device's data to a server that holds nothing", () => {
+    // Being primary does not mean holding nothing beats holding something.
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: null,
+      dirty: true,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "push", reason: "server-empty" });
+  });
+
+  it("says in words what it is about to do", () => {
+    expect(describeSync({ kind: "pull", reason: "adopt-account" })).toMatch(/set aside/i);
+  });
+});
+
+describe("the loop that ate a dose seconds after it was logged", () => {
+  /*
+   * The real sequence, on a brand new account in a hosted build.
+   *
+   * `settings.sync` is written by the panel in Settings, and somebody who signs
+   * in on the login page never goes near it. So `setRemoteSeenAt` had nothing
+   * to update and did nothing, and `remoteSeenAt` stayed null for ever.
+   *
+   * Every run therefore looked like first contact. With the account treated as
+   * the copy that counts, every run pulled the server's copy over the device,
+   * and anything logged since the last push was gone within seconds.
+   *
+   * The record is fixed in the runner. This is the second lock: even with
+   * `remoteSeenAt` stuck at null, an unsent edit is never adopted over.
+   */
+  it("asks rather than adopting when this device has something unsent", () => {
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: 500,
+      dirty: true,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "ask", reason: "first-contact" });
+  });
+
+  it("still adopts the account when nothing is waiting to be sent", () => {
+    // The case it exists for: a browser holding leftovers read from IndexedDB
+    // at startup, which nobody edited.
+    expect(decideSync({
+      remoteSeenAt: null,
+      remoteUpdatedAt: 500,
+      dirty: false,
+      localEmpty: false,
+      serverPrimary: true,
+    })).toEqual({ kind: "pull", reason: "adopt-account" });
+  });
+});

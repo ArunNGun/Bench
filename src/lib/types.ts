@@ -411,7 +411,23 @@ export type MeasurementSource = "manual" | "health-connect";
  * deliberate ceiling: a daily form long enough to feel like work stops being
  * filled in, and a half-filled record is worse than none.
  */
-export type SymptomId = "energy" | "mood" | "libido" | "sleep" | "recovery" | "appetite";
+/**
+ * `appetite` is labelled Physical hunger and always will be.
+ *
+ * The id is deliberately not renamed. It keys every rating anyone has ever
+ * saved, and a year of them would go unreadable the moment the list they are
+ * drawn from stopped mentioning it. What the axis asks about did not change,
+ * only what it is called, so the history carries forward meaning what it always
+ * meant. See `document/05-decisions.md`.
+ */
+export type SymptomId =
+  | "energy"
+  | "mood"
+  | "libido"
+  | "sleep"
+  | "recovery"
+  | "appetite"
+  | "foodNoise";
 
 export interface SymptomDef {
   id: SymptomId;
@@ -420,11 +436,26 @@ export interface SymptomDef {
   high: string;
   low: string;
   /**
-   * Whether a higher rating is a better outcome. Absent where the direction
-   * depends on what you are running: suppressed appetite is the point of a
-   * GLP-1 and a problem on a bulk, so the app charts it and declines to judge.
+   * Which end of the scale is the good one. Three states, and all three are
+   * used:
+   *
+   * - `true`, a five is what you want. Energy, mood, sleep.
+   * - `false`, a one is. Food noise, where five is a day spent thinking about
+   *   food and nobody on any protocol is aiming for that.
+   * - absent, no opinion. Physical hunger, where the direction depends on what
+   *   you are running: suppressed hunger is the point of a GLP-1 and a problem
+   *   on a bulk, so the app charts it and declines to judge.
+   *
+   * The middle case arrived with food noise and is the reason `ratingTone` and
+   * `lowestRatedTone` had to learn that `false` is not the same as absent.
    */
   higherIsBetter?: boolean;
+  /**
+   * What the axis is actually asking, for the axes where that is not obvious
+   * from a one-word label. Optional: an axis with nothing to explain shows no
+   * question mark rather than an empty one.
+   */
+  hint?: string;
 }
 
 export const SYMPTOMS: SymptomDef[] = [
@@ -433,7 +464,21 @@ export const SYMPTOMS: SymptomDef[] = [
   { id: "libido", label: "Libido", low: "Absent", high: "High", higherIsBetter: true },
   { id: "sleep", label: "Sleep", low: "Broken", high: "Deep", higherIsBetter: true },
   { id: "recovery", label: "Recovery", low: "Sore", high: "Fresh", higherIsBetter: true },
-  { id: "appetite", label: "Appetite", low: "None", high: "Ravenous" },
+  {
+    id: "appetite",
+    label: "Physical hunger",
+    low: "None",
+    high: "Ravenous",
+    hint: "What your body is telling you: an empty or growling stomach, flagging energy from not eating, a real need to eat, and whether a meal actually left you satisfied. Not what your head is doing about food, which is the next one.",
+  },
+  {
+    id: "foodNoise",
+    label: "Food noise",
+    low: "Quiet",
+    high: "Constant",
+    higherIsBetter: false,
+    hint: "How much of the day food occupied your thoughts: planning the next meal shortly after finishing one, cravings with no hunger behind them, food you could not ignore, the pull to snack when you were not hungry. These two move apart, which is the point of rating them apart: a GLP-1 can quieten the head while the stomach still behaves normally.",
+  },
 ];
 
 export const SYMPTOM_SCALE_MAX = 5;
@@ -589,6 +634,35 @@ export interface Vial {
   /** Beyond-use date, from first puncture. */
   budAt?: number;
 
+  /**
+   * What the solution is in. Absent means a vial, which is every row made
+   * before nasal sprays existed and every row anyone injects from.
+   *
+   * A spray bottle is deliberately a `Vial` rather than a collection of its
+   * own. The reasoning is the opposite of the one that keeps bottles of water
+   * apart: water has no milligrams, so a vial type would be a category error
+   * carried into every figure. A spray bottle is a mass dissolved in a volume,
+   * which is exactly what a vial is, so it reuses concentration, depletion,
+   * cost per dose, days of supply and the whole of `stockFor` rather than
+   * growing a second implementation of each.
+   *
+   * What it does not reuse is the syringe. See `calc/spray.ts`.
+   */
+  container?: "vial" | "spray";
+  /**
+   * Millilitres one press of the pump delivers, for a spray.
+   *
+   * Measured rather than assumed. Calibrated bottles state it; the rest are
+   * measured by pulling the plunger out of a syringe and spraying into the
+   * barrel, which is where the 0.1 mL default comes from.
+   */
+  mlPerSpray?: number;
+  /**
+   * The vial this bottle was filled from, so the chain stays visible after the
+   * vial has been marked finished.
+   */
+  filledFromVialId?: string;
+
   notes?: string;
 }
 
@@ -669,6 +743,54 @@ export interface Settings {
   dataChangedAt?: number;
   /** When the "nothing is backed up" reminder was last dismissed. */
   backupNagDismissedAt?: number;
+
+  /**
+   * Reminders for a scheduled dose.
+   *
+   * Off until someone turns it on, and the permission is only asked for at that
+   * moment rather than at startup. An app that asks on first launch teaches
+   * people to refuse, and this one has nothing to say until there is a plan.
+   *
+   * Absent means off, which is what every install has today. Nothing was
+   * migrated to add this.
+   */
+  reminders?: RemindersSettings;
+
+  /**
+   * When true, weight log entries are rendered as labelled dots on the PK
+   * chart, so you can see body weight alongside compound levels on the same
+   * timeline. Off by default; toggled from the Weight card.
+   */
+  plotWeightOnChart?: boolean;
+}
+
+/**
+ * How dose reminders behave.
+ *
+ * Scheduled on the device by the operating system. Nothing is sent anywhere, so
+ * this adds no network call and the privacy claim is untouched. See
+ * `document/05-decisions.md`.
+ */
+export interface RemindersSettings {
+  enabled: boolean;
+  /**
+   * Minutes before the scheduled time to fire. Zero means on the hour.
+   *
+   * Some people want the nudge while they are still near the fridge rather than
+   * at the moment the dose is already late.
+   */
+  leadMinutes: number;
+  /**
+   * Name the compound and the dose, or say only that something is due.
+   *
+   * Discreet by default, and deliberately. A notification reading "BPC-157
+   * 250 mcg" sits on a lock screen in front of whoever is next to you, and the
+   * rest of this app has been careful never to put that there. Someone who
+   * would rather see what is due can say so; nobody has it decided for them.
+   */
+  showCompound: boolean;
+  /** Days ahead the calendar export covers, for surfaces that cannot schedule. */
+  calendarDays: number;
 }
 
 export type LabCategory = "growth" | "metabolic" | "lipids" | "organ" | "blood" | "cardio";
@@ -848,6 +970,20 @@ export interface AppData {
   diluents: DiluentBottle[];
 }
 
+/**
+ * Off, discreet, and a quarter ahead.
+ *
+ * Ninety days for the calendar export is long enough not to be re-exported
+ * every week and short enough that a forgotten re-export clears itself within a
+ * quarter rather than haunting a calendar for a year.
+ */
+export const DEFAULT_REMINDERS: RemindersSettings = {
+  enabled: false,
+  leadMinutes: 0,
+  showCompound: false,
+  calendarDays: 90,
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   doseUnit: "mcg",
@@ -859,6 +995,7 @@ export const DEFAULT_SETTINGS: Settings = {
   backupEnabled: true,
   backupIntervalHours: 24,
   backupKeep: 10,
+  reminders: DEFAULT_REMINDERS,
 };
 
 export const DEFAULT_PROFILE_ID = "me";

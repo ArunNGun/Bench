@@ -5,12 +5,13 @@ import {
   diaryDays,
   inWindow,
   isTrendworthy,
+  ratableDay,
   series,
   shiftAround,
   streak,
 } from "./checkins";
 import { startOfLocalDay, addLocalDays } from "./schedule";
-import type { CheckIn, SymptomId } from "../types";
+import { SYMPTOMS, type CheckIn, type SymptomId } from "../types";
 
 const NOW = new Date(2026, 6, 30, 14, 30).getTime();
 const TODAY = startOfLocalDay(NOW);
@@ -55,7 +56,9 @@ describe("averages", () => {
   });
 
   it("returns a row per symptom even with no data at all", () => {
-    expect(averages([])).toHaveLength(6);
+    // Counted from the library rather than written out, so adding an axis is
+    // one edit rather than a hunt through the tests for the number six.
+    expect(averages([])).toHaveLength(SYMPTOMS.length);
     expect(averages([]).every((r) => r.mean === null)).toBe(true);
   });
 
@@ -258,5 +261,85 @@ describe("diaryDays", () => {
 
   it("is empty when there is nothing at all", () => {
     expect(diaryDays([], [])).toEqual([]);
+  });
+});
+
+describe("ratableDay", () => {
+  const NOW = new Date(2026, 5, 10, 14, 0, 0).getTime();
+  const day = (d: number, h = 0) => new Date(2026, 5, d, h, 0, 0).getTime();
+
+  it("gives back the local day a moment falls in", () => {
+    expect(ratableDay(day(8, 23), NOW)).toBe(day(8));
+    expect(ratableDay(day(8, 0), NOW)).toBe(day(8));
+  });
+
+  it("allows today, whatever the hour", () => {
+    expect(ratableDay(day(10, 0), NOW)).toBe(day(10));
+    expect(ratableDay(day(10, 23), NOW)).toBe(day(10));
+    // A rating given at two in the afternoon is about today, not half of it.
+    expect(ratableDay(NOW, NOW)).toBe(day(10));
+  });
+
+  it("allows any day in the past, however far back", () => {
+    // Deliberately unbounded. A day five years ago is still a day that was
+    // lived, and an arbitrary limit would only ever be somebody's guess.
+    expect(ratableDay(new Date(2021, 0, 1).getTime(), NOW)).toBe(
+      new Date(2021, 0, 1).getTime());
+  });
+
+  it("refuses tomorrow", () => {
+    expect(ratableDay(day(11), NOW)).toBeNull();
+    expect(ratableDay(day(11, 23), NOW)).toBeNull();
+  });
+
+  it("refuses a day far in the future, which is what a mistyped year looks like", () => {
+    expect(ratableDay(new Date(2062, 5, 10).getTime(), NOW)).toBeNull();
+  });
+
+  it("does not clamp a refused day onto today", () => {
+    // Clamping looks kinder and would overwrite the rating already given for
+    // today with one meant for a day that has not happened.
+    expect(ratableDay(day(11), NOW)).not.toBe(day(10));
+  });
+});
+
+describe("the axes themselves", () => {
+  it("keeps the appetite id, whatever the label says", () => {
+    /*
+     * The promise that made this split cheap. Every rating anyone has ever
+     * saved is keyed by these ids, and the screens draw only what this list
+     * mentions, so renaming the id would leave a year of ratings in the data
+     * and on no screen. What the axis asks about did not change, only its name.
+     */
+    const hunger = SYMPTOMS.find((s) => s.id === "appetite");
+    expect(hunger).toBeDefined();
+    expect(hunger!.label).toBe("Physical hunger");
+  });
+
+  it("rates food noise the other way up", () => {
+    const noise = SYMPTOMS.find((s) => s.id === "foodNoise")!;
+    expect(noise.higherIsBetter).toBe(false);
+    // Not undefined. The two are different answers now, and this axis is the
+    // reason they are.
+    expect(noise.higherIsBetter).not.toBeUndefined();
+  });
+
+  it("puts food noise directly after the hunger it is easily confused with", () => {
+    const ids = SYMPTOMS.map((s) => s.id);
+    expect(ids.indexOf("foodNoise")).toBe(ids.indexOf("appetite") + 1);
+  });
+
+  it("explains the two axes that need explaining, and no others", () => {
+    const withHint = SYMPTOMS.filter((s) => s.hint).map((s) => s.id);
+    expect(withHint.sort()).toEqual(["appetite", "foodNoise"]);
+  });
+
+  it("reads back an old rating unchanged", () => {
+    // A check-in saved before the split, carrying only appetite. It still
+    // averages, and it still counts as a rated day.
+    const rows = averages([checkIn(0, { appetite: 4 })]);
+    expect(rows.find((r) => r.id === "appetite")!.mean).toBe(4);
+    expect(rows.find((r) => r.id === "foodNoise")!.mean).toBeNull();
+    expect(streak([checkIn(0, { appetite: 4 })], NOW).current).toBe(1);
   });
 });
