@@ -41,7 +41,15 @@ function syncChrome(theme: Theme) {
   meta.content = CHROME[theme];
 }
 
-export function ThemeToggle({ className }: { className?: string }) {
+/**
+ * Light or dark.
+ *
+ * Two shapes from one implementation. `menu` draws a full width row with a
+ * label, for the profile menu, which is where this lives now: the header ran
+ * out of width on a phone and started scrolling sideways, and a theme toggle is
+ * the least urgent thing in it.
+ */
+export function ThemeToggle({ className, menu = false }: { className?: string; menu?: boolean }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
@@ -62,6 +70,28 @@ export function ThemeToggle({ className }: { className?: string }) {
     } catch {
       // Private browsing can refuse writes; the theme still applies this session.
     }
+  }
+
+  const icon = !mounted ? null : theme === "light" ? <Sun size={16} /> : <Moon size={16} />;
+
+  if (menu) {
+    return (
+      <button
+        type="button"
+        role="menuitem"
+        onClick={toggle}
+        className="press flex w-full items-center gap-2.5 rounded-[var(--r-inner)] px-2.5 py-2 text-left hover:bg-[var(--sunken)]"
+      >
+        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--sunken)] text-[var(--muted)]">
+          {icon ?? <span className="block h-4 w-4" />}
+        </span>
+        <span className="flex-1 text-[14px] font-medium text-[var(--ink)]">
+          {/* Says where it goes, not where it is. A row labelled Dark next to a
+              moon reads as a statement rather than a switch. */}
+          {!mounted ? "Theme" : theme === "light" ? "Dark theme" : "Light theme"}
+        </span>
+      </button>
+    );
   }
 
   return (

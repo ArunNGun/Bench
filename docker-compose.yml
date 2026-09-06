@@ -108,6 +108,10 @@ services:
       BENCH_SESSION_SECRET: ${BENCH_SESSION_SECRET:-}
     volumes:
       - ./server:/app/server:ro
+      # The generated app icon, for the login page. Read only, and the only
+      # thing this server ever reads from outside its own directory. Without it
+      # the page still renders; the mark simply is not there.
+      - ./public:/app/public:ro
       - bench_sync_data:/data
     restart: unless-stopped
 

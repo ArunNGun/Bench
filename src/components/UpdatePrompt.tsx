@@ -64,12 +64,27 @@ export function UpdatePrompt() {
   if (!available || dismissed) return null;
 
   return (
+    /*
+      Centred rather than tucked along the bottom edge.
+      
+      It sat above the mobile tab bar, which meant a fixed offset guessed at the
+      height of whatever else was down there. On a short screen, or with the
+      install banner also showing, it ended up too low to read comfortably and
+      sometimes partly under the bar it was trying to clear.
+
+      The middle of the screen has no such arithmetic in it. This is one of the
+      few things in the app allowed to interrupt, since ignoring it means
+      running an old build, so being unmissable is the point rather than a cost.
+      The backdrop is deliberately not opaque: the app stays visible behind it,
+      because this is a suggestion and not a wall.
+    */
     <div
       role="status"
-      className="fixed inset-x-3 z-40 rounded-[var(--r-card)] p-3.5 shadow-[var(--shadow-lg)] sm:left-auto sm:right-4 sm:w-96"
+      className="fixed inset-0 z-40 grid place-items-center bg-[var(--canvas)]/70 p-4 backdrop-blur-[2px]"
+    >
+    <div
+      className="w-full max-w-sm rounded-[var(--r-card)] p-3.5 shadow-[var(--shadow-lg)]"
       style={{
-        // Above the mobile tab bar, and above the install banner if both appear.
-        bottom: "calc(var(--safe-bottom) + 5.5rem)",
         background: TONE_BG.sky,
         color: TONE_FG.sky,
         border: "1px solid var(--sky)",
@@ -119,6 +134,7 @@ export function UpdatePrompt() {
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }

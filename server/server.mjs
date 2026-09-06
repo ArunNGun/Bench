@@ -58,6 +58,14 @@ const DATA_DIR = process.env.BENCH_DATA_DIR ?? join(dirname(fileURLToPath(import
 const ORIGINS = parseOrigins(process.env.BENCH_ORIGIN);
 
 /**
+ * The generated app icon, one directory up from this file.
+ *
+ * Resolves both when run from a checkout and under compose, where `./public` is
+ * mounted read only beside `./server` for exactly this.
+ */
+const ICON_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icon.svg");
+
+/**
  * Sessions are signed rather than stored, so a restart does not log you out and
  * there is no table to grow. Generated when absent, which is convenient for a
  * first run and useless for a real deployment: set it, or every restart
@@ -485,6 +493,35 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { username: who, admin: isAdmin(who) });
     }
 
+    /**
+     * The app's mark, served by this server rather than fetched from the app.
+     *
+     * The obvious answer was to point at the app's own `/icon.svg`, and it
+     * failed for a reason worth keeping: the proxy gate protects everything,
+     * and on the login page nobody is signed in yet, so the icon came back as a
+     * redirect to the login page and the image quietly removed itself.
+     *
+     * So it is served from here, from the same generated file, mounted read
+     * only. Still one source, still no hand copy that could drift, and no
+     * dependency on how the proxy is arranged.
+     */
+    if (req.method === "GET" && url.pathname === "/login-icon.svg") {
+      try {
+        const svg = readFileSync(ICON_PATH);
+        res.writeHead(200, {
+          "content-type": "image/svg+xml",
+          // A generated icon changes only when the brand does, and the login
+          // page is the one place a stale one costs nothing.
+          "cache-control": "public, max-age=86400",
+        });
+        return res.end(svg);
+      } catch {
+        // Not mounted, or running from somewhere else. The page is built to
+        // look right without it.
+        return send(res, 404, { error: "No icon here" });
+      }
+    }
+
     /** Where the proxy sends anyone without a session. */
     if (req.method === "GET" && url.pathname === "/login") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -702,8 +739,7 @@ function loginPage(next, invite) {
            gap: .75rem; background: var(--mint-soft); padding: 2rem 1.5rem; text-align: center; }
   .brand img { width: 64px; height: 64px; border-radius: 18px; }
   .brand h1 { font-size: 22px; margin: 0; letter-spacing: -.02em; color: var(--ink); }
-  .brand p { margin: 0; max-width: 22rem; color: var(--muted); font-size: 13.5px; }
-  .pitch { display: none; }
+  .brand p { margin: 0; max-width: 22rem; color: var(--muted); font-size: 12.5px; }
 
   .pane { display: grid; place-items: center; padding: 2rem 1.5rem; }
   form { width: min(22rem, 100%); }
@@ -734,21 +770,22 @@ function loginPage(next, invite) {
     .brand { min-height: 100dvh; gap: 1.25rem; }
     .brand img { width: 96px; height: 96px; border-radius: 26px; }
     .brand h1 { font-size: 30px; }
-    .pitch { display: block; }
+    .brand p { font-size: 13.5px; }
   }
 </style>
 </head>
 <body>
 <!--
-  The mark is the same /icon.svg the app and the launcher use, rather than a
-  hand copy, so it cannot drift from the generated one. This page is served by
-  the sync server, which has no access to the app's public folder, so it works
-  only where both sit behind one proxy on one origin. That is the arrangement
-  this build is for. Where it is not, the image simply removes itself and the
-  wordmark carries the panel, which is why nothing below depends on it.
+  The same generated icon the app and the launcher use, served by this server
+  from the file rather than fetched from the app. Pointing at the app's own
+  /icon.svg failed: the proxy gate protects everything, and on this page nobody
+  is signed in, so the image came back as a redirect and removed itself.
+
+  Where the file is not mounted, it still removes itself, and the wordmark
+  carries the panel. Nothing below depends on it.
 -->
 <div class="brand">
-  <img src="/icon.svg" alt="" onerror="this.remove()">
+  <img src="/login-icon.svg" alt="" onerror="this.remove()">
   <h1>Bench</h1>
   <p class="pitch">
     Your protocol, your doses, your bloodwork. Encrypted on this device before
