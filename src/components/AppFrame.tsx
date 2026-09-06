@@ -11,7 +11,6 @@ import {
   Info,
   ListChecks,
   NotebookPen,
-  Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ProfileSwitcher } from "./ProfileSwitcher";

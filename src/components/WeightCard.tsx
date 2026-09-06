@@ -33,7 +33,6 @@ const PREFILL_DAYS = 30;
  * is what makes a titration step and the response to it legible together.
  */
 export function WeightCard({ nowMs }: { nowMs: number }) {
-  const { t } = useLang();
   const { measurements, logs } = useProfileData();
   const settings = useStore((s) => s.settings);
   const addMeasurement = useStore((s) => s.addMeasurement);

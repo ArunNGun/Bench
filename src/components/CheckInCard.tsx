@@ -25,8 +25,8 @@ import { dailyRestingHr, nightlySleep } from "@/lib/calc/healthsync";
  * Rating is optional per axis. Leaving one blank records that you did not
  * notice, which is different from and more honest than a middling three.
  */
-const { t } = useLang();
-  export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
+export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
+  const { t } = useLang();
   const { checkIns, protocols, measurements } = useProfileData();
   const saveCheckIn = useStore((s) => s.saveCheckIn);
   const recordVitals = useStore((s) => s.recordVitals);
