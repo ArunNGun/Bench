@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -16,11 +17,12 @@ const MARKER_COUNT = LAB_MARKERS.length;
 
 export default function AboutPage() {
   const [expanded, setExpanded] = useState<string | null>(RELEASES[0].version);
+  const { t } = useLang();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">About Bench</h1>
+        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("about_title")}</h1>
         <p className="mt-1 text-[13.5px] text-[var(--muted)]">
           What this is, who made it, and what it will not do.
         </p>

@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Check } from "lucide-react";
@@ -62,6 +63,7 @@ const WARNING_COPY: Record<DrawWarning, { tone: "warn" | "danger"; title: string
 
 export default function CalculatorPage() {
   const custom = useStore((s) => s.customPeptides);
+  const { t } = useLang();
   const peptides = useMemo(() => allPeptides(custom), [custom]);
 
   const [vialMg, setVialMg] = useState(10);
@@ -107,7 +109,7 @@ export default function CalculatorPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
-        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Reconstitution calculator</h1>
+        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("calc_title")}</h1>
         <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-[var(--muted)]">
           Work out how much water to add and how far to draw the plunger. The syringe below is drawn
           to the real proportions of the barrel you pick, so you can hold yours against the screen.

@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import { Droplet, PackageCheck, Plus, SprayCan, Trash2 } from "lucide-react";
@@ -63,6 +64,7 @@ import {
 
 export default function StockPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, vials, orders, diluents } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const addOrder = useStore((s) => s.addOrder);
@@ -165,7 +167,7 @@ export default function StockPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Stock</h1>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("stock_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
             What is in the fridge and how long it has left.
           </p>

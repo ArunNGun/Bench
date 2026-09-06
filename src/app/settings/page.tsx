@@ -53,9 +53,11 @@ import { RescueNotice } from "@/components/RescueNotice";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
+import { useLang } from "@/lib/i18n";
 
 export default function SettingsPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, logs, vials } = useProfileData();
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
@@ -95,7 +97,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Settings</h1>
+        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("settings_title")}</h1>
       </header>
 
       {message && <Callout tone={message.tone}>{message.text}</Callout>}

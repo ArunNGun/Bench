@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import { Droplet, Plus, Trash2 } from "lucide-react";
@@ -31,6 +32,7 @@ import type { LabMarker, LabResult } from "@/lib/types";
 
 export default function LabsPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { labs, protocols } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const removeLab = useStore((s) => s.removeLab);
@@ -61,7 +63,7 @@ export default function LabsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Bloodwork</h1>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("labs_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
             The markers worth following, against the dates you took things.
           </p>

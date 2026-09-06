@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -15,6 +16,7 @@ const EVIDENCE_RANK = ["anecdotal", "preclinical", "preliminary", "clinical", "a
 export default function LibraryPage() {
   const custom = useStore((s) => s.customPeptides);
   const [query, setQuery] = useState("");
+  const { t } = useLang();
 
   const peptides = useMemo(() => allPeptides(custom), [custom]);
 
@@ -41,7 +43,7 @@ export default function LibraryPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <header>
-        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Library</h1>
+        <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("library_title")}</h1>
         <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--muted)]">
           {peptides.length} compounds, with half-lives, titration ladders and sources. Every dose
           carries a tag saying where it came from, an approved label, a clinical trial, or community

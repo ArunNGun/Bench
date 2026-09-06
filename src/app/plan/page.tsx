@@ -54,6 +54,7 @@ import {
 import { assignColors, colorSubjects } from "@/lib/calc/palette";
 import { routeChoices } from "@/lib/calc/spray";
 import { PhaseEditor, type DoseUnit } from "@/components/PhaseEditor";
+import { useLang } from "@/lib/i18n";
 import { TimesOfDay } from "@/components/TimesOfDay";
 import { DoseMarks } from "@/components/DoseMarks";
 import { SiteMap } from "@/components/SiteMap";
@@ -65,6 +66,7 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export default function PlanPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { protocols } = useProfileData();
+  const { t } = useLang();
   const custom = useStore((s) => s.customPeptides);
   const addProtocol = useStore((s) => s.addProtocol);
   const updateProtocol = useStore((s) => s.updateProtocol);
@@ -84,9 +86,9 @@ export default function PlanPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Plan</h1>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("plan_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-            What you are running, at what dose, on what schedule.
+            {t("plan_subtitle")}
           </p>
         </div>
         <Button
@@ -96,7 +98,7 @@ export default function PlanPage() {
             setAdding(true);
           }}
         >
-          <Plus size={16} /> New protocol
+          <Plus size={16} /> {t("plan_new_protocol")}
         </Button>
       </header>
 
@@ -112,7 +114,7 @@ export default function PlanPage() {
 
       {!protocols.length && !adding && (
         <EmptyState
-          title="No protocols yet"
+          title={t("plan_no_protocols")}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
               Create one

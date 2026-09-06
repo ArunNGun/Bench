@@ -1,4 +1,5 @@
 "use client";
+import { useLang } from "@/lib/i18n";
 
 import { useMemo, useState } from "react";
 import { CalendarPlus, Pencil, Plus } from "lucide-react";
@@ -44,6 +45,7 @@ function dayTone(checkIn: CheckIn) {
 
 export default function LogPage() {
   const hydrated = useStore((s) => s.hydrated);
+  const { t } = useLang();
   const { protocols, logs, checkIns } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
 
@@ -119,7 +121,7 @@ export default function LogPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">Log</h1>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("log_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">Every dose, and how each day went.</p>
         </div>
         <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
