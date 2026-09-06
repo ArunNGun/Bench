@@ -265,3 +265,39 @@ both are there.
 The general lesson, worth more than the specific bug: **a piece of state that
 only one screen ever writes is a piece of state that some path will find
 missing.** The early return that hid it read as defensive. It was the failure.
+
+## A click is delivered to an ancestor, and it closed the sheet
+
+Reported from outside: select the text in a dose field by dragging, release a
+few pixels past the edge of the sheet, and the sheet closed and took everything
+typed with it. No confirmation, no way back.
+
+The backdrop closed on `onClick` and the card stopped propagation, which reads
+as airtight and is not. A `click` is delivered to the nearest common ancestor of
+where the button went down and where it came up. Press inside the input, release
+on the backdrop, and that ancestor is the backdrop itself, so its handler fires
+with `e.target` genuinely equal to `e.currentTarget`. The card never saw the
+event to stop.
+
+`useBackdropDismiss` requires the press to both start and end on the backdrop.
+Pointer events rather than mouse, so a finger dragged off the edge of a phone
+behaves the same. The card's `stopPropagation` came out with it: two mechanisms
+for one job is one more place to look when it goes wrong.
+
+The general lesson: **`e.target === e.currentTarget` answers where a click
+landed, not where the gesture happened.** Anything that dismisses on a click
+outside itself has this bug until it asks about the press as well as the
+release.
+
+## A number field that could not be emptied
+
+Every caller of `NumberInput` holds a number and turns the field's text into one
+with `Number(...)`. `Number("")` is 0, so clearing a field showing 0 stored 0,
+React rendered "0" again, and the nought could not be removed. Reaching 250
+meant typing it after the nought and getting 0250.
+
+Fixed in the component rather than at twenty call sites, by keeping the text as
+typed and showing it for as long as it still means the number the caller holds.
+Empty means zero, so an empty box over a zero is truthful and stays. The rule is
+in `src/lib/calc/numberField.ts` with its tests, because it is one line of code
+and a paragraph of reasoning.

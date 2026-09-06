@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, X } from "lucide-react";
-import { Button, Callout, Card } from "./ui";
+import { Button, Callout, Card, useBackdropDismiss } from "./ui";
 import { CheckInEditor, ratedCount, type RatingDraft } from "./CheckInEditor";
 import { useProfileData, useStore } from "@/lib/store";
 import { checkInFor, ratableDay } from "@/lib/calc/checkins";
@@ -55,6 +55,10 @@ export function CheckInSheet({
     () => measurements.find((m) => m.externalId === `hc-vitals:${dayMs}`),
     [measurements, dayMs]);
 
+  // Above the early return, because it holds a ref and a hook that only runs
+  // sometimes is a hook that changes order between renders.
+  const dismiss = useBackdropDismiss(onClose);
+
   if (dayMs == null) return null;
 
   // Belt and braces with the store, which refuses the same day. A screen that
@@ -76,12 +80,16 @@ export function CheckInSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center"
-      onClick={onClose}
-      role="presentation"
+      {...dismiss}
     >
+      {/*
+        No stopPropagation here any more. The backdrop now asks whether the
+        press both started and ended on itself, which a click inside this card
+        never does, so a second mechanism for the same job would only be
+        somewhere else to look when it goes wrong.
+      */}
       <Card
         className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-b-none sm:rounded"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={`How ${formatDate(dayMs)} went`}

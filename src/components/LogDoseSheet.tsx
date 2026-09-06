@@ -2,18 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, X } from "lucide-react";
-import {
-  Badge,
-  Button,
-  Callout,
-  Field,
-  NumberInput,
-  Card,
-  Segmented,
-  Select,
-  Textarea,
-  TONE_SOLID,
-} from "./ui";
+import { Badge, Button, Callout, Card, Field, NumberInput, Segmented, Select, TONE_SOLID, Textarea, useBackdropDismiss } from "./ui";
 import Link from "next/link";
 import { HelpNote } from "./HelpNote";
 import { FEELING_TONE } from "@/lib/calc/feeling";
@@ -355,6 +344,10 @@ export function LogDoseSheet({
         })
       : null;
 
+  // Above the early return, because it holds a ref and a hook that only runs
+  // sometimes is a hook that changes order between renders.
+  const dismiss = useBackdropDismiss(onClose);
+
   if (!open) return null;
 
   function save() {
@@ -403,12 +396,16 @@ export function LogDoseSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center"
-      onClick={onClose}
-      role="presentation"
+      {...dismiss}
     >
+      {/*
+        No stopPropagation here any more. The backdrop now asks whether the
+        press both started and ended on itself, which a click inside this card
+        never does, so a second mechanism for the same job would only be
+        somewhere else to look when it goes wrong.
+      */}
       <Card
         className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-b-none sm:rounded"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Log a dose"
