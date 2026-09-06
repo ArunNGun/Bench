@@ -17,7 +17,7 @@ import { LogOut } from "lucide-react";
 import { Button, Callout, Card, SectionLabel } from "./ui";
 import { HOSTED, accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
-import { useSignOut } from "./SignOutButton";
+import { useSignOut } from "@/lib/sync/useSignOut";
 
 export function AccountCard() {
   const session = useSyncState((s) => s.session);
