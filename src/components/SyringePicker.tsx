@@ -226,7 +226,6 @@ export function SyringePicker({
           onChange={onChange}
           title={`${mlLabel(spec.capacityMl)} mL`}
           detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec)}`}
-          vet={spec.scale === "U40"}
           spec={spec}
         />
       ))}
@@ -259,11 +258,6 @@ export function SyringeField({
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-semibold text-[var(--ink)]">
             {chosen ? `${mlLabel(chosen.capacityMl)} mL` : "Ask each time"}
-            {chosen?.scale === "U40" && (
-              <span className="ml-1.5 rounded-[var(--r-pill)] bg-[var(--rose-soft)] px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-[var(--rose)]">
-                vet
-              </span>
-            )}
           </p>
           <p className="text-[11.5px] text-[var(--muted)]">
             {chosen
@@ -312,7 +306,6 @@ function Option({
   onChange,
   title,
   detail,
-  vet,
   spec,
 }: {
   id: string;
@@ -320,7 +313,6 @@ function Option({
   onChange: (id: string) => void;
   title: string;
   detail: string;
-  vet?: boolean;
   spec?: SyringeSpec;
 }) {
   return (
@@ -339,16 +331,6 @@ function Option({
     >
       <span className="flex flex-wrap items-center gap-1.5">
         <span className="text-[14px] font-bold text-[var(--ink)]">{title}</span>
-        {/*
-          A U-40 barrel next to a U-100 one is a 2.5x dosing error and the two
-          look identical in the hand. The dropdown said so in the middle of a
-          sentence; here it is a mark you cannot read past.
-        */}
-        {vet && (
-          <span className="rounded-[var(--r-pill)] bg-[var(--rose-soft)] px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-[var(--rose)]">
-            vet
-          </span>
-        )}
         {active && <Check size={14} className="ml-auto text-[var(--mint)]" />}
       </span>
       <span className="text-[11.5px] leading-snug text-[var(--muted)]">{detail}</span>
