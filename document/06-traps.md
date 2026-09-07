@@ -301,3 +301,23 @@ typed and showing it for as long as it still means the number the caller holds.
 Empty means zero, so an empty box over a zero is truthful and stays. The rule is
 in `src/lib/calc/numberField.ts` with its tests, because it is one line of code
 and a paragraph of reasoning.
+
+## A field the form offered and the record had nowhere to put
+
+Changing a logged dose from a 0.3 mL barrel to a 0.5 mL one did not stick. The
+report read as a save bug, and the save was working perfectly: `DoseLog` had
+`syringeScale` and no barrel. U-100 in, U-100 out, an identical record, and
+reopening it ran `SYRINGES.find((s) => s.scale === ...)`, which is the first
+entry of that scale and not the one anybody chose. Every U-100 dose in the
+history reopened as the 0.3 mL half-unit barrel, so the field had been lying to
+everyone all along and only became visible when somebody tried to change it.
+
+Two lessons. **A control that writes to nothing is worse than an absent
+control**, because it reads as a promise. And **when a save appears to fail,
+check the shape of the record before the code that writes it**: a field the type
+does not have cannot be dropped by any bug, it was never there.
+
+`syringeId` now carries the barrel and `syringeScale` stays, since the Log and
+the CSV read it. Old records know only a scale, so `syringeForLog` prefers this
+person's own default barrel when the scale matches, which is a better guess than
+the head of a list.

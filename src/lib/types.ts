@@ -385,6 +385,18 @@ export interface DoseLog {
   vialId?: string;
   volumeMl?: number;
   units?: number;
+  /**
+   * The exact barrel, by id from `SYRINGES`.
+   *
+   * `syringeScale` came first and is not enough: it says U-100 or U-40 and
+   * nothing about capacity or how far apart the marks are. A dose recorded on a
+   * 0.3 mL barrel with half-unit marks and the same dose on a 0.5 mL barrel are
+   * two different readings, and reopening either one used to show whichever
+   * barrel happened to be first in the list. Absent on every dose logged before
+   * this existed, which is why nothing had to be migrated: a record that knows
+   * only its scale still knows its scale.
+   */
+  syringeId?: string;
   syringeScale?: SyringeScale;
   /** Skipped doses are kept so adherence can be measured honestly. */
   skipped?: boolean;

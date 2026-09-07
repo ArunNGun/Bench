@@ -124,6 +124,34 @@ export function syringeById(id: string) {
   return SYRINGES.find((s) => s.id === id);
 }
 
+/**
+ * The barrel a recorded dose was drawn with, for putting the form back the way
+ * it was left.
+ *
+ * Three cases, in order. A record that names its barrel gets that barrel. A
+ * record that names only a scale, which is every dose logged before the id was
+ * stored, gets the barrel this person actually uses if that one is on the same
+ * scale, because a U-100 record from somebody whose default is the 0.5 mL is
+ * far more likely to have been drawn on the 0.5 mL than on the first entry in a
+ * list. Failing that, the first barrel of the right scale, which is a guess and
+ * is at least a guess of the right scale.
+ *
+ * Null means the record says nothing about a syringe, so the form should keep
+ * whatever it already had rather than be moved to a barrel nobody chose.
+ */
+export function syringeForLog(
+  log: { syringeId?: string; syringeScale?: SyringeScale },
+  defaultId?: string,
+): SyringeSpec | null {
+  const named = log.syringeId ? syringeById(log.syringeId) : undefined;
+  if (named) return named;
+  if (!log.syringeScale) return null;
+
+  const preferred = syringeById(defaultId ?? "");
+  if (preferred && preferred.scale === log.syringeScale) return preferred;
+  return SYRINGES.find((s) => s.scale === log.syringeScale) ?? null;
+}
+
 export const MCG_PER_MG = 1000;
 export const mgToMcg = (mg: number) => mg * MCG_PER_MG;
 export const mcgToMg = (mcg: number) => mcg / MCG_PER_MG;

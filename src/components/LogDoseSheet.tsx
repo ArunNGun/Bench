@@ -29,6 +29,7 @@ import {
   mgToMcg,
   SYRINGES,
   syringeById,
+  syringeForLog,
   unitsFromDose,
   type SyringeScale,
 } from "@/lib/calc/reconstitution";
@@ -254,10 +255,8 @@ export function LogDoseSheet({
       setFeeling(editing.feeling);
       setEffects(editing.sideEffects ?? []);
       setSiteOverride(true);
-      if (editing.syringeScale) {
-        const spec = SYRINGES.find((s) => s.scale === editing.syringeScale);
-        if (spec) setSyringeId(spec.id);
-      }
+      const spec = syringeForLog(editing, settings.defaultSyringeId);
+      if (spec) setSyringeId(spec.id);
       return;
     }
 
@@ -364,6 +363,9 @@ export function LogDoseSheet({
         vialId: vialId || undefined,
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
+        // Both, and the id is the one that carries the capacity and the marks.
+        // Scale stays because it is what the Log reads and what the CSV exports.
+        syringeId: draw ? syringe.id : undefined,
         syringeScale: draw ? syringe.scale : undefined,
         skipped: skipped || undefined,
         notes: notes.trim() || undefined,
@@ -384,6 +386,7 @@ export function LogDoseSheet({
       vialId: vialId || undefined,
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
+      syringeId: draw ? syringe.id : undefined,
       syringeScale: draw ? syringe.scale : undefined,
       skipped: skipped || undefined,
       notes: notes.trim() || undefined,
