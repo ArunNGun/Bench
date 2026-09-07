@@ -1,0 +1,250 @@
+# Bench
+
+A private protocol tracker for peptides, growth hormone, and anabolic compounds. No account. No server. Everything stays on your device.
+
+---
+
+## What it is
+
+Bench records what you are running, what you actually took, what is left in the fridge, what it cost, and whether any of it is working. It began as a personal tracker and was widened into something anyone can use.
+
+The things other trackers get wrong are the things Bench takes seriously:
+
+- **Reconstitution is exact.** A U-40 and a U-100 barrel look alike and differ by 2.5x. The scale is always an explicit choice and the reading on the other scale is shown beside it.
+- **Blends are decomposed.** Each component is modelled on its own half-life, not collapsed into one averaged line.
+- **Every dose figure carries its evidence.** An approved label, a clinical trial, and a forum convention are all present and never look alike.
+- **Unknowns stay unknown.** Where a half-life has never been measured in humans, the app says so and draws no curve.
+
+---
+
+## Surfaces
+
+| Surface | URL / delivery |
+|---|---|
+| App | `/` |
+| Public landing page | `/landing` |
+| In-app about and changelog | `/about` |
+| Clinician report (printable) | `/report` |
+| Web / PWA | [benchpep.vercel.app](https://benchpep.vercel.app) |
+| Android | Capacitor APK (same codebase, ships in a WebView) |
+| iOS | PWA only, no native app |
+
+---
+
+## Features
+
+### Library
+
+43 compounds with cited half-lives, dose ranges, titration ladders, side effects, contraindications, and legal status across three categories:
+
+- **Metabolic (9)** - GLP-1s and metabolic peptides
+- **Repair (9)** - BPC-157, TB-500 and related
+- **Growth hormone (12)** - GHRPs, GHRHs, secretagogues
+- **Anabolic (13)** - esters, SARMs, ancillaries
+- **Blends** - decomposed into per-component half-lives
+
+Custom compounds can be added and they work everywhere a built-in does.
+
+### Plan
+
+Build protocols with:
+- Dose schedules (daily, EOD, twice weekly, custom)
+- Titration ladders
+- Pinned injection sites
+- Adherence tracking
+- Forward projection of accumulation and time to steady state before a protocol starts
+
+### Log
+
+Record every dose with:
+- Injection site
+- Units and syringe scale (U-100 / U-40 shown together)
+- Subjective rating
+- Side effects
+
+### Stock
+
+Track vials from sealed through reconstituted to empty:
+- Mass-based depletion (not dose counts)
+- Beyond-use dates
+- Cost per dose and cost per week
+- Nasal spray bottles supported as a first-class container type
+
+### Calculator
+
+Standalone reconstitution calculator for:
+- Vial strength
+- Diluent volume
+- Target concentration
+- Draw volume in marks for U-100 and U-40
+
+### Bloodwork
+
+16 blood markers charted against dose history, with prompts for what your running compounds make worth watching. Lab report PDFs can be read client-side - every value is shown against the line it was parsed from before anything is written.
+
+### Outcomes
+
+- Weight (read from Android Health Connect)
+- Waist measurement
+- Body fat percentage
+- Daily check-ins on six subjective axes (energy, sleep quality, mood, libido, physical hunger, food noise)
+- Sleep duration and resting heart rate from Health Connect beside the check-ins
+
+### Safety
+
+Interaction checks across everything running at once:
+- Duplicate compounds
+- Shared receptor classes
+- Stacked orals
+- Component overlap across protocols
+
+### Import
+
+Accepts dose history from other trackers via CSV, TSV, JSON, or XLSX. Named profiles for Shotsy; anything else is matched by column headers.
+
+### Profiles
+
+More than one person can use Bench on one device. All data is fully partitioned by profile.
+
+### Reminders (Android only)
+
+Dose reminders are scheduled by `AlarmManager` on the device. Nothing leaves the phone. Off by default; permission is asked at the moment the setting is switched on, not at first launch.
+
+Discreet by default: the notification reads "Bench" and "A dose is due." Naming the compound is one setting away and is the user's choice to make.
+
+**The web cannot raise alarms while closed.** The browser gets a calendar export instead - each dose is an event with its own alarm, handled by the calendar app already on every device.
+
+### Sync (optional, self-hosted)
+
+Off by default. A fresh install makes one network request: `/version.json` at startup, for the update check. Sync activates only when you type in the address of a server you host yourself. No hosted option exists.
+
+What goes up is sealed in the browser first with a key derived from a password that never leaves it. The server holds encrypted bytes it cannot read.
+
+---
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 15, App Router |
+| UI | React 19, Tailwind v4 |
+| State | Zustand persisted to IndexedDB via `idb-keyval` |
+| Mobile | Capacitor 8 (Android) |
+| Tests | Vitest, 1520+ tests |
+| Fonts | Jakarta Sans + IBM Plex Mono, self-hosted |
+| Charts | Hand-rolled SVG (no charting library) |
+| Charting model | Bateman one-compartment PK model |
+
+---
+
+## Architecture
+
+### Two build targets, one codebase
+
+| Target | Command | Output |
+|---|---|---|
+| Web / PWA | `npm run build` | Next.js build, deployed to Vercel |
+| Android | `npm run build:static` | Static export (`out/`), copied into APK by Capacitor |
+
+### Directory layout
+
+```
+src/lib/calc/       Pure logic. No React, no I/O. Exhaustively tested.
+src/lib/data/       Compound and blood marker libraries.
+src/lib/import/     CSV / TSV / JSON / XLSX / PDF readers.
+src/lib/health/     Health Connect adapter (read only).
+src/lib/notify/     Local notification adapter.
+src/lib/backup/     Filesystem backups and retention.
+src/lib/migrate.ts  Version migration, shared by persist and import.
+src/lib/store.ts    Zustand store, persistence, profile-scoped selectors.
+src/lib/types.ts    Every domain type, and DATA_VERSION.
+src/components/     UI components.
+src/app/            Routes.
+scripts/            Build-time generators (version stamp, icons).
+assets/             Brand source art.
+document/           Internal project context and decisions.
+release/            Shipped APKs.
+```
+
+The rule: anything with real consequences lives in `src/lib/calc` as a pure function with tests. **Components render. They never compute doses.**
+
+### Data model
+
+Everything is one JSON object persisted under IndexedDB key `peptide-log-v1`. `DATA_VERSION` is 6.
+
+Top-level collections: `profiles`, `protocols`, `logs`, `vials`, `measurements`, `labs`, `checkIns`, `customPeptides`, `settings`, `activeProfileId`, `version`.
+
+Every row carries a `profileId`. Every screen filters by it.
+
+### Migration
+
+`migrateAppData` in `src/lib/migrate.ts` runs on rehydration and on import. It inspects the shape of the data rather than trusting the version stamp, because stamps have been wrong in the wild. Old backups restored from before any given version will be migrated automatically.
+
+### Offline and update behaviour
+
+The service worker is cache-first with a per-build cache namespace. A deploy does not silently swap code.
+
+On startup the web app fetches `/version.json` once. If the build id differs from what is running, the user is offered the update. Accepting clears caches, unregisters the worker, and reloads. Data is never touched.
+
+Android updates through the APK.
+
+### Safety net for data loss
+
+The storage layer compares what is about to be written against what it last wrote. If a collection empties or loses more than half of itself in one write, the previous document is set aside under a second key before the write goes through. Rows can be unioned back without replacing anything that changed after the snapshot.
+
+---
+
+## Development
+
+### Commands
+
+```bash
+npm run dev                      # dev server, port 3210
+npm test                         # run all tests (~1520)
+TZ=America/New_York npm test     # DST-sensitive test run
+npx tsc --noEmit                 # type check
+npx next lint                    # lint
+npm run build                    # web build
+npm run build:static             # Android static export
+
+# Regenerate all icons from assets/brand-icon.svg
+node scripts/icons.mjs
+
+# Android
+npm run android:sync && (cd android && ./gradlew assembleRelease)
+
+# Docker (web + sync server together - always use the full line)
+docker compose --profile sync up -d --build --force-recreate web sync
+```
+
+### Privacy rule
+
+`grep -r "fetch(" src/` must stay short and every hit must be accounted for. Currently two: `/version.json` at startup on web, and `src/lib/sync/client.ts` which is inert until a server address is entered in Settings.
+
+### Icons rule
+
+Never hand-edit generated icons. One source (`assets/brand-icon.svg`), one command (`node scripts/icons.mjs`). It writes every density for Android adaptive icons, legacy PNGs, web icons, PWA icons, and the favicon.
+
+### Pharmacology rule
+
+No number goes in the library without a source. Where no human data exists, set `halfLifeHours: null`, explain why, and draw no curve.
+
+### Health Connect
+
+Read only. Enforced by a test that asserts no exported name from `healthsync.ts` matches `/push|write|save|upload|send/i`.
+
+---
+
+## Data privacy
+
+- No account required
+- No analytics, no error reporting, no telemetry
+- The only network call on a stock install is one fetch of `/version.json` at startup
+- Sync is opt-in, self-hosted, and end-to-end encrypted
+- Android Health Connect access is read only
+
+---
+
+## Attribution
+
+The app icon is by Ricardo Ruiz via Flaticon (free tier). Attribution appears in the About tab and the landing page footer. Required by the licence.
