@@ -454,12 +454,16 @@ export const useStore = create<StoreState>()(
            * Only filled in when the caller left it out, so the log sheet, which
            * asks, always wins.
            */
-          const scale = (syringeById(s.settings.defaultSyringeId ?? "") ?? SYRINGES[2]).scale;
-          const drawn = marksFromVial(s.vials.find((v) => v.id === vialId), l.doseMcg, scale);
+          const spec = syringeById(s.settings.defaultSyringeId ?? "") ?? SYRINGES[2];
+          const drawn = marksFromVial(s.vials.find((v) => v.id === vialId), l.doseMcg, spec.scale);
 
           const measured =
             l.units == null && drawn != null
-              ? { units: Number(drawn.toFixed(2)), syringeScale: l.syringeScale ?? scale }
+              ? {
+                  units: Number(drawn.toFixed(2)),
+                  syringeId: l.syringeId ?? spec.id,
+                  syringeScale: l.syringeScale ?? spec.scale,
+                }
               : null;
 
           return {
