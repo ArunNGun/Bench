@@ -1,5 +1,6 @@
 "use client";
 
+import { barrelTicks } from "@/lib/calc/barrel";
 import { capacityUnits, type SyringeSpec } from "@/lib/calc/reconstitution";
 import type { VialState } from "@/lib/types";
 
@@ -45,20 +46,15 @@ export function Syringe({ spec, units, overCapacity, ghostUnits, className }: Sy
   const plungerX = BARREL_R - fraction * BARREL_W;
   const fluidW = BARREL_R - plungerX;
 
-  const ticks: { x: number; u: number; major: boolean }[] = [];
-  const majorEvery = capacity <= 30 ? 5 : 10;
-  const step = spec.graduationUnits;
-  // Cap tick count so a fine barrel does not turn into a solid block of ink.
-  const drawEvery = BARREL_W / (capacity / step) < 3 ? step * 2 : step;
-
-  for (let u = 0; u <= capacity + 1e-9; u += drawEvery) {
-    const rounded = Math.round(u * 1000) / 1000;
-    ticks.push({
-      x: BARREL_R - (rounded / capacity) * BARREL_W,
-      u: rounded,
-      major: Math.abs(rounded % majorEvery) < 1e-9,
-    });
-  }
+  /*
+   * Shared with the thumbnails in the picker, so the same barrel is the same
+   * picture in both places. It also replaces a local rule that doubled the
+   * step when marks got tight: on a barrel numbered every five, a step of two
+   * doubled to four, and four never lands on five, so the marks that were
+   * supposed to carry the numbers stopped being drawn at all. At this size
+   * nothing is tight enough to have triggered it, which is why it survived.
+   */
+  const { ticks } = barrelTicks(spec, BARREL_W);
 
   const fluidId = `fluid-${spec.id}`;
   const glassId = `glass-${spec.id}`;
@@ -129,33 +125,36 @@ export function Syringe({ spec, units, overCapacity, ghostUnits, className }: Sy
 
       {/* Graduations */}
       <g>
-        {ticks.map((t) => (
-          <g key={t.u}>
-            <line
-              x1={t.x}
-              y1={BARREL_T + 1}
-              x2={t.x}
-              y2={t.major ? BARREL_T + 17 : BARREL_T + 9}
-              stroke="var(--ink)"
-              strokeWidth={t.major ? 1.4 : 0.8}
-              opacity={t.major ? 0.75 : 0.35}
-            />
-            {/* Skip the zero mark, and any label close enough to the flange
-                that it would collide with it. */}
-            {t.major && t.u > 0 && t.x > BARREL_L + 13 && (
-              <text
-                x={t.x}
-                y={BARREL_B - 6}
-                textAnchor="middle"
-                fontSize={13}
-                fill="var(--muted)"
-                fontFamily="var(--font-mono)"
-              >
-                {t.u}
-              </text>
-            )}
-          </g>
-        ))}
+        {ticks.map((t) => {
+          const x = BARREL_R - t.fraction * BARREL_W;
+          return (
+            <g key={t.units}>
+              <line
+                x1={x}
+                y1={BARREL_T + 1}
+                x2={x}
+                y2={t.major ? BARREL_T + 17 : BARREL_T + 9}
+                stroke="var(--ink)"
+                strokeWidth={t.major ? 1.4 : 0.8}
+                opacity={t.major ? 0.75 : 0.35}
+              />
+              {/* Skip the zero mark, and any label close enough to the flange
+                  that it would collide with it. */}
+              {t.major && t.units > 0 && x > BARREL_L + 13 && (
+                <text
+                  x={x}
+                  y={BARREL_B - 6}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fill="var(--muted)"
+                  fontFamily="var(--font-mono)"
+                >
+                  {t.units}
+                </text>
+              )}
+            </g>
+          );
+        })}
       </g>
 
       {/* Exact reading before rounding, when it differs from what is drawn */}

@@ -372,3 +372,33 @@ copying the original algorithm verbatim. It therefore agreed enthusiastically
 with the defect for as long as it existed. A reference implementation is worth
 having, but it has to state the rule independently, or it only proves that two
 copies of the same idea agree.
+
+## A drawing that thins its own detail is worse than no drawing
+
+The picker offers the 0.3 mL barrel twice, once with half-unit marks and once
+with whole ones, and the marks are the only difference between the two options.
+Both syringe drawings had the same rule for a barrel too fine for its width:
+skip marks until the rest fit.
+
+That is silent, and it inverts the fact the picture exists to carry. The finer
+barrel crosses the threshold first, so it gets thinned and the blunter one does
+not, and the finer instrument is drawn with **fewer** marks than the blunt one
+beside it. A picture that is merely unclear is a nuisance. This one was
+confidently wrong.
+
+The rule is now to magnify: draw the first whole numbered divisions that fit, at
+true spacing, and say on the drawing that it is a stretch. `barrelTicks` in
+`src/lib/calc/barrel.ts` owns it for both syringes, and a test asserts the
+property the old rule broke.
+
+**A drawing computed in viewBox units is not computed in pixels.** The first
+version worked out spacing against a fixed viewBox of 232 while the card
+stretched it to about 300, so it magnified a barrel that had room to draw in
+full. Any judgement about what an eye can separate has to be made in the units
+the eye sees, which means the component has to be told the width it will really
+occupy rather than inferring one.
+
+The old fallback also hid a second bug for as long as it was never reached: it
+doubled the step, and on a barrel numbered every five a step of two became four,
+which never lands on five, so the marks meant to carry the numbers stopped being
+drawn at all.
