@@ -18,6 +18,7 @@ import {
   suggestDiluents,
   SYRINGES,
   syringeById,
+  syringeForLog,
   unitsFromDose,
   unitsToMl,
   type SyringeSpec,
@@ -106,6 +107,44 @@ describe("syringe specs", () => {
 
   it("gives every preset a unique id", () => {
     expect(new Set(SYRINGES.map((s) => s.id)).size).toBe(SYRINGES.length);
+  });
+});
+
+describe("syringeForLog", () => {
+  it("gives back the barrel the dose was recorded with", () => {
+    const spec = syringeForLog({ syringeId: "u100-0.5", syringeScale: "U100" }, "u100-1.0");
+    expect(spec?.id).toBe("u100-0.5");
+  });
+
+  it("keeps 0.3 and 0.5 apart, which is the bug this exists for", () => {
+    const small = syringeForLog({ syringeId: "u100-0.3", syringeScale: "U100" });
+    const larger = syringeForLog({ syringeId: "u100-0.5", syringeScale: "U100" });
+    expect(small?.capacityMl).toBe(0.3);
+    expect(larger?.capacityMl).toBe(0.5);
+  });
+
+  it("falls back to this person's own barrel when only a scale was recorded", () => {
+    const spec = syringeForLog({ syringeScale: "U100" }, "u100-0.5");
+    expect(spec?.id).toBe("u100-0.5");
+  });
+
+  it("will not hand back a barrel of the wrong scale, whatever the default is", () => {
+    const spec = syringeForLog({ syringeScale: "U40" }, "u100-0.5");
+    expect(spec?.scale).toBe("U40");
+  });
+
+  it("falls back to a barrel of the right scale when there is no default", () => {
+    expect(syringeForLog({ syringeScale: "U100" })?.scale).toBe("U100");
+    expect(syringeForLog({ syringeScale: "U40" }, "")?.scale).toBe("U40");
+  });
+
+  it("ignores an id nothing answers to, rather than showing nothing", () => {
+    const spec = syringeForLog({ syringeId: "u100-9.9", syringeScale: "U100" }, "u100-0.5");
+    expect(spec?.id).toBe("u100-0.5");
+  });
+
+  it("says nothing about a record that mentions no syringe", () => {
+    expect(syringeForLog({}, "u100-0.5")).toBeNull();
   });
 });
 

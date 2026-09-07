@@ -22,7 +22,6 @@ import { UnlockGate } from "./UnlockGate";
 import { ReminderRunner } from "./ReminderRunner";
 import { SyncNotice } from "./SyncNotice";
 import { BackupButton } from "./BackupButton";
-import { LangDropdown } from "./LangDropdown";
 import { useLang } from "@/lib/i18n";
 
 /**
@@ -129,15 +128,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             {/*
-              Settings holds the theme now. On a phone this row was wider than
-              the screen and the whole app scrolled sideways, so the smallest
-              control moved under the header item that already means "how this
-              behaves" rather than sitting beside it.
+              Settings holds the theme and the language now. On a phone this row
+              was wider than the screen and the whole app scrolled sideways, so
+              the smallest controls moved under the header item that already
+              means "how this behaves" rather than sitting beside it.
 
               Sign out is in the profile menu and in a card in Settings, for the
               same reason: nothing else fits here.
             */}
-            <LangDropdown />
             <SettingsMenu />
           </div>
         </div>

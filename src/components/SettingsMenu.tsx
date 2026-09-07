@@ -19,6 +19,7 @@ import { usePathname } from "next/navigation";
 import { Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./ThemeToggle";
+import { LangDropdown } from "./LangDropdown";
 
 export function SettingsMenu() {
   const pathname = usePathname();
@@ -86,6 +87,15 @@ export function SettingsMenu() {
           <div className="my-1.5 h-px bg-[var(--line)]" />
 
           <ThemeToggle menu />
+
+          {/*
+            The language, for the same reason the theme is here. It arrived as
+            another pill in the header, which is the row that has already
+            overflowed a phone screen once.
+          */}
+          <div className="my-1.5 h-px bg-[var(--line)]" />
+
+          <LangDropdown menu />
         </div>
       )}
     </div>
