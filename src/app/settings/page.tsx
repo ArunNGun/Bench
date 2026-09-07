@@ -25,7 +25,6 @@ import {
   Select,
 } from "@/components/ui";
 import { useStore, useProfileData } from "@/lib/store";
-import { SYRINGES } from "@/lib/calc/reconstitution";
 import { findPeptide, useActiveProfile } from "@/lib/store";
 import {
   AVAILABILITY_MESSAGE,
@@ -49,6 +48,7 @@ import { AccountCard } from "@/components/AccountCard";
 import { AdminPanel } from "@/components/AdminPanel";
 import { SyncPanel } from "@/components/SyncPanel";
 import { RemindersPanel } from "@/components/RemindersPanel";
+import { SyringeField } from "@/components/SyringePicker";
 import { RescueNotice } from "@/components/RescueNotice";
 import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
@@ -131,17 +131,10 @@ export default function SettingsPage() {
           label="Usual syringe"
           hint="Used to prefill the calculator and the log sheet. You can always change it per dose."
         >
-          <Select
+          <SyringeField
             value={settings.defaultSyringeId ?? ""}
-            onChange={(e) => updateSettings({ defaultSyringeId: e.target.value || undefined })}
-          >
-            <option value="">Ask each time</option>
-            {SYRINGES.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
+            onChange={(id) => updateSettings({ defaultSyringeId: id || undefined })}
+          />
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
