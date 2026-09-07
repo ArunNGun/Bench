@@ -26,9 +26,15 @@ import { useLangStore } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n/translations";
 import { cn } from "@/lib/cn";
 
+/**
+ * Each language is named in itself. Somebody who cannot read the current
+ * language is exactly the person reaching for this list, so "Deutsch" belongs
+ * here and "German" does not.
+ */
 const LANGS: { code: Lang; label: string; native: string }[] = [
   { code: "en", label: "EN", native: "English" },
   { code: "de", label: "DE", native: "Deutsch" },
+  { code: "sl", label: "SL", native: "Slovenščina" },
 ];
 
 export function LangDropdown({ menu = false }: { menu?: boolean }) {
