@@ -347,3 +347,28 @@ slot be mistaken for a different dose entirely; the report would have been much
 harder to diagnose without the arithmetic. And the honest answer to a slot with
 no evidence is **silence, not credit**: `slotIsKnowable` does not mark the dose
 taken, it declines to ask about it.
+
+## Nearest is not the right way to match a log to a dose
+
+The same report, second half and unrelated cause. Eleven doses scheduled at
+22:30, each taken the following morning at 07:05, nothing missed. Adherence read
+10 of 11.
+
+Each scheduled dose took the **nearest** unclaimed log. A log at 07:05 sits 8.5
+hours after the dose it belongs to and 15.5 hours before the next one, so the
+first dose took the *second* morning's log, that dose took the third, and the
+theft ran down the whole line until the last dose found nothing inside its
+tolerance.
+
+Nearest is the intuitive rule and it is wrong here. Both sides are sorted and a
+log is eligible for a contiguous run of doses, so handing each dose the
+**earliest** log still in reach is the standard greedy for this shape and leaves
+the most doses matched. It is also linear rather than quadratic, because logs
+are then consumed strictly left to right.
+
+**The oracle was part of the problem.** The property test compared the optimised
+matcher against a brute-force reference, and that reference had been written by
+copying the original algorithm verbatim. It therefore agreed enthusiastically
+with the defect for as long as it existed. A reference implementation is worth
+having, but it has to state the rule independently, or it only proves that two
+copies of the same idea agree.
