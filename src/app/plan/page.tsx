@@ -871,7 +871,8 @@ function ProtocolForm({
           <span className="text-[var(--ink)]">This changes the past as well as the future.</span>{" "}
           Adherence and progress count the doses this schedule expects, replayed over dates that
           have already been and gone, so moving the timing moves those figures too. Your logged
-          doses are untouched.
+          doses are untouched, and nothing from before this edit will be reported as a missed
+          dose: the app cannot know what the plan said on those days.
         </p>
       )}
 
@@ -892,6 +893,13 @@ function ProtocolForm({
               doseMcg: lockedDose ?? doseMcg,
               route,
               schedule,
+              /*
+               * Stamped only when the timing actually moved, and left alone
+               * otherwise, so renaming a protocol does not tell the app that
+               * everything before now is unknowable. A new protocol has no past
+               * to be wrong about and so carries nothing.
+               */
+              scheduleChangedAt: rewritesHistory ? Date.now() : initial?.scheduleChangedAt,
               titration: titrationSteps,
               titrationAutoAdvance,
               phases: usingPhases ? renumberPhases(phases) : undefined,

@@ -16,6 +16,7 @@ import {
   scheduleTimes,
   scheduledDailyMcg,
   scheduledDoseMcg,
+  slotIsKnowable,
   startOfLocalDay,
   titrationStepAt,
   unloggedDoseTimes,
@@ -761,6 +762,83 @@ describe("unloggedDoseTimes", () => {
   it("is empty once the day is out", () => {
     logs = [];
     expect(rest(day(20))).toEqual([]);
+  });
+
+  it("does not ask for a slot from before the schedule was moved", () => {
+    logs = [];
+    const moved = { ...twice, scheduleChangedAt: day(12) };
+    // The morning slot predates the edit and is nobody's missed dose. The
+    // evening one is on the far side of it and is still asked for.
+    expect(unloggedDoseTimes(moved, logs, day(6), local(2026, 9, 8, 23, 59))).toEqual([day(19)]);
+  });
+});
+
+/**
+ * The reported bug, rebuilt from the report.
+ *
+ * A daily dose at 07:00, taken and logged every morning. The time is moved to
+ * 22:30. The next morning the Now page showed the compound twice: the correct
+ * 22:30 dose under Later today, and a row marked Overdue which the reporter
+ * read as the old 07:00 entry left behind.
+ *
+ * It was not. Yesterday's 07:00 slot stopped existing the moment the schedule
+ * moved, and a 22:30 slot appeared in its place, fifteen hours from the log
+ * that was supposed to cover it. The app invented a dose after the fact and
+ * then reported it missed.
+ */
+describe("moving a schedule does not invent a missed dose", () => {
+  const start = local(2026, 8, 27, 7, 0);
+  const evening: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "ghk-cu",
+    name: "GHK-Cu",
+    active: true,
+    startedAt: start,
+    doseMcg: 2000,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timeOfDay: "22:30" },
+    titrationAutoAdvance: false,
+  };
+
+  const yesterdayMorning = local(2026, 9, 6, 7, 5);
+  const thisMorning = local(2026, 9, 7, 7, 43);
+  const movedThisMorning = { ...evening, scheduleChangedAt: local(2026, 9, 7, 7, 30) };
+
+  it("reproduces the report without the fix", () => {
+    const s = dueStatus(evening, thisMorning, { lastLoggedAt: yesterdayMorning });
+    expect(s.state).toBe("overdue");
+    // Yesterday at 22:30, which is the "was due 9 hours ago" on the card.
+    expect(s.at).toBe(local(2026, 9, 6, 22, 30));
+    expect(s.hoursAway).toBeCloseTo(-9.2, 1);
+  });
+
+  it("says nothing about a slot older than the change", () => {
+    const s = dueStatus(movedThisMorning, thisMorning, { lastLoggedAt: yesterdayMorning });
+    expect(s.state).toBe("upcoming");
+    expect(s.at).toBe(local(2026, 9, 7, 22, 30));
+  });
+
+  it("still reports a dose missed after the change", () => {
+    // Two days on, with nothing logged since. This one the app did watch
+    // happen, so it is entitled to say so.
+    const s = dueStatus(movedThisMorning, local(2026, 9, 9, 7, 0), {
+      lastLoggedAt: yesterdayMorning,
+    });
+    expect(s.state).toBe("overdue");
+    expect(s.at).toBe(local(2026, 9, 8, 22, 30));
+  });
+
+  it("clears itself once the first dose under the new time is logged", () => {
+    const tonight = local(2026, 9, 7, 22, 35);
+    const s = dueStatus(evening, local(2026, 9, 7, 22, 40), { lastLoggedAt: tonight });
+    expect(s.state).toBe("scheduled");
+  });
+
+  it("leaves a protocol that was never edited exactly as it was", () => {
+    const before = dueStatus(evening, local(2026, 9, 9, 7, 0), { lastLoggedAt: yesterdayMorning });
+    expect(before.state).toBe("overdue");
+    expect(slotIsKnowable(evening, 0)).toBe(true);
   });
 });
 
