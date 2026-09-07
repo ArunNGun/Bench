@@ -894,11 +894,62 @@ describe("logsForProtocol", () => {
   });
 });
 
+/**
+ * The second half of the moved-schedule report, and independent of it.
+ *
+ * Eleven days of a dose scheduled at 22:30 and taken the following morning at
+ * 07:05, every single day, nothing missed. Adherence read 10 of 11.
+ */
+describe("adherence does not lose a dose to the log after it", () => {
+  const start = local(2026, 8, 27, 22, 30);
+  const p: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "ghk-cu",
+    name: "GHK-Cu",
+    active: true,
+    startedAt: start,
+    doseMcg: 2000,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timeOfDay: "22:30" },
+    titrationAutoAdvance: false,
+  };
+
+  /** Eleven doses, each taken the morning after the one it belongs to. */
+  const logs = Array.from({ length: 11 }, (_, i) => ({
+    at: atTimeOfDay(addLocalDays(local(2026, 8, 28), i), "07:05"),
+  }));
+
+  it("credits every dose that was taken", () => {
+    const a = adherence(p, logs, start, local(2026, 9, 7, 7, 43));
+    expect(a.expected).toBe(11);
+    expect(a.taken).toBe(11);
+    expect(a.missed).toBe(0);
+    expect(a.rate).toBe(1);
+  });
+
+  it("still reports a real gap", () => {
+    // The same run with the fifth morning's dose never taken.
+    const withGap = logs.filter((_, i) => i !== 4);
+    const a = adherence(p, withGap, start, local(2026, 9, 7, 7, 43));
+    expect(a.expected).toBe(11);
+    expect(a.taken).toBe(10);
+    expect(a.missed).toBe(1);
+  });
+});
+
 describe("adherence matching, against a brute-force reference", () => {
   /**
-   * The original quadratic algorithm, kept here verbatim as the definition of
-   * correct. The optimised version must agree with it on every input, not just
-   * on the cases someone thought to write down.
+   * The rule stated plainly and slowly, as the definition of correct: each
+   * scheduled dose, in time order, takes the earliest log still unclaimed and
+   * inside its tolerance. The version in the app must agree with this on every
+   * input, not only on the cases someone thought to write down.
+   *
+   * This used to say "the nearest log" and to be the original algorithm kept
+   * verbatim. Nearest was the defect, so the oracle had to move with it. That
+   * is the risk in an oracle written by copying the implementation: it locks
+   * the behaviour in place, including the part that was wrong, and it agrees
+   * enthusiastically right up until somebody reads a real number and disagrees.
    */
   function referenceAdherence(
     protocol: Protocol,
@@ -920,20 +971,23 @@ describe("adherence matching, against a brute-force reference", () => {
     let taken = 0;
     let skipped = 0;
 
+    // Sorted by time, ties by original position, matching how the app orders
+    // them. Without this "earliest" would mean "earliest in the array".
+    const byTime = unmatched
+      .map((l, i) => ({ ...l, i }))
+      .sort((a, b) => a.at - b.at || a.i - b.i);
+
     for (const time of scheduled) {
       let bestIdx = -1;
-      let bestDist = Infinity;
-      for (let i = 0; i < unmatched.length; i++) {
+      for (let i = 0; i < byTime.length; i++) {
         if (used.has(i)) continue;
-        const dist = Math.abs(unmatched[i].at - time);
-        if (dist <= tolerance && dist < bestDist) {
-          bestDist = dist;
-          bestIdx = i;
-        }
+        if (Math.abs(byTime[i].at - time) > tolerance) continue;
+        bestIdx = i;
+        break;
       }
       if (bestIdx >= 0) {
         used.add(bestIdx);
-        if (unmatched[bestIdx].skipped) skipped++;
+        if (byTime[bestIdx].skipped) skipped++;
         else taken++;
       }
     }
