@@ -124,9 +124,10 @@ export default function CalculatorPage() {
         {/*
           Pictures rather than a list, because the question is literally which
           object is in your hand. The U-100 and U-40 groups the dropdown used
-          are gone with it: the scale is on every card, and the pair that
-          matters most is now told apart by a red mark rather than by which
-          heading it happened to sit under.
+          are gone with it: every card names its own scale, and the barrel it
+          draws is numbered 0 to 40 or 0 to 100 accordingly, which is the
+          difference the groups existed to point at. The warning below is
+          unchanged and is still where the 2.5x is spelled out.
         */}
         <SyringePicker value={syringeId} onChange={setSyringeId} className="mt-2" />
 
