@@ -321,3 +321,84 @@ does not have cannot be dropped by any bug, it was never there.
 the CSV read it. Old records know only a scale, so `syringeForLog` prefers this
 person's own default barrel when the scale matches, which is a better guess than
 the head of a list.
+
+## A schedule that is rewritten backwards, and the dose it invents
+
+Reported as a duplicate row. A dose at 07:00 was taken and logged, the schedule
+was moved to 22:30, and the next morning the compound appeared twice on Now: the
+correct 22:30 dose under Later today, and a row marked Overdue that read as the
+old 07:00 entry left behind.
+
+It was not that entry. It was yesterday, and it did not exist until the edit. A
+protocol stores one schedule, the current one, and past days are not recorded as
+events, they are recomputed by replaying that schedule over dates that have
+already been. So moving the time did not only change the future: yesterday
+stopped having had a 07:00 dose and started having had a 22:30 one, fifteen
+hours from the log that was meant to cover it.
+
+**The general shape is worth more than the fix.** Anything derived by replaying
+current configuration over past dates is a claim about the past made out of
+present state, and it is only as true as the assumption that the configuration
+never changed. The past has no way to object.
+
+Two smaller things came with it. **A card that shows a relative time hides which
+instant it means**, and "was due 9 hours ago" is exactly what let a retro-dated
+slot be mistaken for a different dose entirely; the report would have been much
+harder to diagnose without the arithmetic. And the honest answer to a slot with
+no evidence is **silence, not credit**: `slotIsKnowable` does not mark the dose
+taken, it declines to ask about it.
+
+## Nearest is not the right way to match a log to a dose
+
+The same report, second half and unrelated cause. Eleven doses scheduled at
+22:30, each taken the following morning at 07:05, nothing missed. Adherence read
+10 of 11.
+
+Each scheduled dose took the **nearest** unclaimed log. A log at 07:05 sits 8.5
+hours after the dose it belongs to and 15.5 hours before the next one, so the
+first dose took the *second* morning's log, that dose took the third, and the
+theft ran down the whole line until the last dose found nothing inside its
+tolerance.
+
+Nearest is the intuitive rule and it is wrong here. Both sides are sorted and a
+log is eligible for a contiguous run of doses, so handing each dose the
+**earliest** log still in reach is the standard greedy for this shape and leaves
+the most doses matched. It is also linear rather than quadratic, because logs
+are then consumed strictly left to right.
+
+**The oracle was part of the problem.** The property test compared the optimised
+matcher against a brute-force reference, and that reference had been written by
+copying the original algorithm verbatim. It therefore agreed enthusiastically
+with the defect for as long as it existed. A reference implementation is worth
+having, but it has to state the rule independently, or it only proves that two
+copies of the same idea agree.
+
+## A drawing that thins its own detail is worse than no drawing
+
+The picker offers the 0.3 mL barrel twice, once with half-unit marks and once
+with whole ones, and the marks are the only difference between the two options.
+Both syringe drawings had the same rule for a barrel too fine for its width:
+skip marks until the rest fit.
+
+That is silent, and it inverts the fact the picture exists to carry. The finer
+barrel crosses the threshold first, so it gets thinned and the blunter one does
+not, and the finer instrument is drawn with **fewer** marks than the blunt one
+beside it. A picture that is merely unclear is a nuisance. This one was
+confidently wrong.
+
+The rule is now to magnify: draw the first whole numbered divisions that fit, at
+true spacing, and say on the drawing that it is a stretch. `barrelTicks` in
+`src/lib/calc/barrel.ts` owns it for both syringes, and a test asserts the
+property the old rule broke.
+
+**A drawing computed in viewBox units is not computed in pixels.** The first
+version worked out spacing against a fixed viewBox of 232 while the card
+stretched it to about 300, so it magnified a barrel that had room to draw in
+full. Any judgement about what an eye can separate has to be made in the units
+the eye sees, which means the component has to be told the width it will really
+occupy rather than inferring one.
+
+The old fallback also hid a second bug for as long as it was never reached: it
+doubled the step, and on a barrel numbered every five a step of two became four,
+which never lands on five, so the marks meant to carry the numbers stopped being
+drawn at all.

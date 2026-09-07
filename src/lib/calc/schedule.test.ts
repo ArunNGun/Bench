@@ -16,6 +16,7 @@ import {
   scheduleTimes,
   scheduledDailyMcg,
   scheduledDoseMcg,
+  slotIsKnowable,
   startOfLocalDay,
   titrationStepAt,
   unloggedDoseTimes,
@@ -762,6 +763,83 @@ describe("unloggedDoseTimes", () => {
     logs = [];
     expect(rest(day(20))).toEqual([]);
   });
+
+  it("does not ask for a slot from before the schedule was moved", () => {
+    logs = [];
+    const moved = { ...twice, scheduleChangedAt: day(12) };
+    // The morning slot predates the edit and is nobody's missed dose. The
+    // evening one is on the far side of it and is still asked for.
+    expect(unloggedDoseTimes(moved, logs, day(6), local(2026, 9, 8, 23, 59))).toEqual([day(19)]);
+  });
+});
+
+/**
+ * The reported bug, rebuilt from the report.
+ *
+ * A daily dose at 07:00, taken and logged every morning. The time is moved to
+ * 22:30. The next morning the Now page showed the compound twice: the correct
+ * 22:30 dose under Later today, and a row marked Overdue which the reporter
+ * read as the old 07:00 entry left behind.
+ *
+ * It was not. Yesterday's 07:00 slot stopped existing the moment the schedule
+ * moved, and a 22:30 slot appeared in its place, fifteen hours from the log
+ * that was supposed to cover it. The app invented a dose after the fact and
+ * then reported it missed.
+ */
+describe("moving a schedule does not invent a missed dose", () => {
+  const start = local(2026, 8, 27, 7, 0);
+  const evening: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "ghk-cu",
+    name: "GHK-Cu",
+    active: true,
+    startedAt: start,
+    doseMcg: 2000,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timeOfDay: "22:30" },
+    titrationAutoAdvance: false,
+  };
+
+  const yesterdayMorning = local(2026, 9, 6, 7, 5);
+  const thisMorning = local(2026, 9, 7, 7, 43);
+  const movedThisMorning = { ...evening, scheduleChangedAt: local(2026, 9, 7, 7, 30) };
+
+  it("reproduces the report without the fix", () => {
+    const s = dueStatus(evening, thisMorning, { lastLoggedAt: yesterdayMorning });
+    expect(s.state).toBe("overdue");
+    // Yesterday at 22:30, which is the "was due 9 hours ago" on the card.
+    expect(s.at).toBe(local(2026, 9, 6, 22, 30));
+    expect(s.hoursAway).toBeCloseTo(-9.2, 1);
+  });
+
+  it("says nothing about a slot older than the change", () => {
+    const s = dueStatus(movedThisMorning, thisMorning, { lastLoggedAt: yesterdayMorning });
+    expect(s.state).toBe("upcoming");
+    expect(s.at).toBe(local(2026, 9, 7, 22, 30));
+  });
+
+  it("still reports a dose missed after the change", () => {
+    // Two days on, with nothing logged since. This one the app did watch
+    // happen, so it is entitled to say so.
+    const s = dueStatus(movedThisMorning, local(2026, 9, 9, 7, 0), {
+      lastLoggedAt: yesterdayMorning,
+    });
+    expect(s.state).toBe("overdue");
+    expect(s.at).toBe(local(2026, 9, 8, 22, 30));
+  });
+
+  it("clears itself once the first dose under the new time is logged", () => {
+    const tonight = local(2026, 9, 7, 22, 35);
+    const s = dueStatus(evening, local(2026, 9, 7, 22, 40), { lastLoggedAt: tonight });
+    expect(s.state).toBe("scheduled");
+  });
+
+  it("leaves a protocol that was never edited exactly as it was", () => {
+    const before = dueStatus(evening, local(2026, 9, 9, 7, 0), { lastLoggedAt: yesterdayMorning });
+    expect(before.state).toBe("overdue");
+    expect(slotIsKnowable(evening, 0)).toBe(true);
+  });
 });
 
 describe("logsForProtocol", () => {
@@ -816,11 +894,62 @@ describe("logsForProtocol", () => {
   });
 });
 
+/**
+ * The second half of the moved-schedule report, and independent of it.
+ *
+ * Eleven days of a dose scheduled at 22:30 and taken the following morning at
+ * 07:05, every single day, nothing missed. Adherence read 10 of 11.
+ */
+describe("adherence does not lose a dose to the log after it", () => {
+  const start = local(2026, 8, 27, 22, 30);
+  const p: Protocol = {
+    id: "p1",
+    profileId: "me",
+    peptideId: "ghk-cu",
+    name: "GHK-Cu",
+    active: true,
+    startedAt: start,
+    doseMcg: 2000,
+    route: "subcutaneous",
+    schedule: { kind: "daily", timeOfDay: "22:30" },
+    titrationAutoAdvance: false,
+  };
+
+  /** Eleven doses, each taken the morning after the one it belongs to. */
+  const logs = Array.from({ length: 11 }, (_, i) => ({
+    at: atTimeOfDay(addLocalDays(local(2026, 8, 28), i), "07:05"),
+  }));
+
+  it("credits every dose that was taken", () => {
+    const a = adherence(p, logs, start, local(2026, 9, 7, 7, 43));
+    expect(a.expected).toBe(11);
+    expect(a.taken).toBe(11);
+    expect(a.missed).toBe(0);
+    expect(a.rate).toBe(1);
+  });
+
+  it("still reports a real gap", () => {
+    // The same run with the fifth morning's dose never taken.
+    const withGap = logs.filter((_, i) => i !== 4);
+    const a = adherence(p, withGap, start, local(2026, 9, 7, 7, 43));
+    expect(a.expected).toBe(11);
+    expect(a.taken).toBe(10);
+    expect(a.missed).toBe(1);
+  });
+});
+
 describe("adherence matching, against a brute-force reference", () => {
   /**
-   * The original quadratic algorithm, kept here verbatim as the definition of
-   * correct. The optimised version must agree with it on every input, not just
-   * on the cases someone thought to write down.
+   * The rule stated plainly and slowly, as the definition of correct: each
+   * scheduled dose, in time order, takes the earliest log still unclaimed and
+   * inside its tolerance. The version in the app must agree with this on every
+   * input, not only on the cases someone thought to write down.
+   *
+   * This used to say "the nearest log" and to be the original algorithm kept
+   * verbatim. Nearest was the defect, so the oracle had to move with it. That
+   * is the risk in an oracle written by copying the implementation: it locks
+   * the behaviour in place, including the part that was wrong, and it agrees
+   * enthusiastically right up until somebody reads a real number and disagrees.
    */
   function referenceAdherence(
     protocol: Protocol,
@@ -842,20 +971,23 @@ describe("adherence matching, against a brute-force reference", () => {
     let taken = 0;
     let skipped = 0;
 
+    // Sorted by time, ties by original position, matching how the app orders
+    // them. Without this "earliest" would mean "earliest in the array".
+    const byTime = unmatched
+      .map((l, i) => ({ ...l, i }))
+      .sort((a, b) => a.at - b.at || a.i - b.i);
+
     for (const time of scheduled) {
       let bestIdx = -1;
-      let bestDist = Infinity;
-      for (let i = 0; i < unmatched.length; i++) {
+      for (let i = 0; i < byTime.length; i++) {
         if (used.has(i)) continue;
-        const dist = Math.abs(unmatched[i].at - time);
-        if (dist <= tolerance && dist < bestDist) {
-          bestDist = dist;
-          bestIdx = i;
-        }
+        if (Math.abs(byTime[i].at - time) > tolerance) continue;
+        bestIdx = i;
+        break;
       }
       if (bestIdx >= 0) {
         used.add(bestIdx);
-        if (unmatched[bestIdx].skipped) skipped++;
+        if (byTime[bestIdx].skipped) skipped++;
         else taken++;
       }
     }

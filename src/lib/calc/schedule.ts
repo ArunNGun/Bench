@@ -547,55 +547,53 @@ export function adherence(
   const unmatched = logs.filter((l) => l.at >= fromMs - tolerance && l.at <= toMs + tolerance);
 
   /*
-   * Greedy nearest matching, over a sliding window rather than the whole array.
+   * Each scheduled dose, in time order, takes the earliest log it can still
+   * reach. Not the nearest.
    *
-   * The obvious version compares every scheduled time against every log, which
-   * is fine for a month and quadratic for a history: two years of daily dosing
-   * is 730 scheduled times against 730 logs, half a million comparisons, and it
-   * measured at over 5 ms for three protocols.
+   * Nearest is the intuitive rule and it loses doses. Someone dosing daily at
+   * 22:30 who takes each one the following morning at 07:05 has a log 8.5 hours
+   * after each scheduled time and 15.5 hours before the next. Nearest gives the
+   * first scheduled dose the *second* morning's log, because it is closer, and
+   * the theft cascades down the whole run until the last scheduled dose finds
+   * nothing left inside its tolerance. Eleven doses taken, eleven doses
+   * scheduled, one reported missed. This was found in a real history.
    *
-   * Both sides are ordered in time and a log can only match within a fixed
-   * tolerance, so only a handful of logs are ever candidates for a given
-   * scheduled time. Walking a window over the sorted logs finds exactly the
-   * same candidate set the full scan would have accepted.
+   * Earliest cannot do that. Both sides are sorted, and every log is eligible
+   * for a contiguous run of scheduled times, so handing each dose the oldest
+   * log still in reach is the standard greedy for this shape and leaves the
+   * largest number of doses matched. A dose that was actually taken is never
+   * left uncredited because some other dose preferred its log.
    *
-   * The result is identical, including ties. The original scanned in array
-   * order and kept the first strictly-nearest, so equal distances resolved to
-   * the lowest original index; that rule is preserved explicitly below.
+   * It is also cheaper. Logs are consumed strictly left to right, so the window
+   * only ever moves forwards and the whole pass is linear. The version this
+   * replaces compared every scheduled time against every log inside the
+   * tolerance, which measured at over 5 ms across three protocols on a two year
+   * history.
+   *
+   * The consequence to be honest about: a log matches the earliest dose it can
+   * reach rather than the one it is closest to, so with 36 hours of tolerance
+   * it may be counted against a dose it was not really taken for. The totals
+   * are what this function reports, and those are now right more often. Which
+   * particular dose a log is credited to is not reported anywhere.
    */
   const order = unmatched
     .map((l, i) => ({ at: l.at, skipped: l.skipped, i }))
     .sort((a, b) => a.at - b.at || a.i - b.i);
 
-  const used = new Set<number>();
   let taken = 0;
   let skipped = 0;
   let windowStart = 0;
 
   for (const time of scheduled) {
-    // Drop entries that can no longer reach this or any later scheduled time.
+    // Entries that can no longer reach this or any later scheduled time are
+    // behind us for good, and so is anything already spoken for, because doses
+    // claim them in the same order they are sorted in.
     while (windowStart < order.length && order[windowStart].at < time - tolerance) windowStart++;
 
-    let bestIdx = -1;
-    let bestDist = Infinity;
-
-    for (let w = windowStart; w < order.length; w++) {
-      const entry = order[w];
-      if (entry.at > time + tolerance) break;
-      if (used.has(entry.i)) continue;
-
-      const dist = Math.abs(entry.at - time);
-      // Strictly nearer wins; on a tie the lower original index wins, which is
-      // what scanning the unsorted array in order used to do.
-      if (dist < bestDist || (dist === bestDist && bestIdx >= 0 && entry.i < bestIdx)) {
-        bestDist = dist;
-        bestIdx = entry.i;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      used.add(bestIdx);
-      if (unmatched[bestIdx].skipped) skipped++;
+    const candidate = order[windowStart];
+    if (candidate && candidate.at <= time + tolerance) {
+      windowStart++;
+      if (candidate.skipped) skipped++;
       else taken++;
     }
   }
@@ -634,10 +632,31 @@ export function unloggedDoseTimes(
   const tolerance = toleranceHours * 3_600_000;
 
   return protocolDoseTimesBetween(protocol, fromMs, toMs).filter((at) => {
+    // A slot from before the schedule moved is not a dose anybody was ever
+    // asked for, so it is not one to ask for now. See `slotIsKnowable`.
+    if (!slotIsKnowable(protocol, at)) return false;
+
     const before = protocolPreviousDoseTime(protocol, at - 1);
     const early = earlyWindowMs(before != null ? at - before : null, tolerance);
     return !logs.some((l) => !l.skipped && l.at >= at - early && l.at <= at);
   });
+}
+
+/**
+ * Whether the app has any standing to say a dose at this moment was missed.
+ *
+ * It does not, for anything before the schedule was last moved. Past days are
+ * recomputed from the current schedule rather than recorded, so a slot earlier
+ * than `scheduleChangedAt` is one the app invented after the fact: it does not
+ * know what the plan said that day, only what it says now. Reporting a miss
+ * there is an accusation built on a slot that did not exist when the day
+ * happened.
+ *
+ * Silence rather than credit. The dose is not marked taken, it is simply not
+ * asked about, which is the honest position when the evidence is gone.
+ */
+export function slotIsKnowable(protocol: Protocol, atMs: number): boolean {
+  return protocol.scheduleChangedAt == null || atMs >= protocol.scheduleChangedAt;
 }
 
 export type DueState = "overdue" | "due-now" | "upcoming" | "scheduled" | "none";
@@ -723,7 +742,12 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
   const early = earlyWindowMs(prev != null && before != null ? prev - before : null, tolerance);
   const prevCovered = prev != null && lastLoggedAt != null && lastLoggedAt >= prev - early;
 
-  if (prev != null && !prevCovered && (protocol.endedAt == null || prev <= protocol.endedAt)) {
+  if (
+    prev != null &&
+    !prevCovered &&
+    slotIsKnowable(protocol, prev) &&
+    (protocol.endedAt == null || prev <= protocol.endedAt)
+  ) {
     const hoursAway = (prev - nowMs) / 3_600_000;
     if (nowMs - prev <= grace) {
       return { state: "due-now", at: prev, hoursAway, label: "Due now" };

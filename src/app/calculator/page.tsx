@@ -4,6 +4,7 @@ import { useLang } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Check } from "lucide-react";
 import { Syringe } from "@/components/Syringe";
+import { SyringePicker } from "@/components/SyringePicker";
 import {
   Badge,
   Callout,
@@ -120,26 +121,15 @@ export default function CalculatorPage() {
       {/* Scale choice comes first, because everything downstream depends on it. */}
       <Card className="p-4">
         <SectionLabel>{t("calc_which_syringe")}</SectionLabel>
-        <Select
-          value={syringeId}
-          onChange={(e) => setSyringeId(e.target.value)}
-          aria-label="Syringe type"
-        >
-          <optgroup label="U-100, 100 marks to 1 mL">
-            {SYRINGES.filter((s) => s.scale === "U100").map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="U-40, 40 marks to 1 mL (veterinary)">
-            {SYRINGES.filter((s) => s.scale === "U40").map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </optgroup>
-        </Select>
+        {/*
+          Pictures rather than a list, because the question is literally which
+          object is in your hand. The U-100 and U-40 groups the dropdown used
+          are gone with it: every card names its own scale, and the barrel it
+          draws is numbered 0 to 40 or 0 to 100 accordingly, which is the
+          difference the groups existed to point at. The warning below is
+          unchanged and is still where the 2.5x is spelled out.
+        */}
+        <SyringePicker value={syringeId} onChange={setSyringeId} className="mt-2" />
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge tone={syringe.scale === "U40" ? "rose" : "sky"}>
