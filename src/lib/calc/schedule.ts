@@ -634,10 +634,31 @@ export function unloggedDoseTimes(
   const tolerance = toleranceHours * 3_600_000;
 
   return protocolDoseTimesBetween(protocol, fromMs, toMs).filter((at) => {
+    // A slot from before the schedule moved is not a dose anybody was ever
+    // asked for, so it is not one to ask for now. See `slotIsKnowable`.
+    if (!slotIsKnowable(protocol, at)) return false;
+
     const before = protocolPreviousDoseTime(protocol, at - 1);
     const early = earlyWindowMs(before != null ? at - before : null, tolerance);
     return !logs.some((l) => !l.skipped && l.at >= at - early && l.at <= at);
   });
+}
+
+/**
+ * Whether the app has any standing to say a dose at this moment was missed.
+ *
+ * It does not, for anything before the schedule was last moved. Past days are
+ * recomputed from the current schedule rather than recorded, so a slot earlier
+ * than `scheduleChangedAt` is one the app invented after the fact: it does not
+ * know what the plan said that day, only what it says now. Reporting a miss
+ * there is an accusation built on a slot that did not exist when the day
+ * happened.
+ *
+ * Silence rather than credit. The dose is not marked taken, it is simply not
+ * asked about, which is the honest position when the evidence is gone.
+ */
+export function slotIsKnowable(protocol: Protocol, atMs: number): boolean {
+  return protocol.scheduleChangedAt == null || atMs >= protocol.scheduleChangedAt;
 }
 
 export type DueState = "overdue" | "due-now" | "upcoming" | "scheduled" | "none";
@@ -723,7 +744,12 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
   const early = earlyWindowMs(prev != null && before != null ? prev - before : null, tolerance);
   const prevCovered = prev != null && lastLoggedAt != null && lastLoggedAt >= prev - early;
 
-  if (prev != null && !prevCovered && (protocol.endedAt == null || prev <= protocol.endedAt)) {
+  if (
+    prev != null &&
+    !prevCovered &&
+    slotIsKnowable(protocol, prev) &&
+    (protocol.endedAt == null || prev <= protocol.endedAt)
+  ) {
     const hoursAway = (prev - nowMs) / 3_600_000;
     if (nowMs - prev <= grace) {
       return { state: "due-now", at: prev, hoursAway, label: "Due now" };

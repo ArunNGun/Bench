@@ -350,6 +350,25 @@ export interface Protocol {
   doseMcg: number;
   route: Route;
   schedule: Schedule;
+  /**
+   * When the timing of this protocol was last moved.
+   *
+   * A protocol stores one schedule, the current one. Past days are not recorded
+   * as events, they are recomputed by replaying that schedule backwards over
+   * the calendar, so moving a dose from 07:00 to 22:30 does not only change the
+   * future: yesterday stops having had a 07:00 dose and starts having had a
+   * 22:30 one. Yesterday's log, taken at seven, is then fifteen hours from the
+   * only slot it could belong to, and the day reads as missed.
+   *
+   * This is not a schedule history, which would be the complete answer and a
+   * much larger change. It is the one fact needed to stop the app asserting
+   * something it cannot know: for any slot before this moment, what the
+   * schedule said at the time is unrecorded, so nothing is claimed about it.
+   *
+   * Absent on every protocol made before this existed, and absent means "never
+   * moved", which is the truth for all of them.
+   */
+  scheduleChangedAt?: number;
   /** Copied from a titration plan, or built by hand. */
   titration?: TitrationStep[];
   /** Index into titration steps, advanced manually or by date. */

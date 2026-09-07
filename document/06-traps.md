@@ -321,3 +321,29 @@ does not have cannot be dropped by any bug, it was never there.
 the CSV read it. Old records know only a scale, so `syringeForLog` prefers this
 person's own default barrel when the scale matches, which is a better guess than
 the head of a list.
+
+## A schedule that is rewritten backwards, and the dose it invents
+
+Reported as a duplicate row. A dose at 07:00 was taken and logged, the schedule
+was moved to 22:30, and the next morning the compound appeared twice on Now: the
+correct 22:30 dose under Later today, and a row marked Overdue that read as the
+old 07:00 entry left behind.
+
+It was not that entry. It was yesterday, and it did not exist until the edit. A
+protocol stores one schedule, the current one, and past days are not recorded as
+events, they are recomputed by replaying that schedule over dates that have
+already been. So moving the time did not only change the future: yesterday
+stopped having had a 07:00 dose and started having had a 22:30 one, fifteen
+hours from the log that was meant to cover it.
+
+**The general shape is worth more than the fix.** Anything derived by replaying
+current configuration over past dates is a claim about the past made out of
+present state, and it is only as true as the assumption that the configuration
+never changed. The past has no way to object.
+
+Two smaller things came with it. **A card that shows a relative time hides which
+instant it means**, and "was due 9 hours ago" is exactly what let a retro-dated
+slot be mistaken for a different dose entirely; the report would have been much
+harder to diagnose without the arithmetic. And the honest answer to a slot with
+no evidence is **silence, not credit**: `slotIsKnowable` does not mark the dose
+taken, it declines to ask about it.
