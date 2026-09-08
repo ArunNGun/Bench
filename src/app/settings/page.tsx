@@ -22,6 +22,7 @@ import {
   NumberInput,
   Card,
   SectionLabel,
+  Rich,
   Select,
 } from "@/components/ui";
 import { useStore, useProfileData } from "@/lib/store";
@@ -73,7 +74,7 @@ export default function SettingsPage() {
     // Recording this is what lets the backup reminder go quiet, without it the
     // app cannot tell an exported history from an unprotected one.
     updateSettings({ lastBackupAt: Date.now() });
-    setMessage({ tone: "info", text: "Exported. Keep the file somewhere you control." });
+    setMessage({ tone: "info", text: t("settings_exported_note") });
   }
 
   /** CSV of the dose history, for a spreadsheet or to hand to a clinician. */
@@ -87,11 +88,11 @@ export default function SettingsPage() {
     a.download = `bench-doses-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    setMessage({ tone: "info", text: `Exported ${rows.length} doses as CSV.` });
+    setMessage({ tone: "info", text: t("settings_exported_csv", { n: rows.length }) });
   }
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -128,8 +129,8 @@ export default function SettingsPage() {
         <SectionLabel>{t("settings_defaults")}</SectionLabel>
 
         <Field
-          label="Usual syringe"
-          hint="Used to prefill the calculator and the log sheet. You can always change it per dose."
+          label={t("settings_usual_syringe")}
+          hint={t("settings_usual_syringe_hint")}
         >
           <SyringeField
             value={settings.defaultSyringeId ?? ""}
@@ -139,10 +140,10 @@ export default function SettingsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Currency"
-            hint={`Vial costs and per-dose prices show in this. Example: ${formatMoney(
-              15000,
-              settings.currency ?? DEFAULT_SETTINGS.currency)}`}
+            label={t("settings_currency")}
+            hint={t("settings_currency_hint", {
+              example: formatMoney(15000, settings.currency ?? DEFAULT_SETTINGS.currency),
+            })}
           >
             <Select
               value={settings.currency ?? DEFAULT_SETTINGS.currency}
@@ -156,48 +157,48 @@ export default function SettingsPage() {
             </Select>
           </Field>
 
-          <Field label="Weight in" hint="Stored in kilograms either way, so switching is safe.">
+          <Field label={t("settings_weight_in")} hint={t("settings_weight_hint")}>
             <Select
               value={settings.weightUnit ?? DEFAULT_SETTINGS.weightUnit}
               onChange={(e) => updateSettings({ weightUnit: e.target.value as WeightUnit })}
             >
-              <option value="kg">Kilograms</option>
-              <option value="lb">Pounds</option>
+              <option value="kg">{t("settings_kilograms")}</option>
+              <option value="lb">{t("settings_pounds")}</option>
             </Select>
           </Field>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Warn about vial dates" hint="Days before the beyond-use date.">
+          <Field label={t("settings_warn_vial_dates")} hint={t("settings_warn_vial_hint")}>
             <NumberInput
               value={settings.budWarningDays}
               min={0}
               max={28}
-              suffix="days"
+              suffix={t("days")}
               onChange={(e) => updateSettings({ budWarningDays: Number(e.target.value) })}
             />
           </Field>
-          <Field label="Low stock at" hint="Doses remaining before a warning appears.">
+          <Field label={t("settings_low_stock_at")} hint={t("settings_low_stock_hint")}>
             <NumberInput
               value={settings.lowStockDoses}
               min={0}
               max={60}
-              suffix="doses"
+              suffix={t("settings_doses_suffix")}
               onChange={(e) => updateSettings({ lowStockDoses: Number(e.target.value) })}
             />
           </Field>
         </div>
 
         <Field
-          label="Group identical vials on Stock"
-          hint="Sealed vials of the same compound and strength share one row, with their doses and value added up. Open vials stay separate, because each has its own concentration and use-by date."
+          label={t("settings_group_vials")}
+          hint={t("settings_group_vials_desc")}
         >
           <Select
             value={settings.groupIdenticalVials ? "on" : "off"}
             onChange={(e) => updateSettings({ groupIdenticalVials: e.target.value === "on" })}
           >
-            <option value="off">One row per vial</option>
-            <option value="on">One row per compound and strength</option>
+            <option value="off">{t("settings_one_row_vial")}</option>
+            <option value="on">{t("settings_one_row_compound")}</option>
           </Select>
         </Field>
       </Card>
@@ -205,65 +206,60 @@ export default function SettingsPage() {
       <Card className="space-y-4 p-4">
         <SectionLabel>{t("settings_your_data")}</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
-          Everything lives in this browser on this device. Unless you set up sync below, there is no
-          account and no server, so nothing is uploaded and nothing is backed up for you. Clearing
-          your browser data will erase it, export regularly if you want to keep it. The JSON file
-          restores everything; the CSV is just the dose history, for a spreadsheet or to hand to a
-          clinician.
+          {t("settings_data_note")}
         </p>
         <p className="text-[13px] leading-relaxed text-[var(--faint)]">
-          The same JSON export is on the Backup button in the header, from any screen, so you do not
-          have to come here for it.
+          {t("settings_backup_button_note")}
         </p>
 
         <div className="flex flex-wrap gap-2.5">
           <Button onClick={download}>
-            <Download size={15} /> Export to a file
+            <Download size={15} /> {t("settings_export_file")}
           </Button>
           <Button onClick={downloadCsv} disabled={!logs.length}>
-            <Sheet size={15} /> Doses as CSV
+            <Sheet size={15} /> {t("settings_doses_csv")}
           </Button>
           <ButtonLink href="/report">
-            <Printer size={15} /> Report for a clinician
+            <Printer size={15} /> {t("settings_report_clinician")}
           </ButtonLink>
         </div>
         <p className="text-[12.5px] text-[var(--muted)]">
-          To bring data back in, your own export, or a file from another app, use{" "}
-          <strong>Import from another app</strong> above.
+          <Rich text={t("settings_bring_data_back")} />
         </p>
 
         <p className="text-[12.5px] text-[var(--faint)]">
-          Currently holding {logs.length} dose{logs.length === 1 ? "" : "s"}, {protocols.length}{" "}
-          protocol{protocols.length === 1 ? "" : "s"} and {vials.length} vial
-          {vials.length === 1 ? "" : "s"}.
+          {t("settings_currently_holding", {
+            doses: t("count_doses", { n: logs.length }),
+            protocols: t("count_protocols", { n: protocols.length }),
+            vials: t("count_vials", { n: vials.length }),
+          })}
         </p>
       </Card>
 
       <Card className="space-y-3 border-[var(--rose)]/35 p-4">
         <SectionLabel>{t("settings_erase")}</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
-          Deletes every protocol, dose and vial on this device. There is no undo and no copy
-          anywhere else, export first if there is any chance you want this back.
+          {t("settings_erase_desc")}
         </p>
         {confirmingReset ? (
           <div className="flex flex-wrap gap-2.5">
             <Button variant="ghost" onClick={() => setConfirmingReset(false)}>
-              Keep my data
+              {t("settings_keep_my_data")}
             </Button>
             <Button
               variant="danger"
               onClick={() => {
                 resetAll();
                 setConfirmingReset(false);
-                setMessage({ tone: "danger", text: "Everything has been erased." });
+                setMessage({ tone: "danger", text: t("settings_erased") });
               }}
             >
-              Yes, erase all {logs.length + protocols.length + vials.length} records
+              {t("settings_erase_confirm", { n: logs.length + protocols.length + vials.length })}
             </Button>
           </div>
         ) : (
           <Button variant="danger" onClick={() => setConfirmingReset(true)}>
-            Erase everything
+            {t("settings_erase")}
           </Button>
         )}
       </Card>
@@ -277,27 +273,21 @@ export default function SettingsPage() {
               href="/about"
               className="press rounded-[var(--r-pill)] bg-[var(--sunken)] px-2.5 py-1 text-[12px] font-bold text-[var(--ink)]"
             >
-              About Bench
+              {t("about_title")}
             </Link>
           }
         >
-          What this app is, and is not
+          {t("settings_what_it_is")}
         </SectionLabel>
         <div className="space-y-2.5 text-[13px] leading-relaxed text-[var(--muted)]">
           <p>
-            This is a personal record-keeping tool. It is not medical advice, not a prescription, and
-            not a recommendation to use any compound in it.
+            {t("settings_about_1")}
           </p>
           <p>
-            The reconstitution arithmetic is exact and covered by tests. What it cannot verify is
-            whether a vial contains what its label claims. Most compounds in the library are not
-            approved medicines anywhere, and material sold for research use has no regulated
-            identity, purity, sterility or endotoxin standard behind it.
+            {t("settings_about_2")}
           </p>
           <p>
-            Dose figures are tagged by where they came from. An approved label and a community
-            convention are both shown, but they are not the same kind of information and the app
-            never presents them as though they were.
+            {t("settings_about_3")}
           </p>
         </div>
       </Card>
@@ -329,8 +319,7 @@ function Profiles() {
     <Card className="space-y-4 p-4">
       <SectionLabel>{t("settings_profiles")}</SectionLabel>
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        Each profile keeps its own protocols, doses and stock. Nothing is shared between them, and
-        a dose can only ever draw from the stock of the profile that logged it.
+        {t("settings_profiles_note")}
       </p>
 
       <div className="space-y-2.5">
@@ -356,15 +345,15 @@ function Profiles() {
                 <input
                   value={p.name}
                   onChange={(e) => updateProfile(p.id, { name: e.target.value })}
-                  aria-label={`Name for ${p.name}`}
+                  aria-label={t("settings_name_for", { name: p.name })}
                   className="min-w-28 flex-1 rounded-[var(--r-btn)] border border-transparent bg-transparent px-2 py-1.5 text-[15px] font-semibold text-[var(--ink)] hover:border-[var(--line)] focus:border-[var(--mint)] focus:bg-[var(--card)] focus:outline-none"
                 />
 
                 {isActive ? (
-                  <Badge tone={p.tone}>showing</Badge>
+                  <Badge tone={p.tone}>{t("settings_showing")}</Badge>
                 ) : (
                   <Button variant="soft" onClick={() => switchProfile(p.id)} className="py-2 text-[13px]">
-                    Switch to
+                    {t("settings_switch_to")}
                   </Button>
                 )}
 
@@ -372,7 +361,7 @@ function Profiles() {
                   <button
                     type="button"
                     onClick={() => setConfirming(confirming === p.id ? null : p.id)}
-                    aria-label={`Delete ${p.name}`}
+                    aria-label={t("plan_delete_named", { name: p.name })}
                     className="press p-2 text-[var(--faint)] hover:text-[var(--rose)]"
                   >
                     <Trash2 size={16} />
@@ -381,7 +370,7 @@ function Profiles() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-end gap-3">
-                <Field label="Body weight" className="w-36">
+                <Field label={t("settings_body_weight")} className="w-36">
                   <NumberInput
                     // Rounded on the way out so that converting back and forth
                     // between the two units cannot leave 79.99999999 in the box
@@ -407,7 +396,7 @@ function Profiles() {
                     <button
                       key={tone}
                       type="button"
-                      aria-label={`Colour ${tone}`}
+                      aria-label={t("settings_colour", { tone })}
                       aria-pressed={p.tone === tone}
                       onClick={() => updateProfile(p.id, { tone })}
                       className="press h-6 w-6 rounded-[var(--r-pill)]"
@@ -421,27 +410,29 @@ function Profiles() {
                 </div>
 
                 <p className="ml-auto pb-2 text-[12px] text-[var(--muted)]">
-                  {counts.protocols} protocol{counts.protocols === 1 ? "" : "s"} · {counts.doses}{" "}
-                  dose{counts.doses === 1 ? "" : "s"}
+                  {t("count_protocols", { n: counts.protocols })} ·{" "}
+                  {t("count_doses", { n: counts.doses })}
                 </p>
               </div>
 
               <p className="mt-1.5 text-[11.5px] text-[var(--faint)]">
                 {p.weightKg
-                  ? "Doses can be shown per kilogram for this profile."
-                  : "Add a weight to see doses in mcg/kg."}
+                  ? t("settings_weight_set")
+                  : t("settings_weight_unset")}
               </p>
 
               {confirming === p.id && (
                 <div className="mt-3 rounded-[var(--r-inner)] bg-[var(--rose-soft)] p-3">
                   <p className="text-[13px] leading-relaxed" style={{ color: "var(--rose-ink)" }}>
-                    Deleting {p.name} also deletes their {counts.protocols} protocol
-                    {counts.protocols === 1 ? "" : "s"} and {counts.doses} logged dose
-                    {counts.doses === 1 ? "" : "s"}. This cannot be undone.
+                    {t("settings_delete_profile_confirm", {
+                      name: p.name,
+                      protocols: t("count_protocols", { n: counts.protocols }),
+                      doses: t("count_doses", { n: counts.doses }),
+                    })}
                   </p>
                   <div className="mt-2.5 flex gap-2">
                     <Button variant="soft" onClick={() => setConfirming(null)}>
-                      Keep
+                      {t("keep")}
                     </Button>
                     <Button
                       variant="danger"
@@ -450,7 +441,7 @@ function Profiles() {
                         setConfirming(null);
                       }}
                     >
-                      Delete {p.name}
+                      {t("plan_delete_named", { name: p.name })}
                     </Button>
                   </div>
                 </div>
@@ -529,9 +520,14 @@ function Backups() {
       }
       importData(parsed);
       setNote(
-        `Restored from ${name}: ${parsed.logs.length} doses, ${parsed.protocols?.length ?? 0} protocols, ${parsed.vials?.length ?? 0} vials.`);
+        t("settings_restored_from", {
+          name,
+          doses: t("count_doses", { n: parsed.logs.length }),
+          protocols: t("count_protocols", { n: parsed.protocols?.length ?? 0 }),
+          vials: t("count_vials", { n: parsed.vials?.length ?? 0 }),
+        }));
     } catch {
-      setNote("That backup could not be read as JSON.");
+      setNote(t("settings_backup_unreadable"));
     } finally {
       setConfirming(null);
       setBusy(false);
@@ -543,24 +539,19 @@ function Backups() {
       <SectionLabel>{t("settings_backups")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        Writes a full copy into <strong>Documents/Bench</strong> on this device, keeping the most
-        recent few. Nothing leaves the phone. It is a second copy in a folder you can reach from a
-        file manager rather than a cloud sync, so it survives clearing the app&apos;s data but not losing the
-        device. Copy one somewhere else occasionally if that matters to you.
+        <Rich text={t("settings_backups_desc")} />
       </p>
 
       {available === false && (
         <Callout tone="info">
-          A web page cannot write to a folder on its own, so this runs in the Android app. On the web
-          the copy has to be saved by hand: the <strong>Backup</strong> button in the header does it
-          from any screen, and <strong>Export to a file</strong> below does the same.
+          <Rich text={t("settings_backups_web", { export: t("settings_export_file") })} />
         </Callout>
       )}
 
       {available && (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Take one" hint="Every so often, at app start.">
+            <Field label={t("settings_take_one")} hint={t("settings_take_one_hint")}>
               <Select
                 value={settings.backupEnabled ? String(settings.backupIntervalHours) : "off"}
                 onChange={(e) =>
@@ -572,26 +563,26 @@ function Backups() {
                       })
                 }
               >
-                <option value="off">Never</option>
-                <option value="6">Every 6 hours</option>
-                <option value="24">Daily</option>
-                <option value="168">Weekly</option>
+                <option value="off">{t("reminders_never")}</option>
+                <option value="6">{t("settings_every_6h")}</option>
+                <option value="24">{t("plan_daily")}</option>
+                <option value="168">{t("plan_weekly")}</option>
               </Select>
             </Field>
 
-            <Field label="Keep" hint="Oldest goes when full.">
+            <Field label={t("keep")} hint={t("settings_keep_hint")}>
               <NumberInput
                 value={settings.backupKeep}
                 min={1}
                 max={50}
-                suffix="copies"
+                suffix={t("settings_copies")}
                 onChange={(e) =>
                   updateSettings({ backupKeep: Math.max(1, Number(e.target.value) || 1) })
                 }
               />
             </Field>
 
-            <Field label="Last backup">
+            <Field label={t("settings_last_backup")}>
               <div className="rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3.5 py-3 text-[14px] text-[var(--muted)]">
                 {settings.lastBackupAt ? relativeTime(settings.lastBackupAt) : "Never"}
               </div>
@@ -604,8 +595,8 @@ function Backups() {
             </Button>
             <span className="text-[12.5px] text-[var(--muted)]">
               {files.length
-                ? `${files.length} backup${files.length === 1 ? "" : "s"} in Documents/Bench.`
-                : "No backups yet."}
+                ? t("settings_backups_count", { n: files.length })
+                : t("settings_no_backups")}
             </span>
           </div>
 
@@ -628,23 +619,21 @@ function Backups() {
                       onClick={() => setConfirming(confirming === f.name ? null : f.name)}
                       className="py-2 text-[13px]"
                     >
-                      <RotateCcw size={14} /> Restore
+                      <RotateCcw size={14} /> {t("settings_restore")}
                     </Button>
                   </div>
 
                   {confirming === f.name && (
                     <div className="mt-2 rounded-[var(--r-inner)] bg-[var(--rose-soft)] p-3">
                       <p className="text-[13px] leading-relaxed" style={{ color: "var(--rose-ink)" }}>
-                        Restoring replaces everything currently in the app with the contents of this
-                        file. Anything logged since {formatDate(f.at)} will be gone. There is no undo,
-                        so take a backup now first if you are unsure.
+                        {t("settings_restore_confirm", { date: formatDate(f.at) })}
                       </p>
                       <div className="mt-2.5 flex flex-wrap gap-2">
                         <Button variant="soft" onClick={() => setConfirming(null)}>
-                          Keep what I have
+                          {t("settings_keep_what_i_have")}
                         </Button>
                         <Button variant="danger" disabled={busy} onClick={() => restore(f.name)}>
-                          Replace everything with this
+                          {t("settings_replace_all")}
                         </Button>
                       </div>
                     </div>
@@ -739,24 +728,20 @@ function HealthConnect() {
       <SectionLabel>{t("settings_health_connect")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        Reads weight from Android Health so a reading off your scale shows up here, and prefills the
-        weight field with your most recent one. It is <strong>one-way</strong>: nothing this app holds
-        is ever written back, and it only asks for read access, so nothing here can alter what your
-        scale or Health Connect recorded. A reading you typed just before your scale synced is matched
-        to it rather than duplicated.
+        <Rich text={t("settings_health_desc")} />
       </p>
 
       <Callout tone={connected ? "info" : "warn"}>
-        {state === "checking" ? "Checking…" : AVAILABILITY_MESSAGE[state]}
+        {state === "checking" ? t("settings_checking") : AVAILABILITY_MESSAGE[state]}
       </Callout>
 
       {askable && (
         <div className="flex flex-wrap items-center gap-2.5">
           <Button variant="primary" onClick={connect} disabled={busy}>
-            <Activity size={15} /> {busy ? "Waiting…" : "Allow reading weight"}
+            <Activity size={15} /> {busy ? t("settings_waiting") : t("settings_allow_weight")}
           </Button>
           <Button variant="ghost" onClick={openHealthSettings}>
-            <ExternalLink size={15} /> Open Health Connect
+            <ExternalLink size={15} /> {t("settings_open_health_connect")}
           </Button>
         </div>
       )}
@@ -768,16 +753,15 @@ function HealthConnect() {
             {busy ? "Syncing…" : "Sync now"}
           </Button>
           <Button variant="ghost" onClick={openHealthSettings}>
-            <ExternalLink size={15} /> Open Health Connect
+            <ExternalLink size={15} /> {t("settings_open_health_connect")}
           </Button>
-          <span className="text-[12.5px] text-[var(--muted)]">Read-only, nothing is sent back.</span>
+          <span className="text-[12.5px] text-[var(--muted)]">{t("settings_read_only")}</span>
         </div>
       )}
 
       {connected && (
         <p className="text-[12px] leading-relaxed text-[var(--faint)]">
-          Health Connect will not hand back readings older than about 30 days, so a first sync brings
-          in the last month rather than your whole history.
+          {t("settings_health_30_days")}
         </p>
       )}
 
