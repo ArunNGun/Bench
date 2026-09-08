@@ -8,6 +8,7 @@ import { findPeptide, useProfileData, useStore } from "@/lib/store";
 import { latestResult, labTrend, missingMarkerIds, trackedMarkerIds, verdictFor } from "@/lib/calc/labs";
 import { findMarker } from "@/lib/data/labs";
 import { formatDate, trim } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 const SHOWN = 4;
 
@@ -18,6 +19,7 @@ const SHOWN = 4;
  * that the compounds currently running make worth checking.
  */
 export function LabsCard() {
+  const { t } = useLang();
   const { labs, protocols } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
 
@@ -47,11 +49,12 @@ export function LabsCard() {
             href="/labs"
             className="press flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--mint-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--mint-ink)]"
           >
-            {labs.length ? "All results" : "Add results"} <ArrowRight size={13} strokeWidth={2.6} />
+            {labs.length ? t("labs_card_all_results") : t("labs_card_add_results")}{" "}
+            <ArrowRight size={13} strokeWidth={2.6} />
           </Link>
         }
       >
-        Bloodwork
+        {t("labs_card_title")}
       </SectionLabel>
 
       {tracked.length > 0 && (
@@ -69,7 +72,7 @@ export function LabsCard() {
         >
           <Droplet size={15} strokeWidth={2.4} className="mt-0.5 shrink-0" />
           <span>
-            Worth checking for what you are running:{" "}
+            {t("labs_card_worth_checking")}{" "}
             <strong>{missing.map((id) => findMarker(id)?.name ?? id).join(", ")}</strong>.
           </span>
         </div>

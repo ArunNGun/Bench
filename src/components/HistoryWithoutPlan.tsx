@@ -7,6 +7,7 @@ import { findPeptide, useProfileData, useStore } from "@/lib/store";
 import { inferAllProtocols, type InferredProtocol } from "@/lib/calc/infer";
 import { formatDate, formatDose } from "@/lib/format";
 import { INJECTION_SITES } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 /**
  * What the Now page shows when there are doses on record but no protocol.
@@ -19,6 +20,7 @@ import { INJECTION_SITES } from "@/lib/types";
  * So: show the history, and offer to reconstruct the plan from it.
  */
 export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
+  const { t } = useLang();
   const { logs } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const addProtocol = useStore((s) => s.addProtocol);
@@ -38,16 +40,14 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
   if (!logs.length) {
     return (
       <EmptyState
-        title="Nothing on the bench yet"
+        title={t("hwp_empty_title")}
         action={
           <ButtonLink href="/plan" variant="primary">
-            Set up a protocol
+            {t("hwp_empty_action")}
           </ButtonLink>
         }
       >
-        Add a protocol and this page becomes your at-a-glance view: what is due, what is still
-        circulating, and how much you have left in stock. Already tracking elsewhere? Import a CSV
-        from Settings and your history comes with you.
+        {t("hwp_empty_body")}
       </EmptyState>
     );
   }
@@ -72,11 +72,9 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
   return (
     <div className="space-y-5">
       <Card className="space-y-4 p-4">
-        <SectionLabel>Your history is here, the plan is not</SectionLabel>
+        <SectionLabel>{t("hwp_title")}</SectionLabel>
         <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-          {logs.length} dose{logs.length === 1 ? "" : "s"} on record and no protocol set up, so
-          nothing shows as due and the medication curve has nothing to project forward. Here is what
-          your history looks like it was following, check it and accept, or set one up by hand.
+          {t("hwp_body", { doses: t("count_doses", { n: logs.length }) })}
         </p>
 
         {suggestions.map((s) => {
@@ -94,8 +92,8 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
                 <Sparkles size={15} strokeWidth={2.4} style={{ color: "var(--mint)" }} />
                 <span className="text-[14.5px] font-bold text-[var(--ink)]">{s.peptideName}</span>
                 {s.confidence === "rough" && (
-                  <Badge tone="tangerine" title="The gaps between your doses vary, so the schedule is a guess">
-                    worth checking
+                  <Badge tone="tangerine" title={t("hwp_rough_title")}>
+                    {t("hwp_worth_checking")}
                   </Badge>
                 )}
               </div>
@@ -103,7 +101,10 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
               <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">{s.summary}</p>
 
               <p className="mt-1 text-[11.5px] text-[var(--faint)]">
-                Starting {formatDate(s.startedAt)}, last dose {formatDate(s.lastAt)}
+                {t("hwp_span", {
+                  from: formatDate(s.startedAt),
+                  last: formatDate(s.lastAt),
+                })}
                 {s.sites.length
                   ? ` · ${s.sites.map((id) => INJECTION_SITES.find((x) => x.id === id)?.label ?? id).join(", ")}`
                   : ""}
@@ -111,25 +112,25 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
 
               <div className="mt-2.5">
                 <Button variant="primary" onClick={() => create(s)} disabled={done}>
-                  <CalendarPlus size={15} /> Create this protocol
+                  <CalendarPlus size={15} /> {t("hwp_create")}
                 </Button>
               </div>
             </div>
           );
         })}
 
-        <ButtonLink href="/plan">Set one up by hand instead</ButtonLink>
+        <ButtonLink href="/plan">{t("hwp_by_hand")}</ButtonLink>
       </Card>
 
       <Card className="p-4">
         <SectionLabel
           action={
             <ButtonLink href="/log" variant="soft" className="px-2.5 py-1 text-[12px] font-bold">
-              All {logs.length}
+              {t("hwp_all", { n: logs.length })}
             </ButtonLink>
           }
         >
-          Recent doses
+          {t("hwp_recent")}
         </SectionLabel>
 
         <ul className="space-y-1">
@@ -148,7 +149,7 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
                     {INJECTION_SITES.find((s) => s.id === l.site)?.label}
                   </span>
                 )}
-                {l.at > nowMs && <Badge tone="sky">future</Badge>}
+                {l.at > nowMs && <Badge tone="sky">{t("hwp_future")}</Badge>}
               </li>
             );
           })}
