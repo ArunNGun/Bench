@@ -395,6 +395,22 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
 }
 
 /**
+ * Whether a protocol has begun.
+ *
+ * By the local day rather than the minute, so a protocol started at nine this
+ * morning counts as started at eight, which is what somebody looking at a card
+ * at breakfast expects.
+ *
+ * One place, because this comparison was written inline in `phaseSpanAt` and
+ * the Plan card needed the same question answered a second time. Two copies of
+ * a boundary is how the two come to disagree, and a disagreement about this
+ * particular boundary is what made a plan describe itself wrongly for a week.
+ */
+export function hasStarted(protocol: Protocol, atMs: number): boolean {
+  return atMs >= startOfLocalDay(protocol.startedAt);
+}
+
+/**
  * The phase in force at a moment.
  *
  * Before the protocol starts, that is the first phase. It used to be null, and
@@ -417,7 +433,7 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
  */
 export function phaseSpanAt(protocol: Protocol, atMs: number): PhaseSpan | null {
   const spans = phaseSpans(protocol);
-  if (atMs < startOfLocalDay(protocol.startedAt)) return spans[0] ?? null;
+  if (!hasStarted(protocol, atMs)) return spans[0] ?? null;
   for (const span of spans) {
     if (atMs <= span.to) return span;
   }

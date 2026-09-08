@@ -1204,6 +1204,7 @@ export const TRANSLATIONS = {
     times_split_dose: "{daily} a day, split into {n}: {each} at {when}.",
     times_missing: "Every time needs an hour before this can be saved.",
     phase_same_at_time: "At {time}, same as the protocol.",
+    plan_starts: "Starts",
   },
 
   de: {
@@ -2386,6 +2387,7 @@ export const TRANSLATIONS = {
     times_split_dose: "{daily} am Tag, aufgeteilt auf {n}: {each} um {when}.",
     times_missing: "Jede Zeit braucht eine Uhrzeit, bevor das gespeichert werden kann.",
     phase_same_at_time: "Um {time}, wie beim Protokoll.",
+    plan_starts: "Beginnt",
   },
 
   sl: {
@@ -3636,6 +3638,7 @@ export const TRANSLATIONS = {
     times_split_dose: "{daily} na dan, razdeljeno na {n}: {each} ob {when}.",
     times_missing: "Vsaka ura potrebuje uro, preden je to mogoče shraniti.",
     phase_same_at_time: "Ob {time}, enako kot protokol.",
+    plan_starts: "Se začne",
   },
 
   pl: {
@@ -4886,6 +4889,7 @@ export const TRANSLATIONS = {
     times_split_dose: "{daily} dziennie, podzielone na {n}: {each} o {when}.",
     times_missing: "Każda pora potrzebuje godziny, zanim będzie można to zapisać.",
     phase_same_at_time: "O {time}, tak jak protokół.",
+    plan_starts: "Zaczyna się",
   },
 } satisfies Record<Lang, Record<string, string>>;
 
