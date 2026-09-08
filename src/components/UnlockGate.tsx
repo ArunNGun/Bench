@@ -23,7 +23,8 @@
 
 import { useState } from "react";
 import { KeyRound, Unlock } from "lucide-react";
-import { Button, TextInput } from "./ui";
+import { Button, Rich, TextInput } from "./ui";
+import { useLang } from "@/lib/i18n";
 import { useStore } from "@/lib/store";
 import { cryptoAvailable, login, SyncError } from "@/lib/sync/client";
 import { HOSTED, accountRequired } from "@/lib/sync/hosted";
@@ -32,6 +33,7 @@ import { needsUnlock } from "@/lib/sync/unlock";
 import { rememberKey } from "@/lib/sync/vault";
 
 export function UnlockGate() {
+  const { t } = useLang();
   const hydrated = useStore((s) => s.hydrated);
   const session = useSyncState((s) => s.session);
   const key = useSyncState((s) => s.key);
@@ -79,7 +81,7 @@ export function UnlockGate() {
       setKey(derived);
       setPassword("");
     } catch (err) {
-      setError(err instanceof SyncError ? err.message : "Could not unlock. See the console.");
+      setError(err instanceof SyncError ? err.message : t("unlock_failed"));
       if (!(err instanceof SyncError)) console.error(err);
     } finally {
       setBusy(false);
@@ -103,14 +105,12 @@ export function UnlockGate() {
         <div className="flex items-center gap-2.5">
           <KeyRound size={18} className="text-[var(--muted)]" />
           <h2 id="unlock-title" className="text-[17px] font-semibold text-[var(--ink)]">
-            Unlock your data
+            {t("unlock_title")}
           </h2>
         </div>
 
         <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-          Signed in as <span className="font-medium text-[var(--ink)]">{session.username}</span>.
-          Your data is encrypted, and your password is the key. This browser needs it once before
-          anything can be read.
+          <Rich text={t("unlock_body", { username: session.username })} />
         </p>
 
         <TextInput
@@ -118,7 +118,7 @@ export function UnlockGate() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
-          placeholder="Password"
+          placeholder={t("unlock_password")}
           autoFocus
         />
 
@@ -130,12 +130,11 @@ export function UnlockGate() {
           className="w-full justify-center"
           disabled={busy || !password}
         >
-          <Unlock size={15} /> {busy ? "Unlocking..." : "Unlock"}
+          <Unlock size={15} /> {busy ? t("unlock_working") : t("unlock_action")}
         </Button>
 
         <p className="text-[12px] text-[var(--faint)]">
-          It takes a moment. Turning a password into a key is deliberately slow, which is what makes
-          it worth guessing at only once.
+          {t("unlock_slow")}
         </p>
       </form>
     </div>

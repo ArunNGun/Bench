@@ -6,6 +6,7 @@ import { Button, Callout, Card, SectionLabel } from "./ui";
 import { clearRescue, readRescue, useStore } from "@/lib/store";
 import { describeLoss, recoverable, type Rescue } from "@/lib/calc/rescue";
 import { formatDateTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Says that records disappeared, and offers them back.
@@ -21,6 +22,7 @@ import { formatDateTime } from "@/lib/format";
  * deleting never reaches it.
  */
 export function RescueNotice() {
+  const { t } = useLang();
   const hydrated = useStore((s) => s.hydrated);
   const exportData = useStore((s) => s.exportData);
   const putRecordsBack = useStore((s) => s.putRecordsBack);
@@ -48,8 +50,10 @@ export function RescueNotice() {
     await clearRescue();
     setDone(
       missing.length
-        ? `Put back ${missing.map((l) => describeLoss({ ...l, from: l.to, to: l.from })).join(", ")}.`
-        : "Nothing was missing any more.");
+        ? t("rescue_done", {
+            what: missing.map((l) => describeLoss({ ...l, from: l.to, to: l.from })).join(", "),
+          })
+        : t("rescue_done_nothing"));
     setRescue(null);
   }
 
@@ -63,38 +67,38 @@ export function RescueNotice() {
     <Card className="space-y-4 border-[var(--tangerine)]/40 p-4">
       <SectionLabel>
         <span className="inline-flex items-center gap-1.5">
-          <LifeBuoy size={13} strokeWidth={2.6} /> Something disappeared
+          <LifeBuoy size={13} strokeWidth={2.6} /> {t("rescue_title")}
         </span>
       </SectionLabel>
 
       <Callout tone="warn">
-        {rescue.losses.map((l) => describeLoss(l)).join(", ")} went missing on{" "}
-        {formatDateTime(rescue.at)}. A copy was kept at the moment it happened, so nothing is
-        actually gone yet.
+        {t("rescue_lost", {
+          what: rescue.losses.map((l) => describeLoss(l)).join(", "),
+          when: formatDateTime(rescue.at),
+        })}
       </Callout>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
         {missing.length
-          ? "Putting them back adds only the rows that are still missing. Anything you have recorded since stays exactly as it is."
-          : "They are already back, so there is nothing left to put back. This notice can go."}
+          ? t("rescue_partial")
+          : t("rescue_already")}
       </p>
 
       <div className="flex flex-wrap items-center gap-2.5">
         {missing.length > 0 && (
           <Button variant="primary" onClick={putBack}>
-            <Undo2 size={15} /> Put them back
+            <Undo2 size={15} /> {t("rescue_put_back")}
           </Button>
         )}
         <Button variant="ghost" onClick={dismiss}>
-          <X size={15} /> {missing.length ? "I meant to delete them" : "Dismiss"}
+          <X size={15} /> {missing.length ? t("rescue_meant_to") : t("rescue_dismiss")}
         </Button>
       </div>
 
       {done && <p className="text-[13px] font-medium text-[var(--ink)]">{done}</p>}
 
       <p className="text-[12px] leading-relaxed text-[var(--faint)]">
-        Dismissing throws the copy away, so do that only if the loss was deliberate. If it was not,
-        keep the copy and export a file first: this notice is the only place the rows still exist.
+        {t("rescue_footnote")}
       </p>
     </Card>
   );

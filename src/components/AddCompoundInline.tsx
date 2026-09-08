@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { CustomCompoundForm } from "./CustomCompoundForm";
 import type { Peptide } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 /**
  * "Not in the list?", shown directly under a compound picker.
@@ -14,6 +15,7 @@ import type { Peptide } from "@/lib/types";
  * start again. On save the new compound is selected for them and they carry on.
  */
 export function AddCompoundInline({ onCreated }: { onCreated: (peptide: Peptide) => void }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -23,7 +25,7 @@ export function AddCompoundInline({ onCreated }: { onCreated: (peptide: Peptide)
         onClick={() => setOpen(true)}
         className="press mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--mint-ink)] underline decoration-dotted underline-offset-2"
       >
-        <Plus size={13} strokeWidth={2.6} /> Not in the list? Add your own
+        <Plus size={13} strokeWidth={2.6} /> {t("add_compound_inline")}
       </button>
     );
   }

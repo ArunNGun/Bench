@@ -402,3 +402,20 @@ The old fallback also hid a second bug for as long as it was never reached: it
 doubled the step, and on a barrel numbered every five a step of two became four,
 which never lands on five, so the marks meant to carry the numbers stopped being
 drawn at all.
+
+## A key that ends in the word "other"
+
+`translate` decides a key is a plural family by asking whether `${key}_other`
+exists, and the parity test derives the list of families the same way, from
+every English key ending in `_other`. Both are looking at spelling, because
+nothing else in the file says which keys are families and which are not.
+
+So `install_ios_other`, a perfectly ordinary key holding one sentence about
+Safari, was read as the `other` form of a family called `install_ios`. The test
+then asked Slovenian for the four forms that family would need, found one, and
+failed with a message about grammar for a string that has no number in it.
+
+The fix was to rename the key. It is worth knowing that the suffix is reserved:
+a key whose last word happens to be `other`, `one`, `two`, `few` or `many` will
+be mistaken for part of a family, and the failure arrives in a test about
+plurals rather than anywhere near the key itself.

@@ -27,8 +27,10 @@ import { downloadJson, exportFileName } from "@/lib/backup/download";
 import { needsFirstBackup } from "@/lib/calc/firstBackup";
 import { accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
+import { useLang } from "@/lib/i18n";
 
 export function FirstBackupGate() {
+  const { t } = useLang();
   const exportData = useStore((s) => s.exportData);
   const updateSettings = useStore((s) => s.updateSettings);
   const hydrated = useStore((s) => s.hydrated);
@@ -71,34 +73,22 @@ export function FirstBackupGate() {
         <div className="flex items-center gap-2.5">
           <KeyRound size={18} className="text-[var(--rose)]" />
           <h2 id="first-backup-title" className="text-[17px] font-semibold text-[var(--ink)]">
-            One thing before you start
+            {t("backup_gate_title")}
           </h2>
         </div>
 
         <div className="space-y-3 text-[13.5px] leading-relaxed text-[var(--muted)]">
-          <p>
-            Your password is the key to your data. Everything is encrypted in this browser before it
-            goes to the server, so the server holds something it cannot read. That includes whoever
-            runs it: they can see that your account exists and how large it is, and nothing else.
-          </p>
-          <p className="text-[var(--ink)]">
-            Nobody can reset your password. Not the person running the server, not anyone. If you
-            lose it, the copy up there stays locked forever.
-          </p>
-          <p>
-            So keep your own copy. This saves a file with everything in it, which you can bring back
-            later from Settings. It is the same button that sits in the header, so you can do this
-            again whenever you like, and it is worth doing.
-          </p>
+          <p>{t("backup_gate_encrypted")}</p>
+          <p className="text-[var(--ink)]">{t("backup_gate_no_reset")}</p>
+          <p>{t("backup_gate_keep_copy")}</p>
         </div>
 
         <Button variant="primary" className="w-full justify-center" onClick={saveAndContinue}>
-          <Download size={15} /> Save a backup and continue
+          <Download size={15} /> {t("backup_gate_save")}
         </Button>
 
         <p className="text-[12px] text-[var(--faint)]">
-          A new account has almost nothing in it yet, so the file will be small. That is expected.
-          The point is that you have one, and know where it went.
+          {t("backup_gate_small")}
         </p>
       </div>
     </div>
