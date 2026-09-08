@@ -160,7 +160,7 @@ export default function StockPage() {
   }, [protocols, vials, now]);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -169,44 +169,44 @@ export default function StockPage() {
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("stock_title")}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-            What is in the fridge and how long it has left.
+            {t("stock_subtitle")}
           </p>
         </div>
         <Button variant="primary" onClick={() => setAdding(true)}>
-          <Plus size={16} /> Add a vial
+          <Plus size={16} /> {t("stock_add_vial")}
         </Button>
       </header>
 
       {vials.length > 0 && (
         <Card className="grid grid-cols-3 gap-4 p-4">
-          <Stat label="Sealed" value={sealed.length} />
-          <Stat label="Open" value={open.length} tone="tangerine" />
-          <Stat label="Remaining" value={trim(totalMg, 2)} unit="mg" tone="sky" hint="Across every usable vial." />
+          <Stat label={t("stock_sealed")} value={sealed.length} />
+          <Stat label={t("stock_open")} value={open.length} tone="tangerine" />
+          <Stat label={t("stock_remaining")} value={trim(totalMg, 2)} unit="mg" tone="sky" hint={t("stock_remaining_hint")} />
         </Card>
       )}
 
       {vials.length > 0 && spend.pricedVials > 0 && (
         <Card className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3">
           <Stat
-            label="Spent"
+            label={t("stock_spent")}
             value={formatTotals(spend.byCurrency)}
             tone="grape"
             hint={`${spend.pricedVials} priced vial${spend.pricedVials === 1 ? "" : "s"}${spend.unpricedVials ? `, ${spend.unpricedVials} without a price` : ""}.${spend.mixed ? " Kept apart by currency rather than added together." : ""}`}
           />
           <Stat
-            label="Still in vials"
+            label={t("stock_still_in_vials")}
             value={formatTotals(unusedValue)}
             tone="mint"
-            hint="Value of what you have not used yet."
+            hint={t("stock_still_hint")}
           />
           {hasShipping && (
             <Stat
-              label="Shipping"
+              label={t("stock_shipping")}
               value={formatTotals(spend.shippingByCurrency)}
               tone="sky"
-              hint={`Across ${spend.shippingByCurrency.reduce((n, c) => n + c.vials, 0)} order${
-                spend.shippingByCurrency.reduce((n, c) => n + c.vials, 0) === 1 ? "" : "s"
-              }. Counted in what each vial really cost.`}
+              hint={t("stock_shipping_hint", {
+                n: spend.shippingByCurrency.reduce((n, c) => n + c.vials, 0),
+              })}
             />
           )}
         </Card>
@@ -231,12 +231,11 @@ export default function StockPage() {
           title={t("stock_no_vials")}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
-              Add a vial
+              {t("stock_add_vial")}
             </Button>
           }
         >
-          Track each vial from sealed through reconstitution to empty. Logging a dose against a vial
-          draws it down automatically.
+          {t("stock_empty_desc")}
         </EmptyState>
       )}
 
@@ -381,10 +380,7 @@ export default function StockPage() {
       )}
 
       <Callout tone="info" title={t("stock_28_day_note")}>
-        The beyond-use date this app applies from first puncture is the CDC and USP limit on how long
-        a multi-dose container may be used. It is an infection-control rule about the vial, not a
-        statement that the peptide inside is still potent, chemical stability is a separate,
-        compound-specific question that is undocumented for most research peptides.
+        {t("stock_bud_explainer")}
       </Callout>
     </div>
   );
@@ -439,6 +435,7 @@ function VialRow({
   onTransfer?: () => void;
   onFinish?: () => void;
 }) {
+  const { t } = useLang();
   const st = vialStatus(vial, now);
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
   const scale = useSyringeScale();
@@ -481,7 +478,7 @@ function VialRow({
 
         {vial.state === "on-order" ? (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
-            <span>Not here yet</span>
+            <span>{t("stock_not_here_yet")}</span>
             {vial.acquiredAt != null && <span>ordered {formatDate(vial.acquiredAt)}</span>}
           </div>
         ) : vial.state === "reconstituted" && vial.diluentMl ? (
@@ -499,11 +496,13 @@ function VialRow({
             {marks != null && (
               <span
                 className="tnum font-mono"
-                title={`${trim(marks, 2)} marks on a ${
-                  scale === "U40" ? "U-40" : "U-100"
-                } barrel, ${trim(unitsToMl(marks, scale), 3)} mL`}
+                title={t("stock_marks_title", {
+                  marks: trim(marks, 2),
+                  scale: scale === "U40" ? "U-40" : "U-100",
+                  ml: trim(unitsToMl(marks, scale), 3),
+                })}
               >
-                {trim(marks, 2)} marks per {formatDose(doseMcg)}
+                {t("stock_marks_per", { marks: trim(marks, 2), dose: formatDose(doseMcg) })}
               </span>
             )}
             {spray && perPress > 0 && (
@@ -530,7 +529,7 @@ function VialRow({
           </div>
         ) : (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
-            <span>Lyophilised, unopened</span>
+            <span>{t("stock_lyophilised")}</span>
             {many && <span className="tnum font-mono">{trim(strengthMgTotal, 2)} mg in total</span>}
             {/* The soonest date in the group, because that is the one that bites first. */}
             {(group ? group.expiresAt : vial.expiresAt) != null && (
@@ -582,7 +581,7 @@ function VialRow({
           </p>
         )}
         {outlook.kind === "beyond-horizon" && (
-          <p className="mt-0.5 text-[12px] text-[var(--faint)]">Over a year of stock at this plan</p>
+          <p className="mt-0.5 text-[12px] text-[var(--faint)]">{t("stock_over_a_year")}</p>
         )}
 
         {((!many && (vial.supplier || vial.cost != null)) || (many && rowCost != null)) && (
@@ -617,7 +616,7 @@ function VialRow({
         <div className="mt-2.5 flex flex-wrap gap-2">
           {onArrived && (
             <Button variant="primary" onClick={onArrived} className="px-3 py-1.5 text-[13px]">
-              <PackageCheck size={13} /> It arrived
+              <PackageCheck size={13} /> {t("stock_it_arrived")}
             </Button>
           )}
           {onReconstitute && (
@@ -627,17 +626,17 @@ function VialRow({
           )}
           {onTopUp && (
             <Button onClick={onTopUp} className="px-3 py-1.5 text-[13px]">
-              <Droplet size={13} /> Add diluent
+              <Droplet size={13} /> {t("stock_add_diluent")}
             </Button>
           )}
           {onTransfer && (
             <Button onClick={onTransfer} className="px-3 py-1.5 text-[13px]">
-              <SprayCan size={13} /> To a nasal spray
+              <SprayCan size={13} /> {t("stock_to_spray")}
             </Button>
           )}
           {onFinish && (
             <Button onClick={onFinish} variant="ghost" className="px-3 py-1.5 text-[13px]">
-              Mark empty
+              {t("stock_mark_empty")}
             </Button>
           )}
           <Button
@@ -724,7 +723,7 @@ function AddVialForm({
     <Card className="space-y-4 p-4">
       <SectionLabel>{t("stock_new_vial")}</SectionLabel>
 
-      <Field label="Peptide">
+      <Field label={t("plan_peptide")}>
         <Select
           value={peptideId}
           onChange={(e) => {
@@ -749,7 +748,7 @@ function AddVialForm({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field
-          label="Strength"
+          label={t("stock_strength")}
           hint={peptide?.vialSizesMg.length ? `Common: ${peptide.vialSizesMg.join(", ")} mg` : undefined}
         >
           <NumberInput
@@ -760,7 +759,7 @@ function AddVialForm({
             onChange={(e) => setStrengthMg(Number(e.target.value))}
           />
         </Field>
-        <Field label="How many">
+        <Field label={t("stock_how_many")}>
           <NumberInput
             value={count}
             min={1}
@@ -769,15 +768,15 @@ function AddVialForm({
             onChange={(e) => setCount(Number(e.target.value))}
           />
         </Field>
-        <Field label="Source">
+        <Field label={t("stock_source")}>
           <TextInput
             value={supplier}
             onChange={(e) => setSupplier(e.target.value)}
-            placeholder="Optional"
+            placeholder={t("optional")}
           />
         </Field>
         <Field
-          label="Where is it"
+          label={t("stock_where")}
           hint={
             arrived
               ? undefined
@@ -785,8 +784,8 @@ function AddVialForm({
           }
         >
           <Select value={arrived ? "here" : "ordered"} onChange={(e) => setArrived(e.target.value === "here")}>
-            <option value="here">In the fridge</option>
-            <option value="ordered">On order</option>
+            <option value="here">{t("stock_in_the_fridge")}</option>
+            <option value="ordered">{t("stock_on_order")}</option>
           </Select>
         </Field>
       </div>
@@ -813,12 +812,12 @@ function AddVialForm({
           />
         </Field>
 
-        <Field label="Priced as">
+        <Field label={t("stock_priced_as")}>
           <Select
             value={pricedAs}
             onChange={(e) => setPricedAs(e.target.value as "vial" | "kit")}
           >
-            <option value="vial">Per vial</option>
+            <option value="vial">{t("stock_per_vial")}</option>
             <option value="kit">{count > 1 ? `Kit of ${count}` : "Whole kit"}</option>
           </Select>
         </Field>
@@ -830,7 +829,7 @@ function AddVialForm({
         doing. Automatic rates were declined: they would need a network call on
         every open, and this app makes exactly one in its life.
       */}
-      <Field label="Paid in" hint="Kept with the vial, so totals never add unlike currencies.">
+      <Field label={t("stock_paid_in")} hint={t("stock_paid_in_hint")}>
         <Select value={payCurrency} onChange={(e) => setPayCurrency(e.target.value)}>
           {CURRENCIES.map((c) => (
             <option key={c.code} value={c.code}>
@@ -864,7 +863,7 @@ function AddVialForm({
       )}
 
       <Field
-        label="Shipping for this order"
+        label={t("stock_shipping_order")}
         hint={
           shipping === "" || !(Number(shipping) > 0)
             ? "Optional. Shared across the vials added here, and included in what each one really cost."
@@ -881,7 +880,7 @@ function AddVialForm({
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="primary"
@@ -975,7 +974,7 @@ function ReconstituteForm({
       <SectionLabel>{t("stock_reconstitute")}</SectionLabel>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Water added" hint={`Makes ${trim(conc, 3)} mg/mL.`}>
+        <Field label={t("stock_water_added")} hint={t("stock_makes_conc", { conc: trim(conc, 3) })}>
           <NumberInput
             value={ml}
             min={0.1}
@@ -984,7 +983,7 @@ function ReconstituteForm({
             onChange={(e) => setMl(Number(e.target.value))}
           />
         </Field>
-        <Field label="Diluent">
+        <Field label={t("stock_diluent")}>
           <Select
             value={diluent}
             onChange={(e) => setDiluent(e.target.value as NonNullable<Vial["diluent"]>)}
@@ -1000,7 +999,7 @@ function ReconstituteForm({
 
       {available.length > 0 && (
         <Field
-          label="From which bottle"
+          label={t("stock_from_bottle")}
           hint={
             chosen
               ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
@@ -1014,7 +1013,7 @@ function ReconstituteForm({
                 {b.state === "sealed" ? " · sealed" : ""}
               </option>
             ))}
-            <option value="">Not from tracked stock</option>
+            <option value="">{t("stock_not_tracked")}</option>
           </Select>
         </Field>
       )}
@@ -1028,8 +1027,7 @@ function ReconstituteForm({
 
       {diluent === "sterile" && (
         <Callout tone="warn">
-          Sterile water has no preservative, so the vial is single-use and should be discarded after
-          one withdrawal rather than kept as a multi-dose vial.
+          {t("stock_sterile_water_note")}
         </Callout>
       )}
 
@@ -1041,14 +1039,14 @@ function ReconstituteForm({
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="primary"
           onClick={() => onSave(ml, diluent, bottleId || undefined)}
           disabled={!(ml > 0)}
         >
-          Reconstitute
+          {t("stock_reconstitute")}
         </Button>
       </div>
     </Card>
@@ -1112,13 +1110,12 @@ function TransferToSprayForm({
       <SectionLabel>{t("stock_transfer_spray")}</SectionLabel>
 
       <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
-        The whole contents go into the bottle and the vial is finished. What it cost goes with it,
-        so the purchase is still counted once.
+        {t("stock_transfer_note")}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Saline added"
+          label={t("stock_saline_added")}
           hint={
             plan
               ? `${trim(plan.bottle.diluentMl ?? 0, 2)} mL in the bottle, at ${formatConcentration(
@@ -1136,7 +1133,7 @@ function TransferToSprayForm({
         </Field>
 
         <Field
-          label="One press delivers"
+          label={t("stock_one_press")}
           hint={perPress > 0 ? `${formatDose(perPress)} a press.` : MEASURE_A_PRESS}
         >
           <NumberInput
@@ -1151,7 +1148,7 @@ function TransferToSprayForm({
 
       <p className="text-[12px] leading-relaxed text-[var(--faint)]">{MEASURE_A_PRESS}</p>
 
-      <Field label="What went in">
+      <Field label={t("stock_what_went_in")}>
         <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
           {/* Saline first, because a nose does not take the preservative in
               bacteriostatic water. */}
@@ -1165,7 +1162,7 @@ function TransferToSprayForm({
 
       {available.length > 0 && (
         <Field
-          label="From which ampoule"
+          label={t("stock_from_ampoule")}
           hint={
             chosen
               ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
@@ -1179,28 +1176,25 @@ function TransferToSprayForm({
                 {b.state === "sealed" ? " · sealed" : ""}
               </option>
             ))}
-            <option value="">Not from tracked stock</option>
+            <option value="">{t("stock_not_tracked")}</option>
           </Select>
         </Field>
       )}
 
       <p className="text-[12px] leading-relaxed text-[var(--faint)]">
-        No use-by date is set. The twenty-eight days used for a punctured vial comes from a
-        convention that says nothing about a preservative-free solution in a pump, and how long
-        yours lasts depends on whether it lives in a pocket or a fridge. The day it was filled is
-        recorded and the judgement is yours.
+        {t("stock_spray_bud_note")}
       </p>
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="primary"
           onClick={() => onSave(addedMl, perSpray, kind, bottleId || undefined)}
           disabled={!plan}
         >
-          Fill the bottle
+          {t("stock_fill_bottle")}
         </Button>
       </div>
     </Card>
@@ -1244,7 +1238,7 @@ function TopUpForm({
       <SectionLabel>{t("stock_add_diluent")}</SectionLabel>
 
       <Field
-        label="Water added"
+        label={t("stock_water_added")}
         hint={
           after != null
             ? `${formatConcentration(before)} becomes ${formatConcentration(after)}, with ${trim(
@@ -1263,14 +1257,12 @@ function TopUpForm({
       </Field>
 
       <p className="text-[12.5px] leading-relaxed text-[var(--faint)]">
-        Worked out from what is still in the vial rather than from the label, so a part-used vial
-        comes out right. The mass does not change and neither does the use-by date, which runs from
-        the first puncture rather than from this.
+        {t("stock_topup_note")}
       </p>
 
       {available.length > 0 && (
         <Field
-          label="From which bottle"
+          label={t("stock_from_bottle")}
           hint={
             chosen
               ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
@@ -1284,14 +1276,14 @@ function TopUpForm({
                 {b.state === "sealed" ? " · sealed" : ""}
               </option>
             ))}
-            <option value="">Not from tracked stock</option>
+            <option value="">{t("stock_not_tracked")}</option>
           </Select>
         </Field>
       )}
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="primary"
@@ -1314,6 +1306,7 @@ function TopUpForm({
  * same list would invite the same arithmetic.
  */
 function DiluentShelf() {
+  const { t } = useLang();
   const { diluents } = useProfileData();
   const addDiluent = useStore((s) => s.addDiluent);
   const updateDiluent = useStore((s) => s.updateDiluent);
@@ -1341,13 +1334,13 @@ function DiluentShelf() {
     return (
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
-          <SectionLabel className="mb-0.5">Water and diluents</SectionLabel>
+          <SectionLabel className="mb-0.5">{t("stock_water_section")}</SectionLabel>
           <p className="text-[12.5px] text-[var(--muted)]">
-            Optional. Track bottles here and reconstituting will draw from one.
+            {t("stock_water_section_desc")}
           </p>
         </div>
         <Button variant="soft" onClick={() => setAdding(true)}>
-          <Plus size={15} /> Add a bottle
+          <Plus size={15} /> {t("stock_add_bottle")}
         </Button>
       </Card>
     );
@@ -1359,12 +1352,12 @@ function DiluentShelf() {
         action={
           !adding && (
             <Button variant="soft" onClick={() => setAdding(true)} className="px-2.5 py-1 text-[12px]">
-              <Plus size={13} /> Add a bottle
+              <Plus size={13} /> {t("stock_add_bottle")}
             </Button>
           )
         }
       >
-        Water and diluents
+        {t("stock_water_section")}
       </SectionLabel>
 
       {stock.remainingMl > 0 && (
@@ -1377,7 +1370,7 @@ function DiluentShelf() {
       {adding && (
         <Card className="mb-2.5 space-y-4 p-4">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="What">
+            <Field label={t("stock_what")}>
               <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
                 {(Object.keys(DILUENT_LABEL) as DiluentKind[]).map((k) => (
                   <option key={k} value={k}>
@@ -1386,7 +1379,7 @@ function DiluentShelf() {
                 ))}
               </Select>
             </Field>
-            <Field label="Bottle size">
+            <Field label={t("stock_bottle_size")}>
               <NumberInput
                 value={volumeMl}
                 min={1}
@@ -1395,7 +1388,7 @@ function DiluentShelf() {
                 onChange={(e) => setVolumeMl(Number(e.target.value))}
               />
             </Field>
-            <Field label="How many">
+            <Field label={t("stock_how_many")}>
               <NumberInput
                 value={count}
                 min={1}
@@ -1407,7 +1400,7 @@ function DiluentShelf() {
 
           <div className="flex gap-2.5">
             <Button variant="ghost" onClick={() => setAdding(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               variant="primary"
@@ -1444,7 +1437,7 @@ function DiluentShelf() {
                     className="px-2.5 py-1 text-[12px]"
                     onClick={() => openDiluent(b.id)}
                   >
-                    Open
+                    {t("stock_open")}
                   </Button>
                 )}
                 {b.state !== "discarded" && bottleRemainingMl(b) > 0 && (
@@ -1456,7 +1449,7 @@ function DiluentShelf() {
                       setUsedMl(1);
                     }}
                   >
-                    Used elsewhere
+                    {t("stock_used_elsewhere")}
                   </Button>
                 )}
                 {b.state !== "discarded" && (
@@ -1465,13 +1458,13 @@ function DiluentShelf() {
                     className="px-2.5 py-1 text-[12px]"
                     onClick={() => updateDiluent(b.id, { state: "discarded" })}
                   >
-                    Discard
+                    {t("stock_discard")}
                   </Button>
                 )}
                 <button
                   type="button"
                   onClick={() => removeDiluent(b.id)}
-                  aria-label="Remove bottle"
+                  aria-label={t("stock_remove_bottle")}
                   className="press p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                 >
                   <Trash2 size={15} />
@@ -1489,7 +1482,7 @@ function DiluentShelf() {
                 <div className="mt-2 flex w-full flex-wrap items-end gap-2.5">
                   <label className="flex-1">
                     <span className="mb-1 block text-[12px] text-[var(--muted)]">
-                      Used for something not tracked here
+                      {t("stock_used_untracked")}
                     </span>
                     <NumberInput
                       value={usedMl}
@@ -1500,7 +1493,7 @@ function DiluentShelf() {
                     />
                   </label>
                   <Button variant="ghost" onClick={() => setUsingId(null)}>
-                    Cancel
+                    {t("cancel")}
                   </Button>
                   <Button
                     variant="primary"
