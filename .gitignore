@@ -48,3 +48,10 @@ next-env.d.ts
 # Android signing key - never commit this
 bench.jks
 android/app/bench.jks
+
+# Screenshots dropped in the repo root while comparing something on screen.
+# Two of these were swept into a commit by git add -A, which is how this line
+# came to exist. The generated icons under assets/ and public/ are tracked and
+# unaffected.
+/newbutton.png
+/oldbutton.png
