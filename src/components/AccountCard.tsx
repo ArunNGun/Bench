@@ -44,7 +44,7 @@ export function AccountCard() {
 
       <div>
         <Button disabled={busy} onClick={() => void go()}>
-          <LogOut size={15} /> {busy ? "Signing out..." : "Sign out"}
+          <LogOut size={15} /> {busy ? t("signing_out") : t("sign_out")}
         </Button>
       </div>
     </Card>

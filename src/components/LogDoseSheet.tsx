@@ -418,7 +418,7 @@ export function LogDoseSheet({
       >
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--card)] px-4 py-3">
           <h2 className="text-[16px] font-bold text-[var(--ink)]">
-            {editing ? "Edit dose" : "Log a dose"}
+            {editing ? t("log_edit_dose_title") : t("log_log_a_dose")}
           </h2>
           <button
             type="button"
@@ -442,8 +442,8 @@ export function LogDoseSheet({
               label={t("log_protocol")}
               hint={
                 protocol
-                  ? "Sets the compound, the dose and the site to rotate to."
-                  : "Recording this dose outside any plan."
+                  ? t("log_protocol_sets")
+                  : t("log_outside_plan")
               }
             >
               <Select value={protocolId} onChange={(e) => chooseProtocol(e.target.value)}>
@@ -496,7 +496,7 @@ export function LogDoseSheet({
                     className="rounded-full border border-[var(--line)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--muted)] hover:border-[var(--tangerine)] hover:text-[var(--tangerine)] transition-colors"
                     aria-label={t("log_switch_unit", { unit: doseUnit === "mcg" ? "mg" : "mcg" })}
                   >
-                    {doseUnit === "mcg" ? "switch to mg" : "switch to mcg"}
+                    {doseUnit === "mcg" ? t("log_switch_to_mg") : t("log_switch_to_mcg")}
                   </button>
                 </span>
               }
@@ -527,7 +527,7 @@ export function LogDoseSheet({
                     ? `${formatDose(mcgPerSpray(vial))} a press, ${trim(
                         mlForSprays(vial, spraysForDose(vial, doseMcg)),
                         2)} mL in total.`
-                    : "Fill a spray bottle from a made-up vial to convert between presses and dose."
+                    : t("log_fill_spray_first")
                 }
               >
                 <NumberInput
@@ -549,7 +549,7 @@ export function LogDoseSheet({
               hint={
                 canConvert
                   ? `1 unit = ${trim(mcgPerUnitOfScale(concMcgPerMl, syringe.scale), 2)} mcg at this vial's strength. One printed mark on this barrel is ${syringe.graduationUnits} unit${syringe.graduationUnits === 1 ? "" : "s"}.`
-                  : "Reconstitute the vial to convert between units and dose."
+                  : t("log_reconstitute_first")
               }
             >
               <NumberInput
@@ -571,8 +571,8 @@ export function LogDoseSheet({
               label={t("log_barrel")}
               hint={
                 syringe.scale === "U40"
-                  ? "Veterinary scale, one unit is 0.025 mL."
-                  : "Standard insulin scale, one unit is 0.01 mL."
+                  ? t("log_u40_hint")
+                  : t("log_u100_hint")
               }
             >
               <Segmented
@@ -615,7 +615,7 @@ export function LogDoseSheet({
               hint={
                 pinned.length && !siteOverride
                   ? `Rotating through the ${pinned.length} sites pinned to this protocol.`
-                  : "Green ring marks the longest-rested spot."
+                  : t("log_green_ring")
               }
             >
               <Select value={site} onChange={(e) => setSite(e.target.value as InjectionSite)}>
@@ -657,8 +657,8 @@ export function LogDoseSheet({
                   className="text-[12px] text-[var(--sky)] underline underline-offset-2 hover:text-[var(--ink)]"
                 >
                   {siteOverride
-                    ? "Back to this protocol's sites"
-                    : "Injected somewhere else? Use any site"}
+                    ? t("log_back_to_pinned")
+                    : t("log_use_any_site")}
                 </button>
               </div>
             )}
@@ -667,7 +667,7 @@ export function LogDoseSheet({
 
           {usableVials.length > 0 ? (
             <Field
-              label={nasal ? "Sprayed from" : "Drawn from"}
+              label={nasal ? t("log_sprayed_from") : t("log_drawn_from")}
               hint={t("log_vial_hint", {
                 container: nasal ? t("log_container_bottle") : t("log_container_vial"),
               })}
@@ -900,7 +900,7 @@ export function LogDoseSheet({
               {t("cancel")}
             </Button>
             <Button variant="primary" onClick={save} className="flex-[2]" disabled={!peptideId}>
-              {editing ? "Save changes" : skipped ? "Record skip" : "Save dose"}
+              {editing ? t("log_save_changes") : skipped ? t("log_record_skip") : t("log_save_dose")}
             </Button>
           </div>
         </div>

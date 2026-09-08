@@ -239,6 +239,7 @@ export function AddFirstProfile() {
  * would eventually become a third version of it.
  */
 function SignOutMenuItem({ onDone }: { onDone: () => void }) {
+  const { t } = useLang();
   const session = useSyncState((s) => s.session);
   const { go, busy, refused } = useSignOut();
 
@@ -258,7 +259,7 @@ function SignOutMenuItem({ onDone }: { onDone: () => void }) {
           <LogOut size={16} />
         </span>
         <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--ink)]">
-          {busy ? "Signing out..." : "Sign out"}
+          {busy ? t("signing_out") : t("sign_out")}
         </span>
         <span className="truncate text-[12px] text-[var(--faint)]">{session.username}</span>
       </button>

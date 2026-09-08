@@ -444,3 +444,22 @@ site. Two things about how it reads:
 
 The test asserts both of those on a known key before it asserts anything about
 the dictionary, so a check that has quietly stopped checking fails loudly.
+
+## A key that starts with a plural family's name
+
+The trap above was a key ending in `_other`. This is its mirror image and it
+cost the same ten minutes.
+
+`settings_backup_saved` is a plural family: `_one` and `_other` in English, four
+forms in Slovenian. Adding `settings_backup_saved_plain` for the case with no
+count looked harmless. The parity test collects every key beginning with
+`settings_backup_saved_`, found three forms where the grammar wants two, and
+failed talking about plurals for a key that has nothing to do with them.
+
+The family prefix is reserved for the family. A sibling key needs a name that
+does not start with it, so `settings_backup_written`.
+
+Both halves of this come from the same decision: nothing in the file marks
+which keys are families, so the code reads spelling. That is worth keeping,
+because the alternative is a second structure to keep in step with the first,
+but it means the suffix and the prefix are both load-bearing.

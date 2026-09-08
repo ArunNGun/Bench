@@ -60,7 +60,7 @@ export function SettingsMenu() {
             : "text-[var(--muted)] hover:bg-[var(--card)] hover:text-[var(--ink)]")}
       >
         <SettingsIcon size={18} strokeWidth={2.1} />
-        <span className="hidden lg:inline">Settings</span>
+        <span className="hidden lg:inline">{t("nav_settings_label")}</span>
       </button>
 
       {/*
