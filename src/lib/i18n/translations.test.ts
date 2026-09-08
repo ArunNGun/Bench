@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TRANSLATIONS, type Lang } from "./translations";
+import { pluralCategories } from "./plural";
 
 /**
  * The dictionary is typed `satisfies Record<Lang, Record<string, string>>`,
@@ -17,12 +18,31 @@ const OTHERS = LANGS.filter((l) => l !== "en");
 
 const keysOf = (lang: Lang) => Object.keys(TRANSLATIONS[lang]).sort();
 
+/**
+ * Bases of plural families, taken from English, which declares one `_other`
+ * form per family.
+ */
+const FAMILIES = Object.keys(TRANSLATIONS.en)
+  .filter((k) => k.endsWith("_other"))
+  .map((k) => k.slice(0, -"_other".length))
+  .sort();
+
+const isFamilyForm = (key: string) =>
+  FAMILIES.some((base) => key.startsWith(`${base}_`));
+
+/** Everything that is one string rather than one form of a string. */
+const plainKeysOf = (lang: Lang) => keysOf(lang).filter((k) => !isFamilyForm(k));
+
 /** Every `{placeholder}` in a string, so a template cannot lose its data. */
 function placeholders(text: string) {
   return (text.match(/\{[a-z]+\}/g) ?? []).sort();
 }
 
 describe("translations", () => {
+  it("declares at least one plural family, so the machinery has a user", () => {
+    expect(FAMILIES.length).toBeGreaterThan(0);
+  });
+
   it("ships more than one language", () => {
     expect(LANGS).toContain("en");
     expect(OTHERS.length).toBeGreaterThan(0);
@@ -30,7 +50,25 @@ describe("translations", () => {
 
   for (const lang of OTHERS) {
     it(`${lang} has every key English has, and no key English does not`, () => {
-      expect(keysOf(lang)).toEqual(keysOf("en"));
+      expect(plainKeysOf(lang)).toEqual(plainKeysOf("en"));
+    });
+
+    /*
+     * Plural families are the one place where the languages are allowed to
+     * differ, and they have to differ in exactly one way: each carries the
+     * forms its own grammar selects, no more and no fewer. A missing form
+     * falls back to English mid-sentence, and a form the language never
+     * selects is a translation nobody will ever read.
+     */
+    it(`${lang} carries exactly the plural forms its grammar uses`, () => {
+      const want = pluralCategories(lang);
+      for (const base of FAMILIES) {
+        const have = Object.keys(TRANSLATIONS[lang])
+          .filter((k) => k.startsWith(`${base}_`))
+          .map((k) => k.slice(base.length + 1))
+          .sort();
+        expect(have, `${lang}.${base}`).toEqual([...want].sort());
+      }
     });
 
     it(`${lang} leaves nothing empty`, () => {

@@ -45,7 +45,7 @@ export default function LibraryPage() {
       <header>
         <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("library_title")}</h1>
         <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--muted)]">
-          {t("library_subtitle", { n: String(peptides.length) })}
+          {t("library_subtitle", { n: peptides.length })}
         </p>
       </header>
 
