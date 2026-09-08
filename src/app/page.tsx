@@ -160,7 +160,7 @@ export default function NowPage() {
       const conc = vialConcentration(vial);
       const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
       return {
-        label: `${name} vial`,
+        label: translate(lang, "now_vial_label", { name }),
         concentration: Number.isFinite(conc)
           ? formatConcentration(conc)
           : translate(lang, "now_not_reconstituted"),
@@ -973,13 +973,27 @@ export default function NowPage() {
           <div className="space-y-2.5">
             {lowStock.map((track) => (
               <Callout key={track.protocol.id} tone="warn">
+                {/*
+                  A shelf held back by a date is not a shelf that is running
+                  out, and the usual sentence described it as empty of open and
+                  sealed vials alike, because both counts come from the usable
+                  ones. It reads as a compound that has vanished rather than
+                  one whose vial expired yesterday.
+                */}
                 <Rich
-                  text={t("now_low_stock", {
-                    name: track.peptide?.name ?? "",
-                    doses: t("count_doses", { n: track.stock.dosesRemaining }),
-                    open: track.stock.openCount,
-                    sealed: t("count_vials", { n: track.stock.sealedCount }),
-                  })}
+                  text={
+                    track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0
+                      ? t("now_all_past_date", {
+                          name: track.peptide?.name ?? "",
+                          doses: t("count_doses", { n: track.stock.dosesExpired }),
+                        })
+                      : t("now_low_stock", {
+                          name: track.peptide?.name ?? "",
+                          doses: t("count_doses", { n: track.stock.dosesRemaining }),
+                          open: track.stock.openCount,
+                          sealed: t("count_vials", { n: track.stock.sealedCount }),
+                        })
+                  }
                 />{" "}
                 <Link href="/stock" className="text-[var(--tangerine)] hover:underline">
                   {t("now_check_stock")}
