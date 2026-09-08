@@ -1,5 +1,5 @@
 import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
-import { translate, useLangStore, type Lang } from "./i18n";
+import { translate, useLangStore, type Lang, type TranslationKey } from "./i18n";
 
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
 
@@ -226,10 +226,10 @@ export const percent = (fraction: number, dp = 0) =>
  * do not deserve the same tone: an animal measurement is a fact about animals,
  * and a vendor's number is a fact about the vendor.
  */
-export const ESTIMATE_LABEL: Record<HalfLifeEstimate["evidence"], string> = {
-  preclinical: "Animal data",
-  preliminary: "Early human data",
-  anecdotal: "Claimed, not measured",
+export const ESTIMATE_KEY: Record<HalfLifeEstimate["evidence"], TranslationKey> = {
+  preclinical: "estimate_animal",
+  preliminary: "estimate_early_human",
+  anecdotal: "estimate_anecdotal",
 };
 
 /**
@@ -241,11 +241,24 @@ export const ESTIMATE_LABEL: Record<HalfLifeEstimate["evidence"], string> = {
  * flattering description of a number nobody measured at all.
  */
 export function describeHalfLifeEstimate(e: HalfLifeEstimate) {
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
+    translate(lang(), key, vars);
+
   if (e.evidence === "anecdotal") {
-    return `${formatHalfLife(e.hours)}, claimed by ${e.source}. No study has measured it.`;
+    return t("estimate_claimed", { hours: formatHalfLife(e.hours), source: e.source });
   }
-  const where = e.species ?? "an unstated species";
-  const how = e.route ? ` given it ${ROUTE_LABEL[e.route].toLowerCase()}` : "";
-  const early = e.evidence === "preliminary" ? ", in early work that has not settled" : "";
-  return `${formatHalfLife(e.hours)}, measured in ${where}${how}${early}, reported by ${e.source}.`;
+
+  /*
+   * The route and the species come from the library and stay English with the
+   * rest of it. The frame around them is app copy, and the two optional
+   * clauses are slots rather than sentences of their own, so a translation can
+   * put them where its word order wants them.
+   */
+  return t("estimate_measured", {
+    hours: formatHalfLife(e.hours),
+    where: e.species ?? t("estimate_unstated_species"),
+    how: e.route ? t("estimate_given_it", { route: ROUTE_LABEL[e.route].toLowerCase() }) : "",
+    early: e.evidence === "preliminary" ? t("estimate_early_work") : "",
+    source: e.source,
+  });
 }

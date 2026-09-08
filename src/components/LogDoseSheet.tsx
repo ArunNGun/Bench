@@ -548,7 +548,10 @@ export function LogDoseSheet({
               label={t("log_syringe_units")}
               hint={
                 canConvert
-                  ? `1 unit = ${trim(mcgPerUnitOfScale(concMcgPerMl, syringe.scale), 2)} mcg at this vial's strength. One printed mark on this barrel is ${syringe.graduationUnits} unit${syringe.graduationUnits === 1 ? "" : "s"}.`
+                  ? t("log_unit_worth", {
+                      mcg: trim(mcgPerUnitOfScale(concMcgPerMl, syringe.scale), 2),
+                      marks: t("count_units", { n: syringe.graduationUnits }),
+                    })
                   : t("log_reconstitute_first")
               }
             >
