@@ -13,6 +13,7 @@ import {
   protocolNextDoseTime,
   protocolPhases,
   protocolPreviousDoseTime,
+  scheduleTimes,
   scheduledDoseMcg,
   startOfLocalDay,
 } from "./schedule";
@@ -135,14 +136,34 @@ describe("scheduledDoseMcg with phases", () => {
     expect(scheduledDoseMcg(p, addLocalDays(start, 400))).toBe(4000);
   });
 
-  it("falls back to the fixed dose before the protocol starts", () => {
-    expect(scheduledDoseMcg(p, addLocalDays(start, -1))).toBe(1000);
+  /*
+   * This read the protocol's own doseMcg, and passed only because the ladder
+   * starts on the same number. Written against a protocol where the two
+   * differ, so it can tell which one is being answered.
+   */
+  it("reads the first band's dose before the protocol starts", () => {
+    const stepped = protocol({
+      doseMcg: 9999,
+      phases: [
+        { step: 1, doseMcg: 1000, weeks: 3 },
+        { step: 2, doseMcg: 2000, weeks: 3 },
+      ],
+    });
+    expect(scheduledDoseMcg(stepped, addLocalDays(start, -1))).toBe(1000);
   });
 });
 
 describe("phaseSpanAt", () => {
-  it("is null before the protocol starts", () => {
-    expect(phaseSpanAt(protocol({ phases: ladder }), addLocalDays(start, -2))).toBeNull();
+  /*
+   * This asserted null, and every caller reads the result as
+   * `phaseSpanAt(p, now)?.schedule ?? p.schedule`, so null sent all of them to
+   * a schedule the bands override. A plan starting next week was drawn with
+   * the frequency, the time and the rate of a schedule that governs nothing.
+   */
+  it("is the first phase before the protocol starts", () => {
+    const span = phaseSpanAt(protocol({ phases: ladder }), addLocalDays(start, -2));
+    expect(span?.index).toBe(0);
+    expect(span?.phase.step).toBe(1);
   });
 
   it("reports the index the card badge counts from", () => {
@@ -318,5 +339,78 @@ describe("phases reach the figures built on them", () => {
   it("still marks a due dose as due", () => {
     const now = addLocalDays(start, 21) + 60_000;
     expect(dueStatus(p, now, { lastLoggedAt: null }).state).toBe("due-now");
+  });
+});
+
+/**
+ * The protocol a user reported, kept whole because every part of it mattered:
+ * bands carrying the real schedule, a protocol-level schedule left over from
+ * the top of the form, and a start date a week away.
+ */
+describe("a plan in bands that has not started yet", () => {
+  const startsInAWeek = addLocalDays(start, 7);
+
+  /** Monday to Friday at 06:30, over a protocol still saying every 4 days at 09:00. */
+  const reported: Protocol = protocol({
+    startedAt: startsInAWeek,
+    doseMcg: 250,
+    schedule: { kind: "interval-days", intervalDays: 4, timeOfDay: "09:00" },
+    phases: [
+      {
+        step: 1,
+        doseMcg: 250,
+        weeks: 1,
+        schedule: {
+          kind: "days-of-week",
+          daysOfWeek: [1, 2, 3, 4, 5],
+          timeOfDay: "06:30",
+          timesOfDay: ["06:30"],
+        },
+      },
+      {
+        step: 2,
+        doseMcg: 500,
+        weeks: 4,
+        schedule: {
+          kind: "days-of-week",
+          daysOfWeek: [1, 2, 3, 4, 5],
+          timeOfDay: "06:30",
+          timesOfDay: ["06:30"],
+        },
+      },
+    ],
+  });
+
+  it("reads its frequency from the first band, not from the protocol", () => {
+    const span = phaseSpanAt(reported, start);
+    expect(span?.schedule.kind).toBe("days-of-week");
+    expect(span?.schedule.daysOfWeek).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("reads 06:30 rather than the nine o'clock nothing chose", () => {
+    expect(scheduleTimes(phaseSpanAt(reported, start)!.schedule)).toEqual(["06:30"]);
+  });
+
+  /*
+   * Five, not 7/4. This one is not only on screen: the stock page asks for the
+   * rate to work out when a shelf empties, so the wrong answer moved a
+   * reorder date.
+   */
+  it("counts five doses a week, not the protocol's every four days", () => {
+    expect(protocolDosesPerWeek(reported, start)).toBe(5);
+  });
+
+  it("reads the first band's dose", () => {
+    expect(scheduledDoseMcg(reported, start)).toBe(250);
+  });
+
+  /*
+   * The half of this that was already right, asserted so that the fix cannot
+   * quietly make a dose due before the plan begins. Spans start at startedAt,
+   * whatever phaseSpanAt says about a moment before it.
+   */
+  it("still has nothing due before the start", () => {
+    expect(protocolDoseTimesBetween(reported, start, addLocalDays(start, 6))).toEqual([]);
+    expect(protocolNextDoseTime(reported, start)).toBeGreaterThanOrEqual(startsInAWeek);
   });
 });

@@ -54,6 +54,27 @@ function normalizeTime(raw: string): string {
 }
 
 /**
+ * Whether a list of time fields is finished being typed.
+ *
+ * Adding a time starts an empty field, so a blank is a normal state at the
+ * keyboard and a bad one at the moment of saving. It used to be saved as
+ * 09:00: `timeOfDay: clean[0] ?? "09:00"` in the protocol form and again in
+ * the band editor. On a card that nine o'clock is indistinguishable from an
+ * hour somebody chose, which is the trouble with a silent default that lands
+ * in the record rather than staying in the maths.
+ *
+ * `scheduleTimes` below defaults for the same reason and that is correct:
+ * there it is a reader making the best of what it was handed. Here it is a
+ * writer inventing a fact.
+ *
+ * Lives beside the schedule rather than in the form, because it is a rule
+ * about a schedule and a rule with a test is a rule that stays true.
+ */
+export function everyTimeFilled(times: string[]): boolean {
+  return times.length > 0 && times.every((t) => t.trim() !== "");
+}
+
+/**
  * Every time a dose day carries, in order, deduplicated.
  *
  * The one place `timesOfDay` and `timeOfDay` are reconciled. Two fields for
@@ -373,10 +394,46 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
   return spans;
 }
 
-/** The phase in force at a moment, or null before the protocol starts. */
+/**
+ * Whether a protocol has begun.
+ *
+ * By the local day rather than the minute, so a protocol started at nine this
+ * morning counts as started at eight, which is what somebody looking at a card
+ * at breakfast expects.
+ *
+ * One place, because this comparison was written inline in `phaseSpanAt` and
+ * the Plan card needed the same question answered a second time. Two copies of
+ * a boundary is how the two come to disagree, and a disagreement about this
+ * particular boundary is what made a plan describe itself wrongly for a week.
+ */
+export function hasStarted(protocol: Protocol, atMs: number): boolean {
+  return atMs >= startOfLocalDay(protocol.startedAt);
+}
+
+/**
+ * The phase in force at a moment.
+ *
+ * Before the protocol starts, that is the first phase. It used to be null, and
+ * every caller reads it the same way, `phaseSpanAt(p, now)?.schedule ??
+ * p.schedule`, so null meant they all fell back to the protocol's own schedule.
+ *
+ * For a plan built in bands that schedule governs nothing. It is whatever the
+ * top of the form happened to say when the bands were added, and the bands
+ * override all of it. A plan starting next Monday, Monday to Friday at 06:30,
+ * was drawn on the Plan page as every 4 days at 09:00, counted as 1.75 doses a
+ * week instead of 5, and handed that rate to the stock forecast. The dose was
+ * read the same way, so a first band that steps up from the protocol's figure
+ * would have shown the wrong milligrams too.
+ *
+ * Nothing here decides whether a dose is due. `phaseSpans` is what the dose
+ * times come from and its first span begins at `startedAt`, so no dose can
+ * precede the start whatever this returns. Every caller of this function is
+ * asking what the plan says, and before it starts the honest answer is the
+ * band that will govern when it does.
+ */
 export function phaseSpanAt(protocol: Protocol, atMs: number): PhaseSpan | null {
-  if (atMs < startOfLocalDay(protocol.startedAt)) return null;
   const spans = phaseSpans(protocol);
+  if (!hasStarted(protocol, atMs)) return spans[0] ?? null;
   for (const span of spans) {
     if (atMs <= span.to) return span;
   }

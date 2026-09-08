@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   addLocalDays,
   adherence,
+  everyTimeFilled,
+  hasStarted,
   logsForProtocol,
   atTimeOfDay,
   daysBetween,
@@ -1072,5 +1074,49 @@ describe("adherence matching, against a brute-force reference", () => {
     expect(a.taken).toBe(1);
     expect(a.skipped).toBe(0);
     expect(a.missed).toBe(a.expected - 1);
+  });
+});
+
+describe("everyTimeFilled", () => {
+  it("accepts a list of real times", () => {
+    expect(everyTimeFilled(["06:30"])).toBe(true);
+    expect(everyTimeFilled(["06:30", "20:00"])).toBe(true);
+  });
+
+  /* The state right after Add a time, which the save must not accept. */
+  it("rejects a field that has been started and not finished", () => {
+    expect(everyTimeFilled(["06:30", ""])).toBe(false);
+  });
+
+  it("rejects whitespace, which a time input can leave behind", () => {
+    expect(everyTimeFilled(["  "])).toBe(false);
+  });
+
+  it("rejects an empty list, which is no schedule at all", () => {
+    expect(everyTimeFilled([])).toBe(false);
+  });
+});
+
+describe("hasStarted", () => {
+  const p = {
+    id: "p1", profileId: "me", peptideId: "bpc-157", name: "x", active: true,
+    startedAt: new Date(2026, 8, 14, 9, 0).getTime(),
+    doseMcg: 250, route: "subcutaneous" as const,
+    schedule: { kind: "daily" as const, timeOfDay: "06:30" },
+    titrationAutoAdvance: false,
+  };
+
+  it("is false the week before", () => {
+    expect(hasStarted(p, new Date(2026, 8, 8, 12, 0).getTime())).toBe(false);
+  });
+
+  /* The card is read at breakfast on the day, before the hour it was set to. */
+  it("is true from midnight on the day itself", () => {
+    expect(hasStarted(p, new Date(2026, 8, 14, 0, 0).getTime())).toBe(true);
+    expect(hasStarted(p, new Date(2026, 8, 14, 8, 0).getTime())).toBe(true);
+  });
+
+  it("is false at the last moment of the day before", () => {
+    expect(hasStarted(p, new Date(2026, 8, 13, 23, 59, 59).getTime())).toBe(false);
   });
 });
