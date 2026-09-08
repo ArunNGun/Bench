@@ -14,28 +14,46 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { formatDose } from "@/lib/format";
+import { useLang, type PluralBase, type TranslationKey, type Vars } from "@/lib/i18n";
+
+/** What a caller has to hand over to get a sentence back. */
+type Translate = (key: TranslationKey | PluralBase, vars?: Vars) => string;
 
 /** More than a few times a day is a different kind of protocol than this app models. */
 const MAX_TIMES = 6;
 
-/** What the split works out to, in words, or null when there is nothing to say. */
-export function describeSplit(dailyMcg: number | undefined, times: string[]): string | null {
+/**
+ * What the split works out to, in words, or null when there is nothing to say.
+ *
+ * Takes `t` rather than reaching for it, because it is a plain function and
+ * `PhaseEditor` calls it outside any component of its own.
+ */
+export function describeSplit(
+  t: Translate,
+  dailyMcg: number | undefined,
+  times: string[],
+): string | null {
   const clean = times.filter(Boolean);
   if (clean.length < 2) return null;
 
   const each = dailyMcg != null && dailyMcg > 0 ? dailyMcg / clean.length : null;
-  const when = [...clean].sort().join(" and ");
+  const when = [...clean].sort().join(` ${t("plan_and")} `);
 
   return each == null
-    ? `${clean.length} doses a day, at ${when}.`
-    : `${formatDose(dailyMcg!)} a day, split into ${clean.length}: ${formatDose(each)} at ${when}.`;
+    ? t("times_split_plain", { n: clean.length, when })
+    : t("times_split_dose", {
+        daily: formatDose(dailyMcg!),
+        n: clean.length,
+        each: formatDose(each),
+        when,
+      });
 }
 
 export function TimesOfDay({
   times,
   onChange,
   dailyMcg,
-  label = "Times of day",
+  label,
   variant = "band",
 }: {
   times: string[];
@@ -45,11 +63,14 @@ export function TimesOfDay({
    * comes to. Left out where the form does not know it yet.
    */
   dailyMcg?: number;
+  /** Defaults to "Times of day" in the reader's language. */
   label?: string;
   /** Headings sit differently inside a band than they do in the form. */
   variant?: "field" | "band";
 }) {
-  const split = describeSplit(dailyMcg, times);
+  const { t } = useLang();
+  const heading = label ?? t("times_label");
+  const split = describeSplit(t, dailyMcg, times);
 
   return (
     <div className={variant === "field" ? "space-y-1.5" : "space-y-2"}>
@@ -60,7 +81,7 @@ export function TimesOfDay({
             : "block text-[11.5px] text-[var(--muted)]"
         }
       >
-        {label}
+        {heading}
       </span>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -69,14 +90,18 @@ export function TimesOfDay({
             <input
               type="time"
               value={time}
-              aria-label={times.length > 1 ? `Time ${i + 1} of ${times.length}` : label}
+              aria-label={
+                times.length > 1
+                  ? t("times_nth", { n: i + 1, total: times.length })
+                  : heading
+              }
               onChange={(e) => onChange(times.map((t, x) => (x === i ? e.target.value : t)))}
               className="rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[15px] text-[var(--ink)] focus:border-[var(--tangerine)] focus:outline-none"
             />
             {times.length > 1 && (
               <button
                 type="button"
-                aria-label={`Remove the ${time || "empty"} dose`}
+                aria-label={time ? t("times_remove", { time }) : t("times_remove_empty")}
                 onClick={() => onChange(times.filter((_, x) => x !== i))}
                 className="p-1 text-[var(--faint)] transition-colors hover:text-[var(--rose)]"
               >
@@ -92,7 +117,7 @@ export function TimesOfDay({
             onClick={() => onChange([...times, ""])}
             className="inline-flex items-center gap-1 rounded border border-[var(--line)] px-2.5 py-2 text-[12.5px] text-[var(--muted)] transition-colors hover:text-[var(--ink)]"
           >
-            <Plus size={14} /> Add a time
+            <Plus size={14} /> {t("times_add")}
           </button>
         )}
       </div>

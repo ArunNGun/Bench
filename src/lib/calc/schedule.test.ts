@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addLocalDays,
   adherence,
+  everyTimeFilled,
   logsForProtocol,
   atTimeOfDay,
   daysBetween,
@@ -1072,5 +1073,25 @@ describe("adherence matching, against a brute-force reference", () => {
     expect(a.taken).toBe(1);
     expect(a.skipped).toBe(0);
     expect(a.missed).toBe(a.expected - 1);
+  });
+});
+
+describe("everyTimeFilled", () => {
+  it("accepts a list of real times", () => {
+    expect(everyTimeFilled(["06:30"])).toBe(true);
+    expect(everyTimeFilled(["06:30", "20:00"])).toBe(true);
+  });
+
+  /* The state right after Add a time, which the save must not accept. */
+  it("rejects a field that has been started and not finished", () => {
+    expect(everyTimeFilled(["06:30", ""])).toBe(false);
+  });
+
+  it("rejects whitespace, which a time input can leave behind", () => {
+    expect(everyTimeFilled(["  "])).toBe(false);
+  });
+
+  it("rejects an empty list, which is no schedule at all", () => {
+    expect(everyTimeFilled([])).toBe(false);
   });
 });

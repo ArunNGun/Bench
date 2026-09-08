@@ -54,6 +54,27 @@ function normalizeTime(raw: string): string {
 }
 
 /**
+ * Whether a list of time fields is finished being typed.
+ *
+ * Adding a time starts an empty field, so a blank is a normal state at the
+ * keyboard and a bad one at the moment of saving. It used to be saved as
+ * 09:00: `timeOfDay: clean[0] ?? "09:00"` in the protocol form and again in
+ * the band editor. On a card that nine o'clock is indistinguishable from an
+ * hour somebody chose, which is the trouble with a silent default that lands
+ * in the record rather than staying in the maths.
+ *
+ * `scheduleTimes` below defaults for the same reason and that is correct:
+ * there it is a reader making the best of what it was handed. Here it is a
+ * writer inventing a fact.
+ *
+ * Lives beside the schedule rather than in the form, because it is a rule
+ * about a schedule and a rule with a test is a rule that stays true.
+ */
+export function everyTimeFilled(times: string[]): boolean {
+  return times.length > 0 && times.every((t) => t.trim() !== "");
+}
+
+/**
  * Every time a dose day carries, in order, deduplicated.
  *
  * The one place `timesOfDay` and `timeOfDay` are reconciled. Two fields for
