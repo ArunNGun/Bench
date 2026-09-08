@@ -561,9 +561,15 @@ Nothing was wrong with the arithmetic. What was wrong is that the screen where
 the number matters gave no reason, so the two screens contradicted each other
 and the reader had to guess which one was broken.
 
-`Stock` now carries `expiredMcg`, the mass sitting in vials excluded only by a
-date, and the card names it. Deliberately a quantity rather than a flag: naming
-the amount is what makes it obviously the vial the reader is looking at.
+`Stock` now carries `dosesExpired`, and the card shows that count with a past
+date marker beside it rather than a zero. The first attempt showed the zero and
+explained it, which is worse: zero is true of what can go in a syringe and
+false about what is in the fridge, and the reader comparing the two screens
+still had a contradiction to resolve.
+
+In doses rather than in mass because the card speaks in doses everywhere else.
+Kept out of `dosesRemaining` on purpose: supply days and the reorder date are
+answers about what can actually be drawn, and a vial past its date is not that.
 
 Deliberately excludes finished and discarded vials. Neither is something the
 reader is being denied, and explaining a zero with one of those would be

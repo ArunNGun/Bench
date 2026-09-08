@@ -283,17 +283,22 @@ export interface Stock {
    */
   needsReconstitution: boolean;
   /**
-   * Mass sitting in vials that are excluded only because they are past a date.
+   * Doses sitting in vials that are excluded only because they are past a date.
    *
    * Zero doses with a full vial on the shelf reads as a bug from the Now page,
    * which said nothing about why. The Stock page shows the same vial with what
    * is in it and a past date badge, so the two screens disagreed with no
    * explanation on the one where the number matters.
    *
-   * Counted rather than reported as a flag so the card can name the amount,
-   * which is what makes it obviously the vial the reader is looking at.
+   * Counted in doses rather than in mass because the card speaks in doses
+   * everywhere else, and a reader comparing "0 doses" with "2.85 mg" has been
+   * handed two units and asked to do the division.
+   *
+   * Kept out of `dosesRemaining` deliberately. Supply days and the reorder
+   * date are answers about what you can actually put in a syringe, and a vial
+   * past its date is not that. This is only for saying so.
    */
-  expiredMcg: number;
+  dosesExpired: number;
 }
 
 export function stockFor(
@@ -344,7 +349,7 @@ export function stockFor(
     dosesRemaining: per(availableMcg),
     dosesInOpenVials: per(openMcg),
     needsReconstitution: openCount === 0 && sealedCount > 0,
-    expiredMcg,
+    dosesExpired: per(expiredMcg),
   };
 }
 

@@ -482,7 +482,7 @@ describe("daysOfSupplyForProtocol", () => {
     dosesRemaining: 0,
     dosesInOpenVials: 0,
     needsReconstitution: false,
-    expiredMcg: 0,
+    dosesExpired: 0,
   });
 
   it("agrees with the flat calculation when the dose never changes", () => {
@@ -557,7 +557,7 @@ describe("supplyOutlook", () => {
     dosesRemaining: 0,
     dosesInOpenVials: 0,
     needsReconstitution: false,
-    expiredMcg: 0,
+    dosesExpired: 0,
   });
 
   it("gives the date the stock is spent", () => {
@@ -803,14 +803,15 @@ describe("stock held back by a date", () => {
     expect(stockFor([past], "kpv", 250, NOW).dosesRemaining).toBe(0);
   });
 
-  it("names what the date is holding back", () => {
-    expect(stockFor([past], "kpv", 250, NOW).expiredMcg).toBe(10_000);
+  /* In doses, because that is the unit the card is already speaking in. */
+  it("counts what the date is holding back", () => {
+    expect(stockFor([past], "kpv", 250, NOW).dosesExpired).toBe(40);
   });
 
   it("says nothing is held back when the vial is in date", () => {
     const stock = stockFor([inDate], "kpv", 250, NOW);
     expect(stock.dosesRemaining).toBeGreaterThan(0);
-    expect(stock.expiredMcg).toBe(0);
+    expect(stock.dosesExpired).toBe(0);
   });
 
   /*
@@ -820,6 +821,6 @@ describe("stock held back by a date", () => {
    */
   it("ignores vials that are gone rather than merely out of date", () => {
     const finished = { ...past, state: "finished" as const };
-    expect(stockFor([finished], "kpv", 250, NOW).expiredMcg).toBe(0);
+    expect(stockFor([finished], "kpv", 250, NOW).dosesExpired).toBe(0);
   });
 });
