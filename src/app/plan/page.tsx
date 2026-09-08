@@ -21,6 +21,7 @@ import { allPeptides, findPeptide, useStore, useProfileData } from "@/lib/store"
 import {
   dosesPerDoseDay,
   endOfLocalDay,
+  everyTimeFilled,
   phaseSpanAt,
   protocolDoseTimesBetween,
   protocolDosesPerWeek,
@@ -522,12 +523,35 @@ function ProtocolForm({
       kind,
       intervalDays: kind === "interval-days" ? intervalDays : undefined,
       daysOfWeek: kind === "days-of-week" ? daysOfWeek : undefined,
+      /*
+       * Unreachable now that the save is refused while a time field is empty,
+       * and kept as a floor rather than a decision. It is what made a plan
+       * report an hour nobody chose.
+       */
       timeOfDay: kind === "as-needed" ? undefined : (clean[0] ?? "09:00"),
       timesOfDay: kind === "as-needed" || clean.length < 2 ? undefined : clean,
       cycleWeeksOn: cycleOn || undefined,
       cycleWeeksOff: cycleOff || undefined,
     };
   }, [kind, intervalDays, daysOfWeek, times, cycleOn, cycleOff]);
+
+  /**
+   * A time field somewhere is empty.
+   *
+   * Adding a time starts an empty field, so this is an ordinary state while
+   * typing and the save is what must refuse it. It used to be written as
+   * 09:00, in the protocol and in every band, and on the card that hour is
+   * indistinguishable from one somebody picked.
+   */
+  const missingTime =
+    (kind !== "as-needed" && !everyTimeFilled(times)) ||
+    (usingPhases &&
+      phases.some(
+        (p) =>
+          p.schedule != null &&
+          p.schedule.kind !== "as-needed" &&
+          p.schedule.timesOfDay != null &&
+          !everyTimeFilled(p.schedule.timesOfDay)));
 
   /**
    * True when a saved protocol's timing is being moved. Adherence and progress
@@ -883,6 +907,12 @@ function ProtocolForm({
 
       <ProjectionPreview protocol={draft} peptide={peptide} />
 
+      {missingTime && (
+        <p className="rounded border border-[var(--rose)]/40 px-3 py-2.5 text-[12.5px] leading-snug text-[var(--rose-ink)]">
+          {t("times_missing")}
+        </p>
+      )}
+
       {rewritesHistory && (
         <p className="rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[12.5px] leading-snug text-[var(--muted)]">
           <span className="text-[var(--ink)]">{t("plan_rewrite_title")}</span>{" "}
@@ -896,7 +926,7 @@ function ProtocolForm({
         </Button>
         <Button
           variant="primary"
-          disabled={!peptideId}
+          disabled={!peptideId || missingTime}
           onClick={() =>
             onSave({
               peptideId,

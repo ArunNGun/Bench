@@ -105,6 +105,11 @@ export function PhaseEditor({
   function patchTimes(index: number, next: string[]) {
     const clean = [...new Set(next.map((t) => t.trim()).filter(Boolean))].sort();
     patchSchedule(index, {
+      /*
+       * The nine o'clock here is for a band mid-edit, not for a band that
+       * gets saved: the form refuses to save while any time field is empty,
+       * so this value never reaches a record. See everyTimeFilled.
+       */
       timeOfDay: clean[0] ?? "09:00",
       // Held as typed, blanks and all, so a time just added does not vanish
       // before it can be typed into. The maths ignores the blanks and the form
@@ -139,7 +144,7 @@ export function PhaseEditor({
         const effective = bandSchedule(protocolSchedule, phase.schedule);
         const inheritedTimes =
           protocolSchedule.kind === "as-needed" ? [] : scheduleTimes(protocolSchedule);
-        const inheritedSplit = describeSplit(phase.doseMcg, inheritedTimes);
+        const inheritedSplit = describeSplit(t, phase.doseMcg, inheritedTimes);
 
         return (
           <div
@@ -259,7 +264,7 @@ export function PhaseEditor({
 
             {inherits && inheritedTimes.length > 0 && (
               <p className="text-[12px] text-[var(--faint)]">
-                {inheritedSplit ?? `At ${inheritedTimes[0]}, same as the protocol.`}
+                {inheritedSplit ?? t("phase_same_at_time", { time: inheritedTimes[0] })}
               </p>
             )}
 
