@@ -356,9 +356,11 @@ export default function NowPage() {
         if (!mine) continue;
         out.push({
           id: track.protocol.id,
-          text: `${track.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
-            mine.note ? ` (${mine.note})` : ""
-          }. The library has no published figure for it.`,
+          text: translate(lang, "now_drawn_from_yours", {
+            name: track.peptide!.name,
+            hours: formatHalfLife(mine.hours),
+            note: mine.note ? ` (${mine.note})` : "",
+          }),
           evidence: "anecdotal" as const,
         });
         continue;
@@ -367,12 +369,15 @@ export default function NowPage() {
       if (!e) continue;
       out.push({
         id: track.protocol.id,
-        text: `${track.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
+        text: translate(lang, "now_estimate_line", {
+          name: track.peptide!.name,
+          detail: describeHalfLifeEstimate(e),
+        }),
         evidence: e.evidence,
       });
     }
     return out;
-  }, [tracks, overrides]);
+  }, [tracks, overrides, lang]);
 
   const needsAttention = tracks.filter(
     (track) => track.due.state === "overdue" || track.due.state === "due-now");
@@ -715,7 +720,7 @@ export default function NowPage() {
 
           {estimatedFrom.length > 0 && (
             <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-              A dashed line is a shape, not a level.{" "}
+              {t("now_dashed_line")}{" "}
               {estimatedFrom.map((e) => (
                 <span
                   key={e.id}

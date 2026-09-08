@@ -21,7 +21,7 @@ import {
 } from "@/lib/types";
 import {
   describeHalfLifeEstimate,
-  ESTIMATE_LABEL,
+  ESTIMATE_KEY,
   formatDose,
   formatDuration,
   formatHalfLife,
@@ -194,7 +194,7 @@ export function PeptideDetail({ slug }: { slug: string }) {
               }`}
             >
               <strong className="font-semibold">
-                {ESTIMATE_LABEL[p.halfLifeEstimate.evidence]}.
+                {t(ESTIMATE_KEY[p.halfLifeEstimate.evidence])}.
               </strong>{" "}
               {describeHalfLifeEstimate(p.halfLifeEstimate)}{" "}
               <a
