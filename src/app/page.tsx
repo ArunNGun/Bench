@@ -59,7 +59,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
-import { useLang } from "@/lib/i18n";
+import { translate, useLang, useLangStore, type TranslationKey } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -79,6 +79,7 @@ const DAY = 86_400_000;
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { t } = useLang();
+  const lang = useLangStore((s) => s.lang);
   const { protocols, logs, vials, measurements } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const overrides = useStore((s) => s.halfLifeOverrides);
@@ -127,10 +128,12 @@ export default function NowPage() {
       const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
       return {
         label: `${name} vial`,
-        concentration: Number.isFinite(conc) ? formatConcentration(conc) : "not reconstituted",
+        concentration: Number.isFinite(conc)
+          ? formatConcentration(conc)
+          : translate(lang, "now_not_reconstituted"),
       };
     },
-    [vials, custom]);
+    [vials, custom, lang]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
   /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
@@ -975,7 +978,7 @@ function TodayCard({
 
         <div className="min-w-0 flex-1">
           <h1 className="text-[22px] font-extrabold leading-tight tracking-tight text-[var(--ink)]">
-            {greeting(now)}
+            {greeting(now, t)}
           </h1>
           <p className="mt-0.5 text-[13.5px] text-[var(--muted)]">
             {today.restDay
@@ -1029,10 +1032,10 @@ function TodayCard({
                 }}
                 title={
                   d.restDay
-                    ? "Nothing scheduled"
+                    ? t("now_nothing_scheduled_day")
                     : isToday
-                      ? `${d.taken} of ${d.expected} logged, the day is not over`
-                      : `${d.taken} of ${d.expected} logged`
+                      ? t("now_day_partial", { taken: d.taken, expected: d.expected })
+                      : t("now_day_logged", { taken: d.taken, expected: d.expected })
                 }
               >
                 {(isToday || d.complete) && !d.restDay && filled > 0 && (
@@ -1057,11 +1060,17 @@ function TodayCard({
   );
 }
 
-function greeting(now: number) {
+/*
+ * Takes t rather than reading the store. It is a plain function outside the
+ * component, which is exactly why it stayed English through the whole
+ * translation run: a scan for text in JSX and in attributes never looks at
+ * what a helper returns.
+ */
+function greeting(now: number, t: (key: TranslationKey) => string) {
   const h = new Date(now).getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return t("greeting_morning");
+  if (h < 18) return t("greeting_afternoon");
+  return t("greeting_evening");
 }
 
 

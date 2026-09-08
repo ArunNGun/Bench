@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 type Theme = "dark" | "light";
 
@@ -50,6 +51,7 @@ function syncChrome(theme: Theme) {
  * the least urgent thing in it.
  */
 export function ThemeToggle({ className, menu = false }: { className?: string; menu?: boolean }) {
+  const { t } = useLang();
   const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
@@ -88,7 +90,7 @@ export function ThemeToggle({ className, menu = false }: { className?: string; m
         <span className="flex-1 text-[14px] font-medium text-[var(--ink)]">
           {/* Says where it goes, not where it is. A row labelled Dark next to a
               moon reads as a statement rather than a switch. */}
-          {!mounted ? "Theme" : theme === "light" ? "Dark theme" : "Light theme"}
+          {!mounted ? t("theme_label") : theme === "light" ? t("theme_dark") : t("theme_light")}
         </span>
       </button>
     );
@@ -98,7 +100,7 @@ export function ThemeToggle({ className, menu = false }: { className?: string; m
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-label={theme === "dark" ? t("theme_switch_light") : t("theme_switch_dark")}
       className={
         className ??
         "flex h-9 w-9 items-center justify-center rounded text-[var(--muted)] transition-colors hover:text-[var(--ink)]"

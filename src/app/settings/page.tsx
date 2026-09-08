@@ -493,10 +493,12 @@ function Backups() {
       if (outcome.ok) {
         updateSettings({ lastBackupAt: Date.now() });
         setNote(
-          `Saved ${outcome.name}${outcome.pruned ? `, and removed ${outcome.pruned} older one${outcome.pruned === 1 ? "" : "s"}` : ""}.`);
+          outcome.pruned
+            ? t("settings_backup_saved", { name: outcome.name ?? "", n: outcome.pruned })
+            : t("settings_backup_written", { name: outcome.name ?? "" }));
         await refresh();
       } else {
-        setNote(outcome.reason ?? "Could not write the backup.");
+        setNote(outcome.reason ?? t("settings_backup_write_failed"));
       }
     } finally {
       setBusy(false);
@@ -510,12 +512,12 @@ function Backups() {
     try {
       const text = await readBackup(name);
       if (!text) {
-        setNote("Could not read that backup.");
+        setNote(t("settings_backup_read_failed"));
         return;
       }
       const parsed = JSON.parse(text) as AppData;
       if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.logs)) {
-        setNote("That file is not a Bench backup.");
+        setNote(t("settings_backup_not_bench"));
         return;
       }
       importData(parsed);
@@ -591,7 +593,7 @@ function Backups() {
 
           <div className="flex flex-wrap items-center gap-2.5">
             <Button variant="primary" onClick={backupNow} disabled={busy}>
-              <HardDriveDownload size={15} /> {busy ? "Working…" : "Back up now"}
+              <HardDriveDownload size={15} /> {busy ? t("settings_working") : t("settings_back_up_now")}
             </Button>
             <span className="text-[12.5px] text-[var(--muted)]">
               {files.length
@@ -683,8 +685,7 @@ function HealthConnect() {
       const ok = await adapter.requestPermissions();
       await check();
       if (!ok) {
-        setResult(
-          "Access was not granted. Health Connect only offers the prompt a couple of times, after that it has to be switched on in its own settings.");
+        setResult(t("settings_health_denied"));
       }
     } finally {
       setBusy(false);
@@ -714,7 +715,7 @@ function HealthConnect() {
 
       setResult(describeSync(summarise(plan)));
     } catch {
-      setResult("Sync failed. Check Health Connect permissions and try again.");
+      setResult(t("settings_health_failed"));
     } finally {
       setBusy(false);
     }
@@ -750,7 +751,7 @@ function HealthConnect() {
         <div className="flex flex-wrap items-center gap-2.5">
           <Button variant="primary" onClick={sync} disabled={busy}>
             <RefreshCw size={15} className={busy ? "animate-spin" : undefined} />
-            {busy ? "Syncing…" : "Sync now"}
+            {busy ? t("settings_syncing") : t("settings_sync_now")}
           </Button>
           <Button variant="ghost" onClick={openHealthSettings}>
             <ExternalLink size={15} /> {t("settings_open_health_connect")}

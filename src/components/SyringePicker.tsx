@@ -19,7 +19,7 @@
 import { useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useLang } from "@/lib/i18n";
+import { useLang, type TranslationKey, type Vars } from "@/lib/i18n";
 import { barrelTicks } from "@/lib/calc/barrel";
 import { capacityUnits, SYRINGES, syringeById, type SyringeSpec } from "@/lib/calc/reconstitution";
 
@@ -54,10 +54,10 @@ function mlLabel(ml: number) {
 }
 
 /** What the marks on this barrel are worth, in the words on the box. */
-export function marksLabel(spec: SyringeSpec) {
-  if (spec.graduationUnits === 0.5) return "half-unit marks";
-  if (spec.graduationUnits === 1) return "1-unit marks";
-  return `${spec.graduationUnits}-unit marks`;
+export function marksLabel(spec: SyringeSpec, t: (key: TranslationKey, vars?: Vars) => string) {
+  if (spec.graduationUnits === 0.5) return t("marks_half_unit");
+  if (spec.graduationUnits === 1) return t("marks_one_unit");
+  return t("marks_n_unit", { n: spec.graduationUnits });
 }
 
 export function MiniSyringe({
@@ -216,7 +216,7 @@ export function SyringePicker({
           active={value === ""}
           onChange={onChange}
           title={t("syringe_ask_each_time")}
-          detail="No default. The calculator and the log sheet start empty."
+          detail={t("syringe_unset_detail")}
         />
       )}
 
@@ -227,7 +227,7 @@ export function SyringePicker({
           active={value === spec.id}
           onChange={onChange}
           title={`${mlLabel(spec.capacityMl)} mL`}
-          detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec)}`}
+          detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec, t)}`}
           spec={spec}
         />
       ))}
@@ -264,7 +264,7 @@ export function SyringeField({
           </p>
           <p className="text-[11.5px] text-[var(--muted)]">
             {chosen
-              ? `${chosen.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(chosen)} units, ${marksLabel(chosen)}`
+              ? `${chosen.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(chosen)} units, ${marksLabel(chosen, t)}`
               : t("syringe_no_default")}
           </p>
         </div>

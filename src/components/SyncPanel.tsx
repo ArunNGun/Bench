@@ -78,7 +78,7 @@ export function SyncPanel() {
     try {
       await fn();
     } catch (err) {
-      setError(err instanceof SyncError ? err.message : "Something went wrong. See the console.");
+      setError(err instanceof SyncError ? err.message : t("sync_went_wrong"));
       if (!(err instanceof SyncError)) console.error(err);
     } finally {
       setBusy(null);
@@ -86,7 +86,7 @@ export function SyncPanel() {
   }
 
   const connect = (mode: "login" | "register") =>
-    run(mode === "register" ? "Creating the account" : "Signing in", async () => {
+    run(mode === "register" ? t("sync_creating_account") : t("sync_signing_in"), async () => {
       const derived =
         mode === "register"
           ? await register(url, username, password, setupToken.trim())
@@ -115,7 +115,7 @@ export function SyncPanel() {
    * settings are left exactly as they are.
    */
   const reconnect = () =>
-    run("Signing in", async () => {
+    run(t("sync_signing_in"), async () => {
       const derived = await login(url, username, password);
       setKeyIsRemembered(await rememberKey(derived));
       setKey(derived);
@@ -124,7 +124,7 @@ export function SyncPanel() {
     });
 
   const disconnect = () =>
-    run("Signing out", async () => {
+    run(t("sync_signing_out"), async () => {
       await logout(url).catch(() => undefined);
       await forgetKey();
       setKey(null);
@@ -220,10 +220,10 @@ export function SyncPanel() {
           label={t("sync_password")}
           hint={
             expired
-              ? "The same password. It signs you in and derives the same key."
+              ? t("sync_password_expired_hint")
               : connected
-                ? "Not stored. The key it derives is."
-                : "Also the encryption key."
+                ? t("sync_password_connected_hint")
+                : t("sync_password_new_hint")
           }
         >
           <TextInput
