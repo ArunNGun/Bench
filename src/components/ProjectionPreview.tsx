@@ -44,11 +44,11 @@ export function ProjectionPreview({
       <Card className="p-4">
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
-            <TrendingUp size={13} strokeWidth={2.6} /> Projection
+            <TrendingUp size={13} strokeWidth={2.6} /> {t("projection_label")}
           </span>
         </SectionLabel>
         <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--muted)]">
-          No curve for {peptide.name}: its half-life has never been established in humans.
+          {t("projection_no_curve", { name: peptide.name })}
           {peptide.halfLifeNote ? ` ${peptide.halfLifeNote}` : ""}
         </p>
       </Card>
@@ -73,7 +73,7 @@ export function ProjectionPreview({
     <Card className="p-4">
       <SectionLabel>
         <span className="inline-flex items-center gap-1.5">
-          <TrendingUp size={13} strokeWidth={2.6} /> If you run this
+          <TrendingUp size={13} strokeWidth={2.6} /> {t("projection_header")}
         </span>
       </SectionLabel>
 
@@ -82,7 +82,10 @@ export function ProjectionPreview({
         preserveAspectRatio="none"
         className="mt-3 h-28 w-full"
         role="img"
-        aria-label={`Projected levels for ${peptide.name} over ${Math.round(span / 86_400_000)} days`}
+        aria-label={t("projection_chart_label", {
+          name: peptide.name,
+          days: t("count_days", { n: Math.round(span / 86_400_000) }),
+        })}
       >
         <defs>
           <linearGradient id="proj-fill" x1="0" y1="0" x2="0" y2="1">
@@ -129,19 +132,19 @@ export function ProjectionPreview({
 
       <dl className="mt-3 grid grid-cols-3 gap-2">
         <Figure
-          label="Levels settle"
+          label={t("projection_settle")}
           value={formatDuration(hoursToSteady)}
-          hint="from the first dose"
+          hint={t("projection_from_first")}
         />
         <Figure
-          label="Steady vs first"
-          value={accumulation == null ? "n/a" : `${trim(accumulation, 1)}x`}
-          hint="same dose, higher level"
+          label={t("projection_steady_vs_first")}
+          value={accumulation == null ? t("projection_na") : `${trim(accumulation, 1)}x`}
+          hint={t("projection_same_dose")}
         />
         <Figure
           label={t("projection_peak_trough")}
-          value={swing == null ? "n/a" : `${trim(swing, 1)}x`}
-          hint="between doses"
+          value={swing == null ? t("projection_na") : `${trim(swing, 1)}x`}
+          hint={t("projection_between_doses")}
         />
       </dl>
 
@@ -152,9 +155,7 @@ export function ProjectionPreview({
       )}
 
       <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--faint)]">
-        A one-compartment model from the published half-life, on the schedule above. It shows the
-        shape, not your blood. Absorption and clearance vary between people and the model does not
-        know yours.
+        {t("projection_model_note")}
       </p>
     </Card>
   );
