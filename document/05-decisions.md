@@ -340,3 +340,7 @@ belongs on its own, not appended to the end of a run of wiring PRs.
 
 Until then the public page is English, and the language picker in the app is
 what a person who wants Slovenian will find on their first screen after it.
+
+The same applies to the `metadata` export in `src/app/layout.tsx`, the page
+title and description a search engine and a browser tab show. It is computed on
+the server for the same reason and belongs to the same piece of work.

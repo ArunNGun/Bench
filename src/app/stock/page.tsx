@@ -1,5 +1,6 @@
 "use client";
-import { useLang } from "@/lib/i18n";
+import { useLang, type TranslationKey } from "@/lib/i18n";
+import { splitSlots } from "@/lib/i18n/rich";
 
 import { useMemo, useState } from "react";
 import { Droplet, PackageCheck, Plus, SprayCan, Trash2 } from "lucide-react";
@@ -191,7 +192,12 @@ export default function StockPage() {
             label={t("stock_spent")}
             value={formatTotals(spend.byCurrency)}
             tone="grape"
-            hint={`${spend.pricedVials} priced vial${spend.pricedVials === 1 ? "" : "s"}${spend.unpricedVials ? `, ${spend.unpricedVials} without a price` : ""}.${spend.mixed ? " Kept apart by currency rather than added together." : ""}`}
+            hint={
+              t("stock_priced_vials", { n: spend.pricedVials }) +
+              (spend.unpricedVials ? t("stock_without_price", { n: spend.unpricedVials }) : "") +
+              "." +
+              (spend.mixed ? t("stock_mixed_currency") : "")
+            }
           />
           <Stat
             label={t("stock_still_in_vials")}
@@ -530,11 +536,15 @@ function VialRow({
         ) : (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
             <span>{t("stock_lyophilised")}</span>
-            {many && <span className="tnum font-mono">{trim(strengthMgTotal, 2)} mg in total</span>}
+            {many && (
+              <span className="tnum font-mono">
+                {t("stock_mg_in_total", { mg: trim(strengthMgTotal, 2) })}
+              </span>
+            )}
             {/* The soonest date in the group, because that is the one that bites first. */}
             {(group ? group.expiresAt : vial.expiresAt) != null && (
               <span>
-                {many ? "first expires" : "expires"}{" "}
+                {many ? t("stock_first_expires") : t("stock_expires_word")}{" "}
                 {formatDate((group ? group.expiresAt : vial.expiresAt)!)}
               </span>
             )}
@@ -554,10 +564,12 @@ function VialRow({
               they entered as 500.
             */}
             <span className="text-[var(--muted)]">
-              more dose
-              {Math.floor(remainingMcg / doseMcg) === 1 ? "" : "s"} of{" "}
-              {formatDosePerDay(doseMcg, timesPerDay)}{" "}
-              {many ? "across these vials" : "in this vial"} · {formatDose(remainingMcg)} left
+              {t("stock_more_doses_suffix", {
+                n: Math.floor(remainingMcg / doseMcg),
+                per: formatDosePerDay(doseMcg, timesPerDay),
+                where: many ? t("stock_across_these_vials") : t("stock_in_this_vial"),
+              })}{" "}
+              · {formatDose(remainingMcg)} left
             </span>
           </p>
         )}
@@ -576,8 +588,14 @@ function VialRow({
         */}
         {outlook.kind === "runs-out" && (
           <p className="mt-0.5 text-[12px] text-[var(--faint)]">
-            At this plan, stock runs out{" "}
-            <span className="text-[var(--muted)]">{formatDate(outlook.at)}</span>
+            {splitSlots(t("stock_runs_out_line"), ["date"]).map((part, i) =>
+              "text" in part ? (
+                <span key={i}>{part.text}</span>
+              ) : (
+                <span key={i} className="text-[var(--muted)]">
+                  {formatDate(outlook.at)}
+                </span>
+              ))}
           </p>
         )}
         {outlook.kind === "beyond-horizon" && (
@@ -591,21 +609,27 @@ function VialRow({
               many ? null : vial.supplier,
               rowCost != null
                 ? `${formatMoney(rowCost, rowCurrency)}${
-                    many ? " in total" : ""
+                    many ? t("stock_in_total_suffix") : ""
                   }${
-                    rowShipping > 0 ? ` + ${formatMoney(rowShipping, rowCurrency)} shipping` : ""
+                    rowShipping > 0
+                      ? t("stock_shipping_suffix", {
+                          money: formatMoney(rowShipping, rowCurrency),
+                        })
+                      : ""
                   }${
                     doseMcg > 0
-                      ? ` · ${formatMoney(
-                          ((rowCost + rowShipping) / strengthMgTotal) * (doseMcg / 1000),
-                          rowCurrency)} a dose`
+                      ? t("stock_a_dose_suffix", {
+                          money: formatMoney(
+                            ((rowCost + rowShipping) / strengthMgTotal) * (doseMcg / 1000),
+                            rowCurrency),
+                        })
                       : ""
                   }`
                 : null,
               // Named rather than folded in, so a total is never read as covering
               // vials that were never priced.
               many && group!.unpricedCount > 0
-                ? `${group!.unpricedCount} without a price`
+                ? t("stock_unpriced_count", { n: group!.unpricedCount })
                 : null,
             ]
               .filter(Boolean)
@@ -621,7 +645,7 @@ function VialRow({
           )}
           {onReconstitute && (
             <Button onClick={onReconstitute} className="px-3 py-1.5 text-[13px]">
-              Reconstitute{many ? " one" : ""}
+              {many ? t("stock_reconstitute_one") : t("stock_reconstitute")}
             </Button>
           )}
           {onTopUp && (
@@ -645,7 +669,7 @@ function VialRow({
             className="px-3 py-1.5 text-[13px] text-[var(--rose)] hover:border-[var(--rose)]/40 hover:text-[var(--rose)]"
           >
             {/* Never the whole group. One click, one vial, the oldest of them. */}
-            <Trash2 size={13} /> Delete{many ? " one" : ""}
+            <Trash2 size={13} /> {many ? t("stock_delete_one") : t("stock_delete")}
           </Button>
         </div>
       </div>
@@ -780,7 +804,7 @@ function AddVialForm({
           hint={
             arrived
               ? undefined
-              : "Counts towards what you have spent, and towards nothing else until it lands."
+              : t("stock_on_order_hint")
           }
         >
           <Select value={arrived ? "here" : "ordered"} onChange={(e) => setArrived(e.target.value === "here")}>
@@ -792,14 +816,22 @@ function AddVialForm({
 
       <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
         <Field
-          label={pricedAs === "kit" ? "Cost for the whole kit" : "Cost per vial"}
+          label={pricedAs === "kit" ? t("stock_cost_kit") : t("stock_cost_per_vial_label")}
           hint={
             perVial != null && strengthMg > 0
               ? // Always says both numbers, so the split is visible before it is
                 // saved rather than discovered later on a vial row.
-                `${formatMoney(perVial, currency)} a vial, ${formatMoney(perVial / strengthMg, currency)} per mg.` +
-                (count > 1 ? ` ${formatMoney(perVial * count, currency)} for all ${count}.` : "")
-              : "Optional. Lets the app work out what a dose costs you."
+                t("stock_cost_hint", {
+                  avial: formatMoney(perVial, currency),
+                  permg: formatMoney(perVial / strengthMg, currency),
+                }) +
+                (count > 1
+                  ? t("stock_cost_all", {
+                      total: formatMoney(perVial * count, currency),
+                      n: count,
+                    })
+                  : "")
+              : t("stock_cost_optional")
           }
         >
           <NumberInput
@@ -818,7 +850,7 @@ function AddVialForm({
             onChange={(e) => setPricedAs(e.target.value as "vial" | "kit")}
           >
             <option value="vial">{t("stock_per_vial")}</option>
-            <option value="kit">{count > 1 ? `Kit of ${count}` : "Whole kit"}</option>
+            <option value="kit">{count > 1 ? t("stock_kit_of", { n: count }) : t("stock_whole_kit")}</option>
           </Select>
         </Field>
       </div>
@@ -866,8 +898,11 @@ function AddVialForm({
         label={t("stock_shipping_order")}
         hint={
           shipping === "" || !(Number(shipping) > 0)
-            ? "Optional. Shared across the vials added here, and included in what each one really cost."
-            : `${formatMoney(Number(shipping) / Math.max(1, count), currency)} per vial, across ${count} ${count === 1 ? "vial" : "vials"}.`
+            ? t("stock_shipping_optional")
+            : t("stock_shipping_split", {
+                each: formatMoney(Number(shipping) / Math.max(1, count), currency),
+                vials: t("count_vials", { n: count }),
+              })
         }
       >
         <NumberInput
@@ -908,7 +943,9 @@ function AddVialForm({
           }}
           disabled={!peptideId || !(strengthMg > 0)}
         >
-          {arrived ? "Add" : "Add on order"} {count > 1 ? `${count} vials` : "vial"}
+          {arrived
+            ? t("stock_add_vials", { vials: t("count_vials", { n: count }) })
+            : t("stock_add_vials_on_order", { vials: t("count_vials", { n: count }) })}
         </Button>
       </div>
     </Card>
@@ -923,11 +960,11 @@ function AddVialForm({
  * called it something else again. Somebody went looking for saline in a list
  * that had it and could not see it, which is what a synonym costs.
  */
-const DILUENT_LABEL: Record<DiluentKind, string> = {
-  bacteriostatic: "Bacteriostatic water",
-  sterile: "Sterile water (single use)",
-  saline: "Saline 0.9% (sodium chloride)",
-  oil: "Carrier oil",
+const DILUENT_KEY: Record<DiluentKind, TranslationKey> = {
+  bacteriostatic: "diluent_bacteriostatic",
+  sterile: "diluent_sterile",
+  saline: "diluent_saline",
+  oil: "diluent_oil",
 };
 
 /** The kinds a vial or a bottle can actually be made up with. Oil is not one. */
@@ -990,7 +1027,7 @@ function ReconstituteForm({
           >
             {DILUENT_CHOICES.map((k) => (
               <option key={k} value={k}>
-                {DILUENT_LABEL[k]}
+                {t(DILUENT_KEY[k])}
               </option>
             ))}
           </Select>
@@ -1002,15 +1039,18 @@ function ReconstituteForm({
           label={t("stock_from_bottle")}
           hint={
             chosen
-              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
-              : "Recorded as not coming from tracked stock, so no bottle is drawn down."
+              ? t("stock_ml_left_before", { ml: trim(bottleRemainingMl(chosen), 2) })
+              : t("stock_untracked_bottle")
           }
         >
           <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
             {available.map((b) => (
               <option key={b.id} value={b.id}>
-                {trim(b.volumeMl, 2)} mL bottle · {trim(bottleRemainingMl(b), 2)} mL left
-                {b.state === "sealed" ? " · sealed" : ""}
+                {t("stock_bottle_option", {
+                  ml: trim(b.volumeMl, 2),
+                  left: trim(bottleRemainingMl(b), 2),
+                })}
+                {b.state === "sealed" ? t("stock_sealed_suffix") : ""}
               </option>
             ))}
             <option value="">{t("stock_not_tracked")}</option>
@@ -1118,9 +1158,11 @@ function TransferToSprayForm({
           label={t("stock_saline_added")}
           hint={
             plan
-              ? `${trim(plan.bottle.diluentMl ?? 0, 2)} mL in the bottle, at ${formatConcentration(
-                  vialConcentration(plan.bottle))}.`
-              : "There is nothing left in this vial to pour."
+              ? t("stock_bottle_now", {
+                  ml: trim(plan.bottle.diluentMl ?? 0, 2),
+                  conc: formatConcentration(vialConcentration(plan.bottle)),
+                })
+              : t("stock_nothing_to_pour")
           }
         >
           <NumberInput
@@ -1154,7 +1196,7 @@ function TransferToSprayForm({
               bacteriostatic water. */}
           {(["saline", "sterile", "bacteriostatic"] as DiluentKind[]).map((k) => (
             <option key={k} value={k}>
-              {DILUENT_LABEL[k]}
+              {t(DILUENT_KEY[k])}
             </option>
           ))}
         </Select>
@@ -1165,15 +1207,18 @@ function TransferToSprayForm({
           label={t("stock_from_ampoule")}
           hint={
             chosen
-              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
-              : "Recorded as not coming from tracked stock, so nothing is drawn down."
+              ? t("stock_ml_left_before", { ml: trim(bottleRemainingMl(chosen), 2) })
+              : t("stock_untracked_nothing")
           }
         >
           <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
             {available.map((b) => (
               <option key={b.id} value={b.id}>
-                {trim(b.volumeMl, 2)} mL · {trim(bottleRemainingMl(b), 2)} mL left
-                {b.state === "sealed" ? " · sealed" : ""}
+                {t("stock_ampoule_option", {
+                  ml: trim(b.volumeMl, 2),
+                  left: trim(bottleRemainingMl(b), 2),
+                })}
+                {b.state === "sealed" ? t("stock_sealed_suffix") : ""}
               </option>
             ))}
             <option value="">{t("stock_not_tracked")}</option>
@@ -1241,10 +1286,12 @@ function TopUpForm({
         label={t("stock_water_added")}
         hint={
           after != null
-            ? `${formatConcentration(before)} becomes ${formatConcentration(after)}, with ${trim(
-                vialRemainingMl({ ...vial, diluentMl: nextDiluentMl! }),
-                2)} mL in the vial.`
-            : "How much you are adding now, not the total."
+            ? t("stock_becomes", {
+                before: formatConcentration(before),
+                after: formatConcentration(after),
+                ml: trim(vialRemainingMl({ ...vial, diluentMl: nextDiluentMl! }), 2),
+              })
+            : t("stock_adding_now")
         }
       >
         <NumberInput
@@ -1265,15 +1312,18 @@ function TopUpForm({
           label={t("stock_from_bottle")}
           hint={
             chosen
-              ? `${trim(bottleRemainingMl(chosen), 2)} mL left in it before this.`
-              : "Recorded as not coming from tracked stock, so no bottle is drawn down."
+              ? t("stock_ml_left_before", { ml: trim(bottleRemainingMl(chosen), 2) })
+              : t("stock_untracked_bottle")
           }
         >
           <Select value={bottleId} onChange={(e) => setBottleId(e.target.value)}>
             {available.map((b) => (
               <option key={b.id} value={b.id}>
-                {trim(b.volumeMl, 2)} mL bottle · {trim(bottleRemainingMl(b), 2)} mL left
-                {b.state === "sealed" ? " · sealed" : ""}
+                {t("stock_bottle_option", {
+                  ml: trim(b.volumeMl, 2),
+                  left: trim(bottleRemainingMl(b), 2),
+                })}
+                {b.state === "sealed" ? t("stock_sealed_suffix") : ""}
               </option>
             ))}
             <option value="">{t("stock_not_tracked")}</option>
@@ -1372,9 +1422,9 @@ function DiluentShelf() {
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label={t("stock_what")}>
               <Select value={kind} onChange={(e) => setKind(e.target.value as DiluentKind)}>
-                {(Object.keys(DILUENT_LABEL) as DiluentKind[]).map((k) => (
+                {(Object.keys(DILUENT_KEY) as DiluentKind[]).map((k) => (
                   <option key={k} value={k}>
-                    {DILUENT_LABEL[k]}
+                    {t(DILUENT_KEY[k])}
                   </option>
                 ))}
               </Select>
@@ -1423,7 +1473,7 @@ function DiluentShelf() {
           const left = bottleRemainingMl(b);
           return (
             <Card key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
-              <span className="text-[13.5px] text-[var(--ink)]">{DILUENT_LABEL[b.kind]}</span>
+              <span className="text-[13.5px] text-[var(--ink)]">{t(DILUENT_KEY[b.kind])}</span>
               <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>{b.state}</Badge>
               <span className="tnum font-mono text-[13px] text-[var(--muted)]">
                 {trim(left, 1)} of {trim(b.volumeMl, 1)} mL
