@@ -24,6 +24,22 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.2",
+    date: "2026-09-07",
+    summary: "Polish language support, full translation coverage across all four languages, a visual syringe picker, adherence fixes, and dead translation key cleanup.",
+    changes: [
+      "Polish added as a fourth language, reviewed by a native speaker. Switch between EN, DE, FR and PL from the header dropdown.",
+      "Full translation coverage across every screen, panel and component. Every string the page scanner missed, including ternary hints, helper returns, stock page labels and diluent names, is now translated.",
+      "Pick a syringe by looking at one. The calculator now shows a visual barrel for each option instead of a dropdown.",
+      "Real plural selection instead of bending every sentence around it. Languages that distinguish one from many now say the right thing.",
+      "Adherence fix: each dose was being matched to the nearest log and the last one was lost. Fixed.",
+      "Moving a schedule no longer invents a dose to call missed.",
+      "246 dead translation keys that nothing rendered were deleted, with a test to prevent them coming back.",
+      "About page and landing page fully translated into all four languages.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.1",
     date: "2026-09-06",
     summary: "German language support, weight on the PK chart, actual mg in the readout, and a wave of fixes and features from the community.",
