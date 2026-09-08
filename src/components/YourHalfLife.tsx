@@ -21,8 +21,10 @@ import { Check, Pencil, Trash2 } from "lucide-react";
 import { Button, NumberInput, TextInput } from "./ui";
 import { useStore } from "@/lib/store";
 import { formatDate, formatHalfLife } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 export function YourHalfLife({ peptideId, name }: { peptideId: string; name: string }) {
+  const { t } = useLang();
   const mine = useStore((s) => s.halfLifeOverrides)?.[peptideId];
   const setHalfLifeOverride = useStore((s) => s.setHalfLifeOverride);
 
@@ -42,14 +44,15 @@ export function YourHalfLife({ peptideId, name }: { peptideId: string; name: str
         {mine ? (
           <div className="flex flex-wrap items-center gap-2 text-[12px]">
             <span className="text-[var(--muted)]">
-              Your figure: <strong className="text-[var(--ink)]">{formatHalfLife(mine.hours)}</strong>
+              {t("yhl_your_figure")}{" "}
+              <strong className="text-[var(--ink)]">{formatHalfLife(mine.hours)}</strong>
               {mine.note ? `, ${mine.note}` : ""}
             </span>
-            <span className="text-[var(--faint)]">set {formatDate(mine.setAt)}</span>
+            <span className="text-[var(--faint)]">{t("yhl_set_on", { date: formatDate(mine.setAt) })}</span>
             <button
               type="button"
               onClick={() => setOpen(true)}
-              aria-label={`Change your half-life for ${name}`}
+              aria-label={t("yhl_change", { name })}
               className="press ml-auto p-1 text-[var(--faint)] hover:text-[var(--ink)]"
             >
               <Pencil size={14} />
@@ -57,7 +60,7 @@ export function YourHalfLife({ peptideId, name }: { peptideId: string; name: str
             <button
               type="button"
               onClick={() => setHalfLifeOverride(peptideId, null)}
-              aria-label={`Remove your half-life for ${name}`}
+              aria-label={t("yhl_remove", { name })}
               className="press p-1 text-[var(--faint)] hover:text-[var(--rose)]"
             >
               <Trash2 size={14} />
@@ -65,7 +68,7 @@ export function YourHalfLife({ peptideId, name }: { peptideId: string; name: str
           </div>
         ) : (
           <Button variant="soft" onClick={() => setOpen(true)} className="px-2.5 py-1 text-[12px]">
-            <Pencil size={13} /> Use your own half-life
+            <Pencil size={13} /> {t("yhl_use_own")}
           </Button>
         )}
       </div>
@@ -75,14 +78,12 @@ export function YourHalfLife({ peptideId, name }: { peptideId: string; name: str
   return (
     <div className="space-y-3 border-t border-[var(--line)] px-4 py-3">
       <p className="text-[12px] leading-relaxed text-[var(--muted)]">
-        A curve drawn from this is yours, not the library&apos;s. It stays on this device, travels
-        with your backups, and is marked as your figure everywhere it appears. If a published human
-        half-life is ever added for {name}, that one takes over.
+        {t("yhl_intro", { name })}
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-[12px] text-[var(--muted)]">Half-life, in hours</span>
+          <span className="mb-1 block text-[12px] text-[var(--muted)]">{t("yhl_hours_label")}</span>
           <NumberInput
             value={hours}
             min={0}
@@ -92,22 +93,22 @@ export function YourHalfLife({ peptideId, name }: { peptideId: string; name: str
         </label>
         <label className="block">
           <span className="mb-1 block text-[12px] text-[var(--muted)]">
-            Where you got it, optional
+            {t("yhl_source_label")}
           </span>
           <TextInput
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. vendor datasheet, a paper, a forum"
+            placeholder={t("yhl_source_placeholder")}
           />
         </label>
       </div>
 
       <div className="flex flex-wrap gap-2.5">
         <Button variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button variant="primary" onClick={save}>
-          <Check size={14} /> Save my figure
+          <Check size={14} /> {t("yhl_save")}
         </Button>
       </div>
     </div>
