@@ -919,19 +919,26 @@ export default function NowPage() {
                   }
                 >
                   {t("now_stock_label")}{" "}
-                  <span className="tnum font-mono">
-                    {t("count_doses", { n: track.stock.dosesRemaining })}
-                  </span>
                   {/*
-                    Why it is zero when the Stock page shows a full vial. Only
-                    said when the date is the whole reason, so it never
-                    explains a shortage that has another cause.
+                    A shelf with eleven doses on it says eleven, and says what
+                    is wrong with them. Zero was true of what can go in a
+                    syringe and false about what is in the fridge, and the
+                    reader comparing this with the Stock page saw only the
+                    contradiction.
+
+                    The count comes from the same rounding, so it is the number
+                    that would be here if the date passed tomorrow instead.
                   */}
-                  {track.stock.dosesRemaining === 0 && track.stock.expiredMcg > 0 && (
-                    <span className="text-[var(--rose)]">
-                      {" "}
-                      · {t("now_stock_expired", { amount: formatDose(track.stock.expiredMcg) })}
-                    </span>
+                  <span className="tnum font-mono">
+                    {t("count_doses", {
+                      n:
+                        track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0
+                          ? track.stock.dosesExpired
+                          : track.stock.dosesRemaining,
+                    })}
+                  </span>
+                  {track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0 && (
+                    <span className="text-[var(--rose)]"> · {t("now_stock_past_date")}</span>
                   )}
                   {track.supplyDays != null && track.stock.dosesRemaining > 0 && (
                     <span className="text-[var(--faint)]">
