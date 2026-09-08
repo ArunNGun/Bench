@@ -178,7 +178,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </ul>
 
           <p className="mt-6 rounded-[var(--r-inner)] bg-[var(--card)] p-3.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-            Everything stays on this device. Nothing is uploaded unless you set up sync yourself.
+            {t("frame_stays_on_device")}
           </p>
         </nav>
 

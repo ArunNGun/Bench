@@ -5,6 +5,7 @@ import { Badge, type Tone } from "./ui";
 import { decomposeDose, describeBlendDose, type ComponentDose } from "@/lib/calc/blend";
 import type { Peptide } from "@/lib/types";
 import { formatDose, formatHalfLife, percent } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /**
  * What a blend dose actually delivers, component by component.
@@ -62,6 +63,7 @@ const LABEL: Record<ComponentDose["relativeToTypical"], string> = {
 };
 
 function ComponentRow({ part, compact }: { part: ComponentDose; compact?: boolean }) {
+  const { t } = useLang();
   const share = percent(part.fraction, 0);
 
   return (
@@ -100,7 +102,7 @@ function ComponentRow({ part, compact }: { part: ComponentDose; compact?: boolea
         </span>
       ) : (
         <span className="w-full text-[11.5px] text-[var(--faint)] sm:w-auto">
-          no standalone range documented
+          {t("blend_no_standalone_range")}
         </span>
       )}
 

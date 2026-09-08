@@ -137,7 +137,7 @@ export function ProfileSwitcher() {
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
                 placeholder={t("profile_name_placeholder")}
-                aria-label="New profile name"
+                aria-label={t("profile_new_name")}
                 className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3 py-2 text-[14px] focus:border-[var(--mint)] focus:outline-none"
               />
               <div className="mt-2 flex gap-1.5">
@@ -212,7 +212,7 @@ export function AddFirstProfile() {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && name.trim() && (addProfile(name), setName(""))}
           placeholder={t("profile_their_name")}
-          aria-label="New profile name"
+          aria-label={t("profile_new_name")}
           className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--sunken)] px-3.5 py-3 text-[15px] focus:border-[var(--mint)] focus:outline-none"
         />
       </div>
@@ -225,7 +225,7 @@ export function AddFirstProfile() {
         }}
         className="press flex items-center gap-2 rounded-[var(--r-btn)] bg-[var(--mint)] px-4 py-3 text-[14px] font-semibold text-[var(--on-accent)] disabled:opacity-40"
       >
-        <UserRound size={16} /> Add profile
+        <UserRound size={16} /> {t("profile_add")}
       </button>
     </div>
   );

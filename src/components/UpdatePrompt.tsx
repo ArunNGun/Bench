@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, X } from "lucide-react";
 import { Button, TONE_BG, TONE_FG } from "./ui";
+import { useLang } from "@/lib/i18n";
 import {
   applyUpdate,
   fetchServerBuildId,
@@ -23,6 +24,7 @@ import {
  * through the Play Store or a new install, so a web build id means nothing there.
  */
 export function UpdatePrompt() {
+  const { t } = useLang();
   const [available, setAvailable] = useState(false);
   const [applying, setApplying] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -97,11 +99,11 @@ export function UpdatePrompt() {
           className={`mt-0.5 shrink-0 ${applying ? "animate-spin" : ""}`}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-bold">A new version is ready</p>
+          <p className="text-[14px] font-bold">{t("update_ready")}</p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed opacity-90">
             {applying
-              ? "Fetching it now…"
-              : "Your data is untouched by this. It stays on your device either way."}
+              ? t("update_fetching")
+              : t("update_data_untouched")}
           </p>
 
           {!applying && (
@@ -114,10 +116,10 @@ export function UpdatePrompt() {
                   applyUpdate();
                 }}
               >
-                Update now
+                {t("update_now")}
               </Button>
               <Button variant="ghost" className="py-2 text-[13px]" onClick={() => setDismissed(true)}>
-                Later
+                {t("later")}
               </Button>
             </div>
           )}
@@ -126,7 +128,7 @@ export function UpdatePrompt() {
         {!applying && (
           <button
             type="button"
-            aria-label="Dismiss"
+            aria-label={t("dismiss")}
             onClick={() => setDismissed(true)}
             className="press -mr-1 -mt-1 shrink-0 p-1 opacity-70 hover:opacity-100"
           >

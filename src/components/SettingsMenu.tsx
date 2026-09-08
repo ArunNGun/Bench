@@ -20,8 +20,10 @@ import { Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./ThemeToggle";
 import { LangDropdown } from "./LangDropdown";
+import { useLang } from "@/lib/i18n";
 
 export function SettingsMenu() {
+  const { t } = useLang();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -50,7 +52,7 @@ export function SettingsMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Settings"
+        aria-label={t("settings_title")}
         className={cn(
           "press flex h-10 items-center gap-2 rounded-[var(--r-pill)] px-3 text-[14px] font-medium transition-colors",
           active
@@ -81,7 +83,7 @@ export function SettingsMenu() {
             <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--sunken)] text-[var(--muted)]">
               <SlidersHorizontal size={16} />
             </span>
-            <span className="text-[14px] font-medium text-[var(--ink)]">All settings</span>
+            <span className="text-[14px] font-medium text-[var(--ink)]">{t("settings_all")}</span>
           </Link>
 
           <div className="my-1.5 h-px bg-[var(--line)]" />
