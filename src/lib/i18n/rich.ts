@@ -45,3 +45,37 @@ export function splitEmphasis(text: string): RichPart[] {
   if (rest.length > 0) parts.push({ text: rest, strong: false });
   return parts;
 }
+
+/**
+ * A sentence with something that is not text in the middle of it.
+ *
+ * "Saved days show up in the Log, beside the doses from that day", where Log
+ * is a link. Three keys around the tag would hand a translator two fragments
+ * that only fit together in English word order, which is the one thing
+ * translation changes.
+ *
+ * So the key keeps the whole sentence and marks the spot with a placeholder,
+ * `{log}`, and this returns the pieces in order with the placeholders called
+ * out. Moving the placeholder in a translation moves the link.
+ *
+ * Unknown placeholders are left as literal text, the same way an unpaired `**`
+ * is: a stray brace is a blemish, a swallowed sentence is a bug.
+ */
+export type SlotPart = { text: string } | { slot: string };
+
+export function splitSlots(text: string, slots: string[]): SlotPart[] {
+  if (!slots.length) return text ? [{ text }] : [];
+
+  const pattern = new RegExp(`\\{(${slots.join("|")})\\}`, "g");
+  const parts: SlotPart[] = [];
+  let at = 0;
+
+  for (const m of text.matchAll(pattern)) {
+    if (m.index > at) parts.push({ text: text.slice(at, m.index) });
+    parts.push({ slot: m[1] });
+    at = m.index + m[0].length;
+  }
+
+  if (at < text.length) parts.push({ text: text.slice(at) });
+  return parts;
+}

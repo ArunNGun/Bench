@@ -4,7 +4,8 @@ import { useLang } from "@/lib/i18n";
 import { useState } from "react";
 import Link from "next/link";
 import { Code2, ExternalLink, Lock, MessageCircle, ShieldAlert, Sparkles } from "lucide-react";
-import { Badge, Callout, Card, SectionLabel } from "@/components/ui";
+import { Badge, Callout, Card, Rich, SectionLabel } from "@/components/ui";
+import { splitSlots } from "@/lib/i18n/rich";
 import { PEPTIDES } from "@/lib/data/peptides";
 import { LAB_MARKERS } from "@/lib/data/labs";
 import { CURRENT_VERSION, GITHUB_URL, RELEASES } from "@/lib/changelog";
@@ -23,53 +24,32 @@ export default function AboutPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
         <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("about_title")}</h1>
-        <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-          {t("about_desc").slice(0, 60)}…
-        </p>
+        {/*
+          Its own key, not the first sentence of another one cut at sixty
+          characters. That cut landed mid-word in English and would have landed
+          mid-word differently in every other language.
+        */}
+        <p className="mt-1 text-[13.5px] text-[var(--muted)]">{t("about_subtitle")}</p>
       </header>
 
       <Card className="space-y-3 p-4">
         <SectionLabel action={<Badge tone="mint">v{CURRENT_VERSION}</Badge>}>{t("about_what_it_is")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
-          <p>
-            A tracker for peptide, growth hormone and anabolic protocols. It holds what you are
-            running, what you have actually taken, what is left in the fridge, what it cost, and
-            whether any of it is doing anything: weight, bloodwork, how you felt.
-          </p>
-          <p>
-            The parts that are easy to get wrong are the parts it takes seriously. Reconstitution
-            arithmetic is exact and covered by tests. Blends are split into their components and each
-            one modelled on its own half-life. A U-40 barrel is never quietly read as U-100. And the{" "}
-            {COMPOUND_COUNT} compound library tags every dose figure with where it came from, so an
-            approved label and a forum convention never look alike.
-          </p>
+          <p>{t("about_desc")}</p>
+          <p>{t("about_what_it_is_2", { compounds: COMPOUND_COUNT })}</p>
         </div>
       </Card>
 
       <Card className="space-y-3 p-4">
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
-            <Lock size={13} strokeWidth={2.6} /> Your data
+            <Lock size={13} strokeWidth={2.6} /> {t("about_your_data")}
           </span>
         </SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
-          <p>
-            By default there is no account, no server and no analytics. Everything you enter is
-            stored in this browser, on this device, and never leaves it. Not to me, not to whoever
-            is hosting it.
-          </p>
-          <p>
-            One exception, and it is off unless you switch it on. In Settings you can point the app
-            at a sync server you run yourself, so a second device can read the same data. Your data
-            is encrypted in this browser before it is uploaded, with a key derived from your
-            password, so that server holds something it cannot read either. Leave it alone and
-            nothing is ever sent.
-          </p>
-          <p>
-            That is a real privacy guarantee and a real risk at the same time. Nobody can read your
-            data, and nobody can recover it for you either. Clearing your browsing data erases it.
-            Export a copy from Settings and keep it somewhere else.
-          </p>
+          <p>{t("about_data_1")}</p>
+          <p>{t("about_data_2")}</p>
+          <p>{t("about_data_3")}</p>
         </div>
       </Card>
 
@@ -83,63 +63,39 @@ export default function AboutPage() {
         <SectionLabel>{t("about_skipped_dose")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
-            Ticking <strong className="text-[var(--ink)]">Record this as a skipped dose</strong>{" "}
-            writes an entry to your log and marks it as not taken. It is a record rather than the
-            absence of one, and that is the entire point: the app can tell a dose you decided
-            against from one nobody ever logged, and your adherence figure reports the two
-            separately rather than lumping both under missed.
+            <Rich text={t("about_skipped_1")} />
           </p>
-          <p className="font-semibold text-[var(--ink)]">What it stops happening</p>
+          <p className="font-semibold text-[var(--ink)]">{t("about_skipped_stops")}</p>
           <ul className="space-y-1.5 pl-4">
-            <li className="list-disc">
-              No vial is drawn down. Change an existing dose from taken to skipped and the mass goes
-              back into the vial it came from. Delete a skipped entry and nothing is returned,
-              because nothing was taken.
-            </li>
-            <li className="list-disc">
-              No drug is modelled in your body, so the curve, the percentage of peak and the
-              projection are all untouched.
-            </li>
-            <li className="list-disc">
-              It does not count towards today&apos;s ring or your streak, which count it apart from
-              a dose taken.
-            </li>
-            <li className="list-disc">
-              It is left out of the outcome comparisons, the injection site rotation, the dose marks
-              on the weight chart, and the protocol the app infers from your history.
-            </li>
-            <li className="list-disc">
-              The dose, units and vial fields grey out while the box is ticked, since none of them
-              mean anything for a dose that did not happen.
-            </li>
+            <li className="list-disc">{t("about_skipped_vial")}</li>
+            <li className="list-disc">{t("about_skipped_curve")}</li>
+            <li className="list-disc">{t("about_skipped_ring")}</li>
+            <li className="list-disc">{t("about_skipped_left_out")}</li>
+            <li className="list-disc">{t("about_skipped_greyed")}</li>
           </ul>
-          <p className="font-semibold text-[var(--ink)]">Where it still shows up</p>
-          <p>
-            In the log with its own marker, in the Skipped figure for the last thirty days, as
-            &quot;skipped&quot; in the printable report, and as <code>skipped=yes</code> in the CSV
-            export.
-          </p>
+          <p className="font-semibold text-[var(--ink)]">{t("about_skipped_shows")}</p>
+          <p>{t("about_skipped_where")}</p>
         </div>
       </Card>
 
       <Card className="space-y-3 p-4">
         <SectionLabel>{t("about_what_it_tracks")}</SectionLabel>
         <ul className="grid gap-x-6 gap-y-1.5 text-[13px] text-[var(--muted)] sm:grid-cols-2">
-          <li>{COMPOUND_COUNT} compounds, with cited half-lives and dose ranges</li>
-          <li>Protocols, titration ladders and adherence</li>
-          <li>Reconstitution for U-100 and U-40 syringes</li>
-          <li>Vial stock, beyond-use dates and cost per dose</li>
-          <li>Injection site rotation</li>
-          <li>Weight, with Android Health read-in</li>
-          <li>{MARKER_COUNT} blood markers, charted against your doses</li>
-          <li>Interaction checks across what you run together</li>
+          <li>{t("about_tracks_compounds", { n: COMPOUND_COUNT })}</li>
+          <li>{t("about_tracks_protocols")}</li>
+          <li>{t("about_tracks_reconstitution")}</li>
+          <li>{t("about_tracks_stock")}</li>
+          <li>{t("about_tracks_sites")}</li>
+          <li>{t("about_tracks_weight")}</li>
+          <li>{t("about_tracks_markers", { n: MARKER_COUNT })}</li>
+          <li>{t("about_tracks_interactions")}</li>
         </ul>
       </Card>
 
       <Card className="space-y-3 p-4">
         <SectionLabel action={<Badge tone="grape">v{CURRENT_VERSION}</Badge>}>
           <span className="inline-flex items-center gap-1.5">
-            <Sparkles size={13} strokeWidth={2.6} /> What is new
+            <Sparkles size={13} strokeWidth={2.6} /> {t("about_whats_new")}
           </span>
         </SectionLabel>
 
@@ -157,7 +113,7 @@ export default function AboutPage() {
                   <span className="text-[14px] font-bold text-[var(--ink)]">v{release.version}</span>
                   <span className="text-[11.5px] text-[var(--faint)]">{release.date}</span>
                   <span className="ml-auto text-[11.5px] font-semibold text-[var(--mint-ink)]">
-                    {open ? "Hide" : "Show"}
+                    {open ? t("about_hide") : t("about_show")}
                   </span>
                 </button>
 
@@ -178,7 +134,7 @@ export default function AboutPage() {
 
                 {open && release.contributors && release.contributors.length > 0 && (
                   <p className="mt-2 text-[11.5px] text-[var(--faint)]">
-                    Contributors:{" "}
+                    {t("about_contributors")}{" "}
                     {release.contributors.map((name, i) => (
                       <span key={name}>
                         <a
@@ -204,9 +160,7 @@ export default function AboutPage() {
         <SectionLabel>{t("about_who_made_it")}</SectionLabel>
         <div className="space-y-2.5 text-[13.5px] leading-relaxed text-[var(--muted)]">
           <p>
-            Built by <strong className="text-[var(--ink)]">Arun</strong>, originally to track my own
-            protocols properly, because every other option either wanted an account or got the
-            arithmetic wrong. It is free, there is nothing to buy, and nothing about you is collected.
+            <Rich text={t("about_built_by")} />
           </p>
           <a
             href={GITHUB_URL}
@@ -226,65 +180,57 @@ export default function AboutPage() {
             <MessageCircle size={15} /> {t("about_join_discord")}
             <ExternalLink size={13} className="text-[var(--faint)]" />
           </a>
-          <p className="text-[12.5px]">
-            Corrections to the library are welcome, particularly with a citation attached.
-          </p>
+          <p className="text-[12.5px]">{t("about_corrections")}</p>
+          {/*
+            Two links inside one sentence. The key holds the whole sentence and
+            marks where each link goes, so a language that wants the author
+            after the site can simply say so.
+          */}
           <p className="text-[12px] text-[var(--faint)]">
-            App icon by{" "}
-            <a
-              href="https://www.flaticon.com/authors/ricardo-ruiz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-dotted"
-            >
-              Ricardo Ruiz
-            </a>{" "}
-            on{" "}
-            <a
-              href="https://www.flaticon.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-dotted"
-            >
-              Flaticon
-            </a>
-            , used under the Flaticon licence.
+            {splitSlots(t("about_icon_credit"), ["author", "site"]).map((part, i) =>
+              "text" in part ? (
+                <span key={i}>{part.text}</span>
+              ) : (
+                <a
+                  key={i}
+                  href={
+                    part.slot === "author"
+                      ? "https://www.flaticon.com/authors/ricardo-ruiz"
+                      : "https://www.flaticon.com/"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted"
+                >
+                  {part.slot === "author" ? "Ricardo Ruiz" : "Flaticon"}
+                </a>
+              ))}
           </p>
         </div>
       </Card>
 
-      <Callout tone="warn" title="What this is not">
-        Not medical advice, not a prescription, and not a recommendation to use anything in it. Most
-        compounds here are not approved medicines anywhere, and material sold for research use has no
-        regulated identity, purity or sterility behind it. The app can check your arithmetic. It
-        cannot check what is in your vial, and it is no substitute for a doctor who knows your history.
+      <Callout tone="warn" title={t("about_what_it_is_not")}>
+        {t("about_not_body")}
       </Callout>
 
       <Card className="space-y-3 p-4">
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
-            <ShieldAlert size={13} strokeWidth={2.6} /> Where the numbers come from
+            <ShieldAlert size={13} strokeWidth={2.6} /> {t("about_numbers_title")}
           </span>
         </SectionLabel>
         <div className="space-y-2.5 text-[13px] leading-relaxed text-[var(--muted)]">
-          <p>
-            Prescribing labels first, then published trials, then registries. Community practice is
-            included where it is genuinely what people do, but it is always tagged as such.
-          </p>
-          <p>
-            Where a half-life has never been measured in humans, as with trenbolone and several
-            research peptides, the app says so and draws no curve rather than inventing one that looks
-            authoritative. Every entry links its sources.
-          </p>
+          <p>{t("about_numbers_1")}</p>
+          <p>{t("about_numbers_2")}</p>
         </div>
       </Card>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pb-2 text-[12px] text-[var(--faint)]">
         <Link href="/landing" className="underline decoration-dotted">
-          The public page for this app
+          {t("about_public_page")}
         </Link>
         <Link href="/settings" className="underline decoration-dotted">
-          Export your data
+          {t("about_export_data")}
         </Link>
       </div>
     </div>

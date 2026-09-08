@@ -1,5 +1,6 @@
 "use client";
 import { useLang } from "@/lib/i18n";
+import { splitSlots } from "@/lib/i18n/rich";
 
 import Link from "next/link";
 
@@ -153,21 +154,18 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
             for it the next week, and found no screen that showed it.
           */}
           {/*
-            One key with the link as a placeholder would need the link to be a
-            string. Splitting on {log} keeps the sentence whole for the
-            translator and still renders a real anchor in the middle of it.
+            The sentence stays one key with {log} marking where the link goes,
+            so a translation can move the link by moving the placeholder.
           */}
           <p className="text-[11.5px] text-[var(--faint)]">
-            {t("checkin_saved_days").split("{log}").map((part, i) => (
-              <span key={i}>
-                {i > 0 && (
-                  <Link href="/log" className="underline hover:text-[var(--ink)]">
-                    {t("checkin_log_link")}
-                  </Link>
-                )}
-                {part}
-              </span>
-            ))}
+            {splitSlots(t("checkin_saved_days"), ["log"]).map((part, i) =>
+              "text" in part ? (
+                <span key={i}>{part.text}</span>
+              ) : (
+                <Link key={i} href="/log" className="underline hover:text-[var(--ink)]">
+                  {t("checkin_log_link")}
+                </Link>
+              ))}
           </p>
 
           <div className="flex items-center gap-2">
