@@ -373,10 +373,30 @@ export function phaseSpans(protocol: Protocol): PhaseSpan[] {
   return spans;
 }
 
-/** The phase in force at a moment, or null before the protocol starts. */
+/**
+ * The phase in force at a moment.
+ *
+ * Before the protocol starts, that is the first phase. It used to be null, and
+ * every caller reads it the same way, `phaseSpanAt(p, now)?.schedule ??
+ * p.schedule`, so null meant they all fell back to the protocol's own schedule.
+ *
+ * For a plan built in bands that schedule governs nothing. It is whatever the
+ * top of the form happened to say when the bands were added, and the bands
+ * override all of it. A plan starting next Monday, Monday to Friday at 06:30,
+ * was drawn on the Plan page as every 4 days at 09:00, counted as 1.75 doses a
+ * week instead of 5, and handed that rate to the stock forecast. The dose was
+ * read the same way, so a first band that steps up from the protocol's figure
+ * would have shown the wrong milligrams too.
+ *
+ * Nothing here decides whether a dose is due. `phaseSpans` is what the dose
+ * times come from and its first span begins at `startedAt`, so no dose can
+ * precede the start whatever this returns. Every caller of this function is
+ * asking what the plan says, and before it starts the honest answer is the
+ * band that will govern when it does.
+ */
 export function phaseSpanAt(protocol: Protocol, atMs: number): PhaseSpan | null {
-  if (atMs < startOfLocalDay(protocol.startedAt)) return null;
   const spans = phaseSpans(protocol);
+  if (atMs < startOfLocalDay(protocol.startedAt)) return spans[0] ?? null;
   for (const span of spans) {
     if (atMs <= span.to) return span;
   }

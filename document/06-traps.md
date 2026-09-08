@@ -463,3 +463,38 @@ Both halves of this come from the same decision: nothing in the file marks
 which keys are families, so the code reads spelling. That is worth keeping,
 because the alternative is a second structure to keep in step with the first,
 but it means the suffix and the prefix are both load-bearing.
+
+## A plan in bands, before it starts
+
+`phaseSpanAt` returned null for any moment before the protocol's start date.
+Six call sites read it the same way:
+
+```ts
+phaseSpanAt(protocol, now)?.schedule ?? protocol.schedule
+```
+
+so null sent every one of them to the protocol's own schedule. For a plan built
+in bands that schedule governs nothing. It is whatever the top of the form
+happened to say when the bands were added, and each band overrides all of it.
+
+Reported from a real record: a plan starting the following Monday, Monday to
+Friday at 06:30, drawn on the Plan page as **every 4 days at 09:00**. Both
+numbers came from the leftover. The same fallback also had
+`protocolDosesPerWeek` answer 1.75 instead of 5, and the Stock page asks that
+function how fast a shelf empties, so a reorder date moved. `scheduledDoseMcg`
+read the same way, so a first band stepping up from the protocol's figure would
+have shown the wrong milligrams as well.
+
+The fix is that before the start the phase in force is the first phase, which
+is the one that will govern when it begins.
+
+What made it hard to see is that the half of the feature that matters was
+right the whole time. `protocolNextDoseTime` said Monday 06:30, because dose
+times come from `phaseSpans`, whose first span begins at `startedAt` and never
+consults `phaseSpanAt`. The app knew when the dose was due and described it
+wrongly on the same card.
+
+The general shape is worth remembering: a function that returns null for "not
+applicable yet" hands every caller the job of deciding what that means, and
+`?? somethingPlausible` is what they all reach for. If there is a right answer,
+return it.
