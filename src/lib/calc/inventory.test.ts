@@ -482,6 +482,7 @@ describe("daysOfSupplyForProtocol", () => {
     dosesRemaining: 0,
     dosesInOpenVials: 0,
     needsReconstitution: false,
+    expiredMcg: 0,
   });
 
   it("agrees with the flat calculation when the dose never changes", () => {
@@ -556,6 +557,7 @@ describe("supplyOutlook", () => {
     dosesRemaining: 0,
     dosesInOpenVials: 0,
     needsReconstitution: false,
+    expiredMcg: 0,
   });
 
   it("gives the date the stock is spent", () => {
@@ -775,5 +777,49 @@ describe("keeping sprays and syringes apart", () => {
     // Marks are a reading off a barrel and a nasal dose never meets one, so
     // this has to be null rather than a number nobody can act on.
     expect(marksForDose([shelf[1]], "klow", 250, "U100", NOW)).toBeNull();
+  });
+});
+
+/**
+ * Why a shelf with something on it can report nothing.
+ *
+ * Reported from a real record: the Stock page showed 2.85 mg and eleven doses
+ * left in a KPV vial, and the Now card beside it said 0 doses. Both were
+ * right. The vial was one day past its beyond-use date, so nothing counts it
+ * as supply, and the card had no way to say so.
+ */
+describe("stock held back by a date", () => {
+  const inDate = vial({
+    id: "in",
+    peptideId: "kpv",
+    strengthMg: 10,
+    state: "reconstituted",
+    diluentMl: 2,
+    budAt: NOW + DAY,
+  });
+  const past = { ...inDate, id: "past", budAt: NOW - DAY };
+
+  it("counts nothing towards supply", () => {
+    expect(stockFor([past], "kpv", 250, NOW).dosesRemaining).toBe(0);
+  });
+
+  it("names what the date is holding back", () => {
+    expect(stockFor([past], "kpv", 250, NOW).expiredMcg).toBe(10_000);
+  });
+
+  it("says nothing is held back when the vial is in date", () => {
+    const stock = stockFor([inDate], "kpv", 250, NOW);
+    expect(stock.dosesRemaining).toBeGreaterThan(0);
+    expect(stock.expiredMcg).toBe(0);
+  });
+
+  /*
+   * A finished vial is empty and a discarded one was thrown away. Neither is
+   * something the reader is being denied, and explaining a zero with either
+   * would be explaining it with the wrong vial.
+   */
+  it("ignores vials that are gone rather than merely out of date", () => {
+    const finished = { ...past, state: "finished" as const };
+    expect(stockFor([finished], "kpv", 250, NOW).expiredMcg).toBe(0);
   });
 });

@@ -549,3 +549,26 @@ done
 ```
 
 Run that before claiming a translation pass is finished.
+
+## A shelf with something on it that reports nothing
+
+The Now card said **0 doses** for KPV while the Stock page, one tap away, said
+2.85 mg and eleven doses left in the same vial. Both were right. The vial was
+one day past its beyond-use date, `vialUsable` excludes it, and `stockFor`
+counts only usable vials.
+
+Nothing was wrong with the arithmetic. What was wrong is that the screen where
+the number matters gave no reason, so the two screens contradicted each other
+and the reader had to guess which one was broken.
+
+`Stock` now carries `expiredMcg`, the mass sitting in vials excluded only by a
+date, and the card names it. Deliberately a quantity rather than a flag: naming
+the amount is what makes it obviously the vial the reader is looking at.
+
+Deliberately excludes finished and discarded vials. Neither is something the
+reader is being denied, and explaining a zero with one of those would be
+explaining it with the wrong vial.
+
+The general shape: when a screen filters something out, the filter is invisible
+and the number is not. If a zero can be caused by a rule rather than by an
+empty shelf, the rule has to say so where the zero is.

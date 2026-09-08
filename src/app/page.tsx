@@ -749,7 +749,18 @@ export default function NowPage() {
       <section>
         <SectionLabel>{t("now_active_protocols")}</SectionLabel>
         <div className="space-y-2.5">
-          {tracks.map((track) => (
+          {tracks.map((track) => {
+            /*
+              Only when the curve is actually drawn from it. A compound with a
+              published figure is never offered an override, so basis is the
+              honest test rather than the presence of a stored number.
+            */
+            const yourHalfLife =
+              track.curve?.basis === "yours"
+                ? (overrides?.[track.protocol.peptideId]?.hours ?? null)
+                : null;
+
+            return (
             <Card key={track.protocol.id} className="p-4">
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
@@ -883,9 +894,21 @@ export default function NowPage() {
                 <span className="text-[var(--muted)]">
                   {t("library_half_life")}{" "}
                   <span className="text-[var(--ink)]">
+                    {/*
+                      Your own figure when the curve is drawn from it. This
+                      read the library's number, which for a compound you
+                      entered a half-life for is null, so the same card said
+                      Not established and then drew a curve from thirty
+                      minutes you had typed in.
+                    */}
                     {track.blendParts.length > 0
                       ? t("now_per_component")
-                      : formatHalfLife(track.peptide?.halfLifeHours ?? null)}
+                      : yourHalfLife != null
+                        ? t("now_half_life_yours", {
+                            hours: formatHalfLife(yourHalfLife),
+                            marker: t("now_your_figure"),
+                          })
+                        : formatHalfLife(track.peptide?.halfLifeHours ?? null)}
                   </span>
                 </span>
                 <span
@@ -899,6 +922,17 @@ export default function NowPage() {
                   <span className="tnum font-mono">
                     {t("count_doses", { n: track.stock.dosesRemaining })}
                   </span>
+                  {/*
+                    Why it is zero when the Stock page shows a full vial. Only
+                    said when the date is the whole reason, so it never
+                    explains a shortage that has another cause.
+                  */}
+                  {track.stock.dosesRemaining === 0 && track.stock.expiredMcg > 0 && (
+                    <span className="text-[var(--rose)]">
+                      {" "}
+                      · {t("now_stock_expired", { amount: formatDose(track.stock.expiredMcg) })}
+                    </span>
+                  )}
                   {track.supplyDays != null && track.stock.dosesRemaining > 0 && (
                     <span className="text-[var(--faint)]">
                       {" "}
@@ -913,7 +947,8 @@ export default function NowPage() {
                 )}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </section>
 
