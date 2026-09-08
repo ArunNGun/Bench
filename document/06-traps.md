@@ -419,3 +419,28 @@ The fix was to rename the key. It is worth knowing that the suffix is reserved:
 a key whose last word happens to be `other`, `one`, `two`, `few` or `many` will
 be mistaken for part of a family, and the failure arrives in a test about
 plurals rather than anywhere near the key itself.
+
+## Keys nothing renders
+
+The dictionary reached 1236 keys with 246 of them unused. They were the
+original set from the first translation pass, and each screen that got wired up
+afterwards introduced more specific keys and left the old ones behind. Nothing
+failed: an unused key breaks nothing, type checks fine, and the parity test was
+perfectly happy to demand four translations of a string no screen would ever
+show.
+
+The cost lands on whoever is translating. A person working down the file has no
+way to tell which strings will be seen and which are ghosts, and a fifth of the
+work was ghosts.
+
+`src/lib/i18n/unused.test.ts` reads the source and fails when a key has no call
+site. Two things about how it reads:
+
+- A key reached as `` t(`reminders_lead_${minutes}`) `` never appears in full,
+  so the prefix is collected and everything under it counts as used.
+- The regex for that needs a lookbehind. `get(` ends in `t(`, so without one
+  the prefix `p` gets collected from `` get(`p${n}`) `` in an unrelated test,
+  and every key beginning with p is marked used. That is most of them.
+
+The test asserts both of those on a known key before it asserts anything about
+the dictionary, so a check that has quietly stopped checking fails loudly.
