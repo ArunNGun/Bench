@@ -3,7 +3,7 @@ import { useLang } from "@/lib/i18n";
 
 import { useRef, useState } from "react";
 import { AlertTriangle, Droplet, FileUp, Upload } from "lucide-react";
-import { Badge, Button, Callout, Card, SectionLabel, TONE_BG, TONE_FG } from "./ui";
+import { Badge, Button, Callout, Card, Rich, SectionLabel, TONE_BG, TONE_FG } from "./ui";
 import { allPeptides, useProfileData, useStore } from "@/lib/store";
 import { ACCEPTED_EXTENSIONS, ImportError, readImportFile, type ReadResult } from "@/lib/import/pipeline";
 import { describePlan, planIsEmpty, planSpan } from "@/lib/import/plan";
@@ -67,7 +67,7 @@ export function ImportPanel() {
       setError(
         e instanceof ImportError
           ? e.message
-          : "That file could not be read. CSV, TSV, JSON, .xlsx and a lab report PDF are supported.");
+          : t("import_unreadable"));
     } finally {
       setBusy(false);
     }
@@ -79,7 +79,10 @@ export function ImportPanel() {
     if (result.kind === "bench-export") {
       importData(result.data as AppData);
       setDone(
-        `Restored from your own export: ${result.data.logs?.length ?? 0} doses, ${result.data.protocols?.length ?? 0} protocols.`);
+        t("import_restored", {
+          doses: t("count_doses", { n: result.data.logs?.length ?? 0 }),
+          protocols: t("count_protocols", { n: result.data.protocols?.length ?? 0 }),
+        }));
       reset();
       return;
     }
@@ -99,12 +102,12 @@ export function ImportPanel() {
         });
         written++;
       }
+      const saved = t("import_saved_results", {
+        results: t("count_results", { n: written }),
+        date: formatDate(at),
+      });
       setDone(
-        `Saved ${written} result${written === 1 ? "" : "s"} dated ${formatDate(at)}.${
-          result.report.collectedAt == null
-            ? " No collection date was found in the file, so today's date was used. Edit it on the Bloodwork page if that is wrong."
-            : ""
-        }`);
+        result.report.collectedAt == null ? `${saved} ${t("import_no_date_used")}` : saved);
       reset();
       return;
     }
@@ -127,9 +130,10 @@ export function ImportPanel() {
     });
 
     setDone(
-      `Imported ${added.logs} dose${added.logs === 1 ? "" : "s"} and ${added.measurements} weight${
-        added.measurements === 1 ? "" : "s"
-      }. Nothing was taken off your stock. These are historical records.`);
+      t("import_imported", {
+        doses: t("count_doses", { n: added.logs }),
+        weights: t("count_weights", { n: added.measurements }),
+      }));
     reset();
   }
 
@@ -138,24 +142,19 @@ export function ImportPanel() {
       <SectionLabel>{t("import_title")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-Reads a CSV, TSV, JSON or .xlsx export from another tracker and merges the doses and
-        weights into this profile. A lab report PDF is read here too, straight on this device:
-        nothing is uploaded anywhere.
-        Shotsy is recognised by name; anything else is read from its column headers, so a spreadsheet
-        with a date, what you took and a dose will work. Nothing is written until you have seen what it
-        found, and re-importing the same file later only adds what is new.
+        {t("import_intro")}
       </p>
 
       {done && <Callout tone="info">{done}</Callout>}
-      {error && <Callout tone="danger" title="Could not read that file">{error}</Callout>}
+      {error && <Callout tone="danger" title={t("import_could_not_read")}>{error}</Callout>}
 
       {!result && (
         <div className="flex flex-wrap items-center gap-2.5">
           <Button variant="primary" onClick={() => fileRef.current?.click()} disabled={busy}>
-            <FileUp size={15} /> {busy ? "Reading…" : "Choose a file"}
+            <FileUp size={15} /> {busy ? t("import_reading") : t("import_choose_file")}
           </Button>
           <span className="text-[12px] text-[var(--faint)]">
-            .csv .tsv .json .xlsx .pdf, the old .xls needs re-saving first
+            {t("import_extensions")}
           </span>
         </div>
       )}
@@ -174,18 +173,21 @@ Reads a CSV, TSV, JSON or .xlsx export from another tracker and merges the doses
 
       {result?.kind === "bench-export" && (
         <div className="space-y-3">
-          <Callout tone="warn" title="This is one of your own exports">
-            It contains everything, protocols, stock, settings and profiles, so importing it
-            <strong> {t("import_replaces")}</strong> what is in the app rather than merging. {result.data.logs?.length ?? 0}{" "}
-            doses and {result.data.protocols?.length ?? 0} protocols would take the place of your
-            current {logs.length}.
+          <Callout tone="warn" title={t("import_own_export")}>
+            <Rich
+              text={t("import_own_export_body", {
+                doses: t("count_doses", { n: result.data.logs?.length ?? 0 }),
+                protocols: t("count_protocols", { n: result.data.protocols?.length ?? 0 }),
+                current: t("count_doses", { n: logs.length }),
+              })}
+            />
           </Callout>
           <div className="flex flex-wrap gap-2.5">
             <Button variant="ghost" onClick={reset}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button variant="danger" onClick={apply}>
-              Replace everything with this file
+              {t("import_replace_everything")}
             </Button>
           </div>
         </div>
@@ -245,6 +247,7 @@ function Preview({
   onCancel: () => void;
   onApply: () => void;
 }) {
+  const { t } = useLang();
   const { plan, profile, table } = result;
   const span = planSpan(plan);
   const nothing = planIsEmpty(plan);
@@ -255,8 +258,10 @@ function Preview({
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="mint">{profile.name}</Badge>
         <span className="text-[12.5px] text-[var(--muted)]">
-          {fileName} · {table.records.length} row{table.records.length === 1 ? "" : "s"}
-          {span ? ` · ${formatDate(span.from)} to ${formatDate(span.to)}` : ""}
+          {fileName} · {t("count_rows", { n: table.records.length })}
+          {span
+            ? ` · ${t("import_span", { from: formatDate(span.from), to: formatDate(span.to) })}`
+            : ""}
         </span>
       </div>
 
@@ -265,14 +270,14 @@ function Preview({
           on={withDoses}
           onChange={setWithDoses}
           count={plan.doses.length}
-          label={`dose${plan.doses.length === 1 ? "" : "s"}`}
+          title={t("import_new_doses", { n: plan.doses.length })}
           duplicates={plan.duplicateDoses}
         />
         <Toggle
           on={withWeights}
           onChange={setWithWeights}
           count={plan.weights.length}
-          label={`weight${plan.weights.length === 1 ? "" : "s"}`}
+          title={t("import_new_weights", { n: plan.weights.length })}
           duplicates={plan.duplicateWeights}
         />
       </div>
@@ -280,7 +285,7 @@ function Preview({
       {plan.doses.length > 0 && (
         <div>
           <p className="mb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[var(--faint)]">
-            First and last, to check it read them correctly
+            {t("import_first_last")}
           </p>
           <ul className="space-y-1">
             {sample(plan.doses).map((d) => (
@@ -299,7 +304,9 @@ function Preview({
                     {INJECTION_SITES.find((s) => s.id === d.site)?.label}
                   </span>
                 )}
-                <span className="ml-auto text-[11px] text-[var(--faint)]">row {d.sourceRow}</span>
+                <span className="ml-auto text-[11px] text-[var(--faint)]">
+                  {t("import_source_row", { n: d.sourceRow })}
+                </span>
               </li>
             ))}
           </ul>
@@ -312,19 +319,23 @@ function Preview({
           style={{ background: TONE_BG.tangerine, color: TONE_FG.tangerine }}
         >
           <p className="flex items-center gap-1.5 font-bold">
-            <AlertTriangle size={14} strokeWidth={2.4} /> Not in the library, so these are skipped
+            <AlertTriangle size={14} strokeWidth={2.4} /> {t("import_not_in_library")}
           </p>
           <ul className="mt-1 space-y-0.5">
             {plan.unresolved.map((u) => (
               <li key={u.label}>
-                <strong>{u.label}</strong>, {u.rows.length} row{u.rows.length === 1 ? "" : "s"} (
-                {u.rows.slice(0, 6).join(", ")}
-                {u.rows.length > 6 ? "…" : ""})
+                <Rich
+                  text={t("import_unresolved_row", {
+                    label: u.label,
+                    rows: t("count_rows", { n: u.rows.length }),
+                    list: u.rows.slice(0, 6).join(", ") + (u.rows.length > 6 ? "…" : ""),
+                  })}
+                />
               </li>
             ))}
           </ul>
           <p className="mt-1.5 opacity-90">
-            Add a compound with that name under Library to bring these in.
+            {t("import_add_compound")}
           </p>
         </div>
       )}
@@ -332,12 +343,14 @@ function Preview({
       {plan.problems.length > 0 && (
         <details className="rounded-[var(--r-inner)] bg-[var(--sunken)] px-3.5 py-3">
           <summary className="cursor-pointer text-[12.5px] font-bold text-[var(--ink)]">
-            {plan.problems.length} row{plan.problems.length === 1 ? "" : "s"} could not be read
+            {t("import_rows_unreadable", {
+              rows: t("count_rows", { n: plan.problems.length }),
+            })}
           </summary>
           <ul className="mt-2 space-y-1 text-[12px] leading-relaxed text-[var(--muted)]">
             {plan.problems.slice(0, 20).map((p, i) => (
               <li key={i}>
-                <strong>Row {p.sourceRow}:</strong> {p.reason}
+                <strong>{t("import_row_label", { n: p.sourceRow })}</strong> {p.reason}
               </li>
             ))}
           </ul>
@@ -346,17 +359,16 @@ function Preview({
 
       {nothing && (
         <Callout tone="info">
-          Nothing new here, everything in this file is already recorded. Importing the same export
-          again is safe and does nothing.
+          {t("import_nothing_new")}
         </Callout>
       )}
 
       <div className="flex flex-wrap gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button variant="primary" onClick={onApply} disabled={nothing || selectedNothing}>
-          <Upload size={15} /> Import {describePlan(plan)}
+          <Upload size={15} /> {t("import_action", { what: describePlan(plan) })}
         </Button>
       </div>
     </div>
@@ -373,15 +385,17 @@ function Toggle({
   on,
   onChange,
   count,
-  label,
+  title,
   duplicates,
 }: {
   on: boolean;
   onChange: (v: boolean) => void;
   count: number;
-  label: string;
+  /** Already counted and translated, because the plural rule belongs to the language. */
+  title: string;
   duplicates: number;
 }) {
+  const { t } = useLang();
   const disabled = count === 0;
 
   return (
@@ -403,11 +417,9 @@ function Toggle({
         {on && !disabled ? "✓" : ""}
       </span>
       <span className="min-w-0">
-        <span className="block text-[14px] font-bold text-[var(--ink)]">
-          {count} new {label}
-        </span>
+        <span className="block text-[14px] font-bold text-[var(--ink)]">{title}</span>
         <span className="block text-[11.5px] text-[var(--muted)]">
-          {duplicates > 0 ? `${duplicates} already recorded, skipped` : "nothing skipped"}
+          {duplicates > 0 ? t("import_dupes", { n: duplicates }) : t("import_none_skipped")}
         </span>
       </span>
     </button>
@@ -443,32 +455,32 @@ function LabPreview({
   const { t } = useLang();
   const keeping = report.candidates.filter((c) => !skipped.has(c.markerId));
   const suspect = report.candidates.filter((c) => c.confidence === "unit-mismatch");
+  const markers = t("count_markers", { n: report.candidates.length });
+  const when =
+    report.collectedAt != null ? formatDate(report.collectedAt) : t("import_lab_today");
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold text-[var(--ink)]">
-          <Droplet size={14} strokeWidth={2.6} /> Lab report
+          <Droplet size={14} strokeWidth={2.6} /> {t("import_lab_report")}
         </span>
         <span className="text-[12px] text-[var(--faint)]">
-          {fileName} · {lineCount} lines read
+          {fileName} · {t("import_lines_read", { n: lineCount })}
         </span>
       </div>
 
       <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
-        {report.candidates.length} marker{report.candidates.length === 1 ? "" : "s"} recognised
-        {report.lab ? ` from ${report.lab}` : ""}, dated{" "}
-        {report.collectedAt != null ? formatDate(report.collectedAt) : "today"}
-        {report.collectedAt == null ? ", since no collection date was found" : ""}. Check each
-        against the line it came from before saving.
+        {report.lab
+          ? t("import_lab_recognised_from", { markers, lab: report.lab, date: when })
+          : t("import_lab_recognised", { markers, date: when })}{" "}
+        {report.collectedAt == null ? `${t("import_lab_no_date")} ` : ""}
+        {t("import_lab_check")}
       </p>
 
       {suspect.length > 0 && (
-        <Callout tone="warn" title="Units that do not match">
-          {suspect.map((c) => c.markerName).join(", ")} came back in a unit the app does not chart
-          in. Nothing is converted on a guess, because charting one unit as another produces a trend
-          that is wrong rather than merely imprecise. Untick these and enter them by hand, or
-          convert them yourself first.
+        <Callout tone="warn" title={t("import_units_title")}>
+          {t("import_units_body", { markers: suspect.map((c) => c.markerName).join(", ") })}
         </Callout>
       )}
 
@@ -497,10 +509,13 @@ function LabPreview({
                     </span>
                     {c.refLow != null || c.refHigh != null ? (
                       <span className="text-[11.5px] text-[var(--faint)]">
-                        ref {c.refLow ?? "n/a"} to {c.refHigh ?? "n/a"}
+                        {t("import_ref_range", {
+                          low: c.refLow ?? "n/a",
+                          high: c.refHigh ?? "n/a",
+                        })}
                       </span>
                     ) : null}
-                    {bad && <Badge tone="tangerine">expects {c.expectedUnit}</Badge>}
+                    {bad && <Badge tone="tangerine">{t("import_expects_unit", { unit: c.expectedUnit })}</Badge>}
                     {c.confidence === "loose" && <Badge>{t("import_matched_loosely")}</Badge>}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-[11px] text-[var(--faint)]">
@@ -515,10 +530,10 @@ function LabPreview({
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button variant="primary" className="flex-1" disabled={!keeping.length} onClick={onApply}>
-          Save {keeping.length} result{keeping.length === 1 ? "" : "s"}
+          {t("import_save_results", { results: t("count_results", { n: keeping.length }) })}
         </Button>
       </div>
     </div>

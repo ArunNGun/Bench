@@ -40,10 +40,14 @@ import { HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { useStore } from "@/lib/store";
 import { formatDateTime } from "@/lib/format";
+import { translate, useLang, useLangStore } from "@/lib/i18n";
 
-const kb = (bytes: number) => (bytes > 0 ? `${Math.round(bytes / 1024)} kB` : "nothing yet");
+const kb = (bytes: number, t: (key: "admin_nothing_yet") => string) =>
+  bytes > 0 ? `${Math.round(bytes / 1024)} kB` : t("admin_nothing_yet");
 
 export function AdminPanel() {
+  const { t } = useLang();
+  const lang = useLangStore((s) => s.lang);
   const settings = useStore((s) => s.settings);
   const owner = useSyncState((s) => s.session);
   const url = HOSTED?.url ?? settings.sync?.url ?? "";
@@ -62,9 +66,9 @@ export function AdminPanel() {
       setAccounts(a);
       setInvites(i);
     } catch (err) {
-      setError(err instanceof SyncError ? err.message : "Could not read the server.");
+      setError(err instanceof SyncError ? err.message : translate(lang, "admin_read_failed"));
     }
-  }, [url]);
+  }, [url, lang]);
 
   useEffect(() => {
     if (owner?.admin) void refresh();
@@ -81,7 +85,7 @@ export function AdminPanel() {
       await fn();
       await refresh();
     } catch (err) {
-      setError(err instanceof SyncError ? err.message : "Something went wrong. See the console.");
+      setError(err instanceof SyncError ? err.message : t("admin_went_wrong"));
       if (!(err instanceof SyncError)) console.error(err);
     } finally {
       setBusy(false);
@@ -101,11 +105,10 @@ export function AdminPanel() {
    */
   const remove = (target: string) =>
     run(async () => {
-      if (!window.confirm(
-        `Remove ${target}? Their account and the only copy of their history on this server both go, and there is no undo.`)) {
+      if (!window.confirm(t("admin_confirm_remove", { name: target }))) {
         return;
       }
-      const password = window.prompt(`Your own password, to confirm removing ${target}.`);
+      const password = window.prompt(t("admin_confirm_password", { name: target }));
       if (!password) return;
       await removeAccount(url, owner.username, password, target);
     });
@@ -116,37 +119,30 @@ export function AdminPanel() {
     <Card className="space-y-4 p-4">
       <SectionLabel>
         <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck size={13} /> This server
+          <ShieldCheck size={13} /> {t("admin_title")}
         </span>
       </SectionLabel>
 
       <p className="text-[12.5px] text-[var(--muted)]">
-        You own this server, so you can see who has an account on it and invite more people. You
-        cannot see anything they have recorded. The server holds their data sealed with their own
-        password and has no key to it, which also means you cannot reset a password for anybody, and
-        neither can anyone else.
+        {t("admin_intro")}
       </p>
 
-      {error && <Callout tone="danger" title="The server said no">{error}</Callout>}
+      {error && <Callout tone="danger" title={t("admin_said_no")}>{error}</Callout>}
 
       {/* Shown once. Only the hash reaches the disk, so this cannot be asked for again. */}
       {made && (
-        <Callout tone="info" title={`Invitation for ${made.username}`}>
-          <p>
-            Send this over something private. Whoever opens it chooses their own password, which
-            nobody else will ever know, you included. It works once, and stops working{" "}
-            {formatDateTime(made.expiresAt)}.
-          </p>
+        <Callout tone="info" title={t("admin_invite_for", { name: made.username })}>
+          <p>{t("admin_invite_send", { when: formatDateTime(made.expiresAt) })}</p>
           <div className="mt-2 flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded bg-[var(--sunken)] px-2 py-1.5 text-[12px]">
               {link}
             </code>
             <Button onClick={() => void navigator.clipboard?.writeText(link)}>
-              <Copy size={14} /> Copy
+              <Copy size={14} /> {t("admin_copy")}
             </Button>
           </div>
           <p className="mt-2 text-[12px] text-[var(--faint)]">
-            This is the only time it is shown. If it is lost, cancel it below and make another.
+            {t("admin_shown_once")}
           </p>
         </Callout>
       )}
@@ -158,8 +154,8 @@ export function AdminPanel() {
             to invite, and a real person's name at that.
           */}
           <Field
-            label="Invite somebody"
-            hint="You choose the name, they choose the password. Lowercase letters, digits, dot, dash, underscore."
+            label={t("admin_invite_label")}
+            hint={t("admin_invite_hint")}
           >
             <TextInput
               value={name}
@@ -169,7 +165,7 @@ export function AdminPanel() {
           </Field>
         </div>
         <Button variant="primary" disabled={busy || !name.trim()} onClick={invite}>
-          <UserPlus size={15} /> Make an invitation
+          <UserPlus size={15} /> {t("admin_make_invite")}
         </Button>
       </div>
 
@@ -190,18 +186,22 @@ function Accounts({
   busy: boolean;
   onRemove: (username: string) => void;
 }) {
-  if (rows == null) return <p className="text-[12.5px] text-[var(--faint)]">Reading the server...</p>;
+  const { t } = useLang();
+
+  if (rows == null) {
+    return <p className="text-[12.5px] text-[var(--faint)]">{t("admin_reading")}</p>;
+  }
 
   return (
     <div className="space-y-1.5">
-      <SectionLabel>Accounts</SectionLabel>
+      <SectionLabel>{t("admin_accounts")}</SectionLabel>
       {rows.map((a) => (
         <div
           key={a.username}
           className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-[var(--sunken)] px-3 py-2"
         >
           <span className="font-medium">{a.username}</span>
-          {a.admin && <span className="text-[11.5px] text-[var(--faint)]">owner</span>}
+          {a.admin && <span className="text-[11.5px] text-[var(--faint)]">{t("admin_owner")}</span>}
           {/*
             A lockout is shown because the owner is the one who will be told
             about it, usually by the person it happened to, and because the way
@@ -209,16 +209,18 @@ function Accounts({
           */}
           {a.lockedUntil != null && (
             <span className="text-[11.5px] text-[var(--rose)]">
-              locked until {formatDateTime(a.lockedUntil)}
+              {t("admin_locked_until", { when: formatDateTime(a.lockedUntil) })}
             </span>
           )}
           <span className="ml-auto text-[12px] text-[var(--faint)]">
-            {kb(a.bytes)}
-            {a.lastSyncAt != null && <>, last synced {formatDateTime(a.lastSyncAt)}</>}
+            {kb(a.bytes, t)}
+            {a.lastSyncAt != null && (
+              <>, {t("admin_last_synced", { when: formatDateTime(a.lastSyncAt) })}</>
+            )}
           </span>
           {a.username !== me && (
             <Button variant="ghost" disabled={busy} onClick={() => onRemove(a.username)}>
-              <Trash2 size={14} /> Remove
+              <Trash2 size={14} /> {t("admin_remove")}
             </Button>
           )}
         </div>
@@ -236,11 +238,13 @@ function Invites({
   busy: boolean;
   onCancel: (id: string) => void;
 }) {
+  const { t } = useLang();
+
   if (!rows.length) return null;
 
   return (
     <div className="space-y-1.5">
-      <SectionLabel>Invitations</SectionLabel>
+      <SectionLabel>{t("admin_invitations")}</SectionLabel>
       {rows.map((i) => (
         <div
           key={i.id}
@@ -250,11 +254,11 @@ function Invites({
           <span className="font-medium">{i.username}</span>
           <span className="ml-auto text-[12px] text-[var(--faint)]">
             {i.usedAt != null
-              ? `used ${formatDateTime(i.usedAt)}`
-              : `expires ${formatDateTime(i.expiresAt)}`}
+              ? t("admin_invite_used", { when: formatDateTime(i.usedAt) })
+              : t("admin_invite_expires", { when: formatDateTime(i.expiresAt) })}
           </span>
           <Button variant="ghost" disabled={busy} onClick={() => onCancel(i.id)}>
-            {i.usedAt != null ? "Clear" : "Cancel"}
+            {i.usedAt != null ? t("admin_clear") : t("cancel")}
           </Button>
         </div>
       ))}
