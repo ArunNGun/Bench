@@ -345,38 +345,32 @@ export function hoursUntilFraction(fraction: number, halfLifeHours: number) {
 
 export type PhaseId = "absorbing" | "peak" | "active" | "trailing" | "cleared";
 
-export interface Phase {
-  id: PhaseId;
-  label: string;
-  /** Plain-language description of what the number means. */
-  detail: string;
-}
+/*
+ * The phase is an id and nothing else.
+ *
+ * It used to carry an English label and an English detail beside the id, which
+ * made this pure module the author of two sentences on the dashboard and left
+ * them untranslatable. Every test here already asserted the id, because the id
+ * is the fact and the words were decoration.
+ */
 
 /**
  * Describe where a compound sits on its curve, for the dashboard copy.
  * `rising` distinguishes the climb to peak from the fall after it.
  */
-export function describePhase(level: number, rising: boolean, nearPeak: boolean): Phase {
-  if (level < 0.05) {
-    return { id: "cleared", label: "Cleared", detail: "Under 5% of peak. Effectively out of your system." };
-  }
-  if (nearPeak) {
-    return { id: "peak", label: "At peak", detail: "Near the highest level this dose will reach." };
-  }
-  if (rising) {
-    return { id: "absorbing", label: "Absorbing", detail: "Still climbing toward peak." };
-  }
-  if (level >= 0.4) {
-    return { id: "active", label: "Active", detail: "Past peak and still well within the active range." };
-  }
-  return { id: "trailing", label: "Trailing off", detail: "Falling toward the tail of the curve." };
+export function describePhase(level: number, rising: boolean, nearPeak: boolean): PhaseId {
+  if (level < 0.05) return "cleared";
+  if (nearPeak) return "peak";
+  if (rising) return "absorbing";
+  if (level >= 0.4) return "active";
+  return "trailing";
 }
 
 export interface LevelSnapshot {
   level: number;
   rising: boolean;
   nearPeak: boolean;
-  phase: Phase;
+  phase: PhaseId;
   /** Percentage of a single reference-dose peak. */
   percentOfPeak: number;
 }

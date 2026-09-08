@@ -718,12 +718,28 @@ export function slotIsKnowable(protocol: Protocol, atMs: number): boolean {
 
 export type DueState = "overdue" | "due-now" | "upcoming" | "scheduled" | "none";
 
+/**
+ * What to call this state on screen.
+ *
+ * Finer than `DueState`, which lumps a paused protocol together with one that
+ * has nothing scheduled. They are the same to the maths and different to a
+ * reader, so the state stays as it is and the name is its own field.
+ */
+export type DueLabel =
+  | "paused"
+  | "due-now"
+  | "overdue"
+  | "none"
+  | "due-today"
+  | "scheduled";
+
 export interface DueStatus {
   state: DueState;
   at: number | null;
   /** Hours until due; negative when overdue. */
   hoursAway: number;
-  label: string;
+  /** An id, translated by whoever renders it. This module writes no English. */
+  label: DueLabel;
 }
 
 export interface DueOptions {
@@ -790,7 +806,7 @@ function earlyWindowMs(gapMs: number | null, capMs: number): number {
  */
 export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions = {}): DueStatus {
   const { lastLoggedAt = null, graceHours = 4, toleranceHours = 12 } = options;
-  if (!protocol.active) return { state: "none", at: null, hoursAway: 0, label: "Paused" };
+  if (!protocol.active) return { state: "none", at: null, hoursAway: 0, label: "paused" };
 
   const grace = graceHours * 3_600_000;
   const tolerance = toleranceHours * 3_600_000;
@@ -807,9 +823,9 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
   ) {
     const hoursAway = (prev - nowMs) / 3_600_000;
     if (nowMs - prev <= grace) {
-      return { state: "due-now", at: prev, hoursAway, label: "Due now" };
+      return { state: "due-now", at: prev, hoursAway, label: "due-now" };
     }
-    return { state: "overdue", at: prev, hoursAway, label: "Overdue" };
+    return { state: "overdue", at: prev, hoursAway, label: "overdue" };
   }
 
   let next = protocolNextDoseTime(protocol, nowMs);
@@ -817,14 +833,14 @@ export function dueStatus(protocol: Protocol, nowMs: number, options: DueOptions
   if (next != null && lastLoggedAt != null && loggedEarlyFor(next, prev, lastLoggedAt, grace)) {
     next = protocolNextDoseTime(protocol, next + 1);
   }
-  if (next == null) return { state: "none", at: null, hoursAway: 0, label: "No dose scheduled" };
+  if (next == null) return { state: "none", at: null, hoursAway: 0, label: "none" };
 
   const hours = (next - nowMs) / 3_600_000;
   if (hours <= graceHours) {
-    return { state: "due-now", at: next, hoursAway: hours, label: "Due now" };
+    return { state: "due-now", at: next, hoursAway: hours, label: "due-now" };
   }
   if (next <= endOfLocalDay(nowMs)) {
-    return { state: "upcoming", at: next, hoursAway: hours, label: "Due today" };
+    return { state: "upcoming", at: next, hoursAway: hours, label: "due-today" };
   }
-  return { state: "scheduled", at: next, hoursAway: hours, label: "Scheduled" };
+  return { state: "scheduled", at: next, hoursAway: hours, label: "scheduled" };
 }

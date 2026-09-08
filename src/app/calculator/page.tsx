@@ -277,10 +277,13 @@ export default function CalculatorPage() {
           {draw.warnings.includes("off-graduation") && (
             <div className="border-t border-[var(--line)] px-4 py-3.5 sm:px-6">
               <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-                Settling on {trim(draw.unitsRounded, 2)} marks actually delivers{" "}
+                {t("calc_settling_on", { marks: trim(draw.unitsRounded, 2) })}{" "}
                 <strong className="tnum font-mono text-[var(--ink)]">
                   {formatDose(draw.deliveredMcg)}
-                </strong>, which is {draw.roundingErrorMcg > 0 ? "over" : "under"} your target by{" "}
+                </strong>,{" "}
+                {draw.roundingErrorMcg > 0
+                  ? t("calc_which_is_over")
+                  : t("calc_which_is_under")}{" "}
                 <strong className="tnum font-mono text-[var(--ink)]">
                   {formatDose(Math.abs(draw.roundingErrorMcg))}
                 </strong>{" "}
@@ -345,10 +348,11 @@ export default function CalculatorPage() {
                       {trim(s.diluentMl, 2)} mL
                     </span>
                     <span className="tnum shrink-0 font-mono text-[14px] text-[var(--tangerine)]">
-                      {trim(s.units, 2)} marks
+                      {t("calc_marks_count", { n: trim(s.units, 2) })}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--faint)]">
-                      {trim(s.concentrationMgPerMl, 3)} mg/mL · {trim(s.mcgPerGraduation, 2)} mcg per mark
+                      {trim(s.concentrationMgPerMl, 3)} mg/mL ·{" "}
+                      {t("calc_mcg_per_mark_value", { n: trim(s.mcgPerGraduation, 2) })}
                     </span>
                     {s.landsOnMark && (
                       <Check size={15} className="shrink-0 text-[var(--leaf)]" aria-label={t("calc_lands_on_mark")} />
@@ -375,7 +379,10 @@ export default function CalculatorPage() {
             <span className="text-[var(--ink)]">{trim(draw.volumeMl, 4)} mL</span>
           </p>
           <p>
-            marks = {trim(draw.volumeMl, 4)} mL ÷ {trim(graduationMl(syringe), 4)} mL per mark ={" "}
+            {t("calc_marks_formula", {
+              volume: trim(draw.volumeMl, 4),
+              per: trim(graduationMl(syringe), 4),
+            })}{" "}
             <span className="text-[var(--ink)]">{trim(draw.volumeMl / graduationMl(syringe), 2)}</span>
           </p>
         </div>

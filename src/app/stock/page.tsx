@@ -1412,8 +1412,10 @@ function DiluentShelf() {
 
       {stock.remainingMl > 0 && (
         <p className="mb-2 text-[12.5px] text-[var(--muted)]">
-          {trim(stock.remainingMl, 1)} mL of bacteriostatic water across {stock.bottles}{" "}
-          {stock.bottles === 1 ? "bottle" : "bottles"}.
+          {t("stock_water_across", {
+            ml: trim(stock.remainingMl, 1),
+            n: stock.bottles,
+          })}
         </p>
       )}
 

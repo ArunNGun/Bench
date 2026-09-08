@@ -20,11 +20,18 @@ import {
   type Tone,
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
-import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import {
+  curveFor,
+  isMeasuredInPeople,
+  snapshot,
+  type DoseEvent,
+  type PhaseId,
+} from "@/lib/calc/pk";
 import { toDisplayWeight } from "@/lib/calc/outcomes";
 import {
   dosesPerDoseDay,
   dueStatus,
+  type DueLabel,
   endOfLocalDay,
   phaseSpanAt,
   logsForProtocol,
@@ -75,6 +82,32 @@ import {
 } from "@/lib/types";
 
 const DAY = 86_400_000;
+
+/** The calc layer names a state; the page is where it becomes a word. */
+const DUE_KEY: Record<DueLabel, TranslationKey> = {
+  paused: "due_paused",
+  "due-now": "due_now",
+  overdue: "due_overdue",
+  none: "due_none",
+  "due-today": "due_today",
+  scheduled: "due_scheduled",
+};
+
+const CURVE_KEY: Record<PhaseId, TranslationKey> = {
+  cleared: "curve_cleared",
+  peak: "curve_peak",
+  absorbing: "curve_absorbing",
+  active: "curve_active",
+  trailing: "curve_trailing",
+};
+
+const CURVE_DETAIL_KEY: Record<PhaseId, TranslationKey> = {
+  cleared: "curve_cleared_detail",
+  peak: "curve_peak_detail",
+  absorbing: "curve_absorbing_detail",
+  active: "curve_active_detail",
+  trailing: "curve_trailing_detail",
+};
 
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -434,7 +467,7 @@ export default function NowPage() {
                 track.due.state === "overdue" ? "border-[var(--rose)]/45" : "border-[var(--tangerine)]/45"
               }`}
             >
-              <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>{track.due.label}</Badge>
+              <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>{t(DUE_KEY[track.due.label])}</Badge>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
                   {track.color && (
@@ -726,8 +759,8 @@ export default function NowPage() {
                       {track.peptide?.name ?? track.protocol.peptideId}
                     </Link>
                     {track.snap && (
-                      <Badge tone={track.snap.phase.id === "cleared" ? "neutral" : "sky"}>
-                        {track.snap.phase.label}
+                      <Badge tone={track.snap.phase === "cleared" ? "neutral" : "sky"}>
+                        {t(CURVE_KEY[track.snap.phase])}
                       </Badge>
                     )}
                     {/*
@@ -779,7 +812,7 @@ export default function NowPage() {
                     <span className="tnum font-semibold text-[var(--ink)]">
                       {t("now_percent_of_peak", { pct: track.snap.percentOfPeak.toFixed(0) })}
                     </span>
-                    <span className="text-[var(--muted)]">{track.snap.phase.detail}</span>
+                    <span className="text-[var(--muted)]">{t(CURVE_DETAIL_KEY[track.snap.phase])}</span>
                   </div>
                 </div>
               ) : track.blendParts.length === 0 ? (
