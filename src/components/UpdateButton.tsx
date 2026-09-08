@@ -9,6 +9,7 @@ import {
   RUNNING_BUILD_ID,
   updateAvailable,
 } from "@/lib/update";
+import { useLang } from "@/lib/i18n";
 
 type State = "idle" | "checking" | "up-to-date" | "available" | "applying";
 
@@ -20,6 +21,7 @@ type State = "idle" | "checking" | "up-to-date" | "available" | "applying";
  * when the passive check hasn't fired yet or was dismissed.
  */
 export function UpdateButton() {
+  const { t } = useLang();
   const [state, setState] = useState<State>("idle");
 
   const isNative =
@@ -47,29 +49,29 @@ export function UpdateButton() {
   }
 
   const buildLabel =
-    RUNNING_BUILD_ID === "dev" ? "dev build" : RUNNING_BUILD_ID.slice(0, 8);
+    RUNNING_BUILD_ID === "dev" ? t("update_dev_build") : RUNNING_BUILD_ID.slice(0, 8);
 
   return (
     <Card className="space-y-3 p-4">
-      <SectionLabel>App version</SectionLabel>
+      <SectionLabel>{t("update_app_version")}</SectionLabel>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-[13px] text-[var(--ink)]">
-            Build{" "}
+            {t("update_build")}{" "}
             <span className="font-mono text-[12px] text-[var(--muted)]">{buildLabel}</span>
           </p>
           <p className="text-[12px] text-[var(--muted)]">
             {state === "up-to-date" && (
               <span className="flex items-center gap-1 text-[var(--leaf)]">
                 <CheckCircle2 size={12} strokeWidth={2.5} />
-                You&apos;re on the latest version.
+                {t("update_latest")}
               </span>
             )}
-            {state === "available" && "A newer version is available."}
-            {state === "checking" && "Checking…"}
-            {state === "applying" && "Clearing cache and reloading…"}
-            {state === "idle" && "Tap to fetch the latest version."}
+            {state === "available" && t("update_available")}
+            {state === "checking" && t("update_checking")}
+            {state === "applying" && t("update_applying")}
+            {state === "idle" && t("update_idle")}
           </p>
         </div>
 
@@ -77,28 +79,28 @@ export function UpdateButton() {
           {(state === "idle" || state === "up-to-date") && (
             <Button variant="ghost" className="gap-1.5 py-2 text-[13px]" onClick={check}>
               <RefreshCw size={13} strokeWidth={2.3} />
-              Check for update
+              {t("update_check")}
             </Button>
           )}
 
           {state === "checking" && (
             <Button variant="ghost" className="gap-1.5 py-2 text-[13px]" disabled>
               <RefreshCw size={13} strokeWidth={2.3} className="animate-spin" />
-              Checking…
+              {t("update_checking")}
             </Button>
           )}
 
           {state === "available" && (
             <>
               <Button variant="primary" className="py-2 text-[13px]" onClick={apply}>
-                Update now
+                {t("update_now")}
               </Button>
               <Button
                 variant="ghost"
                 className="py-2 text-[13px]"
                 onClick={() => setState("idle")}
               >
-                Later
+                {t("update_later")}
               </Button>
             </>
           )}
@@ -106,7 +108,7 @@ export function UpdateButton() {
           {state === "applying" && (
             <Button variant="ghost" className="gap-1.5 py-2 text-[13px]" disabled>
               <RefreshCw size={13} strokeWidth={2.3} className="animate-spin" />
-              Reloading…
+              {t("update_reloading")}
             </Button>
           )}
         </div>
