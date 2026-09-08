@@ -22,6 +22,7 @@ import {
   dosesPerDoseDay,
   endOfLocalDay,
   everyTimeFilled,
+  hasStarted,
   phaseSpanAt,
   protocolDoseTimesBetween,
   protocolDosesPerWeek,
@@ -215,7 +216,14 @@ export default function PlanPage() {
                     )}
                   </div>
                   <p className="mt-1.5 text-[12px] text-[var(--faint)]">
-                    {t("plan_started")} {formatDate(p.startedAt)}
+                    {/*
+                      A protocol dated next week has not started, and saying it
+                      did is a false statement rather than an awkward tense.
+                      The boundary comes from hasStarted so that this and the
+                      phase in force can never disagree about it.
+                    */}
+                    {hasStarted(p, now) ? t("plan_started") : t("plan_starts")}{" "}
+                    {formatDate(p.startedAt)}
                     {p.sites?.length ? ` · ${t("plan_rotating_sites", { n: p.sites.length })}` : ""}
                   </p>
                 </div>
