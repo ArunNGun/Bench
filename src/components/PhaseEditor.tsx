@@ -12,10 +12,22 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button, NumberInput, Segmented, Select } from "@/components/ui";
 import { TimesOfDay, describeSplit } from "@/components/TimesOfDay";
 import { bandSchedule, scheduleTimes } from "@/lib/calc/schedule";
+import { useLang } from "@/lib/i18n";
 import { formatDose } from "@/lib/format";
 import type { ProtocolPhase, Schedule, ScheduleKind } from "@/lib/types";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Indexed by `Date.getDay()`, so Sunday is first. Shared with the Plan page. */
+const WEEKDAY_KEYS = [
+  "weekday_sun",
+  "weekday_mon",
+  "weekday_tue",
+  "weekday_wed",
+  "weekday_thu",
+  "weekday_fri",
+  "weekday_sat",
+] as const;
+
+type Translate = ReturnType<typeof useLang>["t"];
 
 /** Sentinel for "this band keeps the protocol's own frequency". */
 const INHERIT = "inherit";
@@ -34,11 +46,11 @@ export function bandWeekRange(phases: ProtocolPhase[], index: number) {
   return { start, end: start + Math.max(0, phases[index].weeks) - 1 };
 }
 
-export function describeBandRange(phases: ProtocolPhase[], index: number) {
+export function describeBandRange(t: Translate, phases: ProtocolPhase[], index: number) {
   const { start, end } = bandWeekRange(phases, index);
-  if (end == null) return `Week ${start} onwards`;
-  if (end === start) return `Week ${start}`;
-  return `Weeks ${start} to ${end}`;
+  if (end == null) return t("phase_week_onwards", { start });
+  if (end === start) return t("phase_week_one", { start });
+  return t("phase_week_range", { start, end });
 }
 
 function nextPhase(phases: ProtocolPhase[]): ProtocolPhase {
@@ -71,6 +83,8 @@ export function PhaseEditor({
   /** Shown as the default so "same as protocol" means something concrete. */
   protocolSchedule: Schedule;
 }) {
+  const { t } = useLang();
+
   function patch(index: number, changes: Partial<ProtocolPhase>) {
     onChange(phases.map((p, i) => (i === index ? { ...p, ...changes } : p)));
   }
@@ -103,10 +117,10 @@ export function PhaseEditor({
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12.5px] text-[var(--muted)]">
-          Each band runs for the weeks you give it. The last one runs on until you change the plan.
+          {t("phase_intro")}
         </p>
         <Segmented
-          ariaLabel="Dose unit"
+          ariaLabel={t("phase_dose_unit")}
           options={[
             { value: "mcg", label: "mcg" },
             { value: "mg", label: "mg" },
@@ -134,12 +148,12 @@ export function PhaseEditor({
           >
             <div className="flex items-center justify-between gap-3">
               <span className="text-[12px] font-semibold text-[var(--ink)]">
-                {describeBandRange(phases, i)}
+                {describeBandRange(t, phases, i)}
               </span>
               {phases.length > 1 && (
                 <button
                   type="button"
-                  aria-label={`Remove band ${i + 1}`}
+                  aria-label={t("phase_remove_band", { n: i + 1 })}
                   onClick={() => onChange(renumber(phases.filter((_, x) => x !== i)))}
                   className="p-1 text-[var(--faint)] transition-colors hover:text-[var(--rose)]"
                 >
@@ -150,7 +164,7 @@ export function PhaseEditor({
 
             <div className="grid gap-2.5 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-[11.5px] text-[var(--muted)]">Dose</span>
+                <span className="mb-1 block text-[11.5px] text-[var(--muted)]">{t("plan_dose")}</span>
                 <NumberInput
                   value={unit === "mg" ? phase.doseMcg / 1000 : phase.doseMcg}
                   min={0}
@@ -172,17 +186,17 @@ export function PhaseEditor({
               */}
               {isLast ? (
                 <div className="self-end pb-2.5 text-[12px] text-[var(--faint)]">
-                  Runs on until you change the plan.
+                  {t("phase_runs_on")}
                 </div>
               ) : (
                 <label className="block">
-                  <span className="mb-1 block text-[11.5px] text-[var(--muted)]">Weeks</span>
+                  <span className="mb-1 block text-[11.5px] text-[var(--muted)]">{t("phase_weeks")}</span>
                   <NumberInput
                     value={phase.weeks}
                     min={1}
                     max={104}
                     step={1}
-                    suffix="weeks"
+                    suffix={t("weeks")}
                     onChange={(e) => patch(i, { weeks: Math.max(1, Number(e.target.value)) })}
                   />
                 </label>
@@ -191,7 +205,7 @@ export function PhaseEditor({
 
             <div className="grid gap-2.5 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-[11.5px] text-[var(--muted)]">How often</span>
+                <span className="mb-1 block text-[11.5px] text-[var(--muted)]">{t("plan_how_often")}</span>
                 <Select
                   value={kind}
                   onChange={(e) => {
@@ -203,23 +217,23 @@ export function PhaseEditor({
                     patchSchedule(i, { kind: v as ScheduleKind });
                   }}
                 >
-                  <option value={INHERIT}>Same as the protocol</option>
-                  <option value="daily">Daily</option>
-                  <option value="interval-days">Every N days</option>
-                  <option value="days-of-week">Set days</option>
-                  <option value="as-needed">As needed</option>
+                  <option value={INHERIT}>{t("phase_same_as_protocol")}</option>
+                  <option value="daily">{t("plan_daily")}</option>
+                  <option value="interval-days">{t("plan_every_n_days_short")}</option>
+                  <option value="days-of-week">{t("plan_set_days")}</option>
+                  <option value="as-needed">{t("plan_as_needed")}</option>
                 </Select>
               </label>
 
               {!inherits && phase.schedule!.kind === "interval-days" && (
                 <label className="block">
-                  <span className="mb-1 block text-[11.5px] text-[var(--muted)]">Interval</span>
+                  <span className="mb-1 block text-[11.5px] text-[var(--muted)]">{t("plan_interval")}</span>
                   <NumberInput
                     value={phase.schedule!.intervalDays ?? 7}
                     min={1}
                     max={90}
                     step={1}
-                    suffix="days"
+                    suffix={t("days")}
                     onChange={(e) =>
                       patchSchedule(i, { intervalDays: Math.max(1, Number(e.target.value)) })
                     }
@@ -251,11 +265,11 @@ export function PhaseEditor({
 
             {!inherits && phase.schedule!.kind === "days-of-week" && (
               <div className="flex flex-wrap gap-1.5">
-                {WEEKDAYS.map((d, dayIndex) => {
+                {WEEKDAY_KEYS.map((key, dayIndex) => {
                   const on = (phase.schedule!.daysOfWeek ?? []).includes(dayIndex);
                   return (
                     <button
-                      key={d}
+                      key={key}
                       type="button"
                       aria-pressed={on}
                       onClick={() =>
@@ -271,7 +285,7 @@ export function PhaseEditor({
                           : "border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
                       }`}
                     >
-                      {d}
+                      {t(key)}
                     </button>
                   );
                 })}
@@ -283,11 +297,13 @@ export function PhaseEditor({
 
       <div className="flex items-center justify-between gap-3">
         <Button onClick={() => onChange([...phases, nextPhase(phases)])}>
-          <Plus size={15} /> Add band
+          <Plus size={15} /> {t("phase_add_band")}
         </Button>
         <span className="text-[12px] text-[var(--faint)]">
-          {phases.length} band{phases.length === 1 ? "" : "s"}, ending at{" "}
-          {formatDose(phases[phases.length - 1]?.doseMcg ?? 0)}
+          {t("phase_bands_ending", {
+            n: phases.length,
+            dose: formatDose(phases[phases.length - 1]?.doseMcg ?? 0),
+          })}
         </span>
       </div>
     </div>

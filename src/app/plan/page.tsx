@@ -61,7 +61,24 @@ import { SiteMap } from "@/components/SiteMap";
 import { StackWarnings } from "@/components/StackWarnings";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/**
+ * Sunday first, because the array is indexed by `Date.getDay()`. Keys rather
+ * than words: `formatWeekday` elsewhere asks the browser, which answers in the
+ * browser's language and not in the one this app is set to, and the two
+ * disagreeing on the same screen is worse than either alone.
+ */
+const WEEKDAY_KEYS = [
+  "weekday_sun",
+  "weekday_mon",
+  "weekday_tue",
+  "weekday_wed",
+  "weekday_thu",
+  "weekday_fri",
+  "weekday_sat",
+] as const;
+
+/** The `t` from `useLang`, for the two describe helpers below the component. */
+type Translate = ReturnType<typeof useLang>["t"];
 
 export default function PlanPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -79,7 +96,7 @@ export default function PlanPage() {
   const now = Date.now();
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -172,8 +189,8 @@ export default function PlanPage() {
                     {!p.active && <Badge>{t("plan_paused")}</Badge>}
                     {bands && current && (
                       <Badge tone="sky">
-                        {p.phases?.length ? t("plan_week_band") : t("plan_step")} {current.index + 1} of{" "}
-                        {bands.length}
+                        {p.phases?.length ? t("plan_week_band") : t("plan_step")} {current.index + 1}{" "}
+                        {t("plan_of")} {bands.length}
                       </Badge>
                     )}
                   </div>
@@ -188,7 +205,7 @@ export default function PlanPage() {
                     <span className="tnum font-mono text-[var(--tangerine)]">
                       {formatDosePerDay(target, dosesPerDoseDay(showSchedule))}
                     </span>
-                    <span className="text-[var(--muted)]">{describeSchedule(showSchedule)}</span>
+                    <span className="text-[var(--muted)]">{describeSchedule(t, showSchedule)}</span>
                     <span className="text-[var(--faint)]">
                       {trim(protocolDosesPerWeek(p, now), 2)} {t("plan_per_week")}
                     </span>
@@ -209,21 +226,21 @@ export default function PlanPage() {
                       setEditingId(p.id);
                     }}
                     className="px-2.5 py-2"
-                    aria-label={`Edit ${p.name}`}
+                    aria-label={t("plan_edit_named", { name: p.name })}
                   >
                     <Pencil size={15} />
                   </Button>
                   <Button
                     onClick={() => updateProtocol(p.id, { active: !p.active })}
                     className="px-2.5 py-2"
-                    aria-label={p.active ? "Pause protocol" : "Resume protocol"}
+                    aria-label={p.active ? t("plan_pause_protocol") : t("plan_resume_protocol")}
                   >
                     {p.active ? <Pause size={15} /> : <Play size={15} />}
                   </Button>
                   <button
                     type="button"
                     onClick={() => removeProtocol(p.id)}
-                    aria-label={`Delete ${p.name}`}
+                    aria-label={t("plan_delete_named", { name: p.name })}
                     className="p-2 text-[var(--faint)] transition-colors hover:text-[var(--rose)] focus-visible:text-[var(--rose)]"
                   >
                     <Trash2 size={15} />
@@ -237,7 +254,7 @@ export default function PlanPage() {
                     {bands.map((s, i) => (
                       <div
                         key={s.step}
-                        title={describeBand(s, i === bands.length - 1)}
+                        title={describeBand(t, s, i === bands.length - 1)}
                         className={`h-1.5 flex-1 rounded-full ${
                           current && i <= current.index ? "bg-[var(--tangerine)]" : "bg-[var(--line)]"
                         }`}
@@ -270,36 +287,42 @@ export default function PlanPage() {
 }
 
 /** Tooltip for one band of the plan bar. */
-function describeBand(phase: ProtocolPhase, isLast: boolean) {
+function describeBand(t: Translate, phase: ProtocolPhase, isLast: boolean) {
   const dose = formatDose(phase.doseMcg);
-  const span = isLast
-    ? "onwards"
-    : `for ${phase.weeks} week${phase.weeks === 1 ? "" : "s"}`;
-  const freq = phase.schedule ? `, ${describeSchedule(phase.schedule).toLowerCase()}` : "";
+  const span = isLast ? t("onwards") : t("plan_band_weeks", { n: phase.weeks });
+  /*
+   * The frequency is no longer lowercased on the way in. It was, to read as
+   * part of the sentence, and German capitalises nouns, so lowercasing a
+   * translated string quietly damages it. A comma does the same joining work
+   * without touching the words.
+   */
+  const freq = phase.schedule ? `, ${describeSchedule(t, phase.schedule)}` : "";
   return `${dose} ${span}${freq}`;
 }
 
-function describeSchedule(s: Schedule) {
+function describeSchedule(t: Translate, s: Schedule) {
   const base =
     s.kind === "daily"
-      ? "Every day"
+      ? t("plan_every_day")
       : s.kind === "interval-days"
         ? s.intervalDays === 7
-          ? "Weekly"
+          ? t("plan_weekly")
           : s.intervalDays === 1
-            ? "Every day"
-            : `Every ${s.intervalDays} days`
+            ? t("plan_every_day")
+            : t("plan_every_n_days", { n: s.intervalDays ?? 0 })
         : s.kind === "days-of-week"
-          ? (s.daysOfWeek ?? []).map((d) => WEEKDAYS[d]).join(", ") || "No days chosen"
-          : "As needed";
+          ? (s.daysOfWeek ?? []).map((d) => t(WEEKDAY_KEYS[d])).join(", ") || t("plan_no_days")
+          : t("plan_as_needed");
   const cycle =
     s.cycleWeeksOn && s.cycleWeeksOff
-      ? `, ${s.cycleWeeksOn} on / ${s.cycleWeeksOff} off`
+      ? `, ${t("plan_cycle", { on: s.cycleWeeksOn, off: s.cycleWeeksOff })}`
       : "";
   // Silent about the hour when the schedule never named one, rather than
   // reporting the nine o'clock the maths falls back to as though it were chosen.
   const named = s.kind !== "as-needed" && (s.timesOfDay?.length || s.timeOfDay);
-  const at = named ? ` at ${scheduleTimes(s).join(" and ")}` : "";
+  const at = named
+    ? ` ${t("plan_at_times", { times: scheduleTimes(s).join(` ${t("plan_and")} `) })}`
+    : "";
 
   return base + cycle + at;
 }
@@ -573,7 +596,7 @@ function ProtocolForm({
     <Card className="space-y-4 p-4">
       <SectionLabel>{initial ? t("plan_edit_protocol") : t("plan_new_protocol_form")}</SectionLabel>
 
-      <Field label="Peptide">
+      <Field label={t("plan_peptide")}>
         <Select value={peptideId} onChange={(e) => pick(e.target.value)}>
           {peptides.map((p) => (
             <option key={p.id} value={p.id}>
@@ -586,12 +609,8 @@ function ProtocolForm({
 
       {routes.length > 1 && (
         <Field
-          label="Route"
-          hint={
-            route === "intranasal"
-              ? "Doses on this plan are counted in presses of the pump rather than in marks on a barrel."
-              : "How this compound is taken. Intranasal appears once you have filled a spray bottle with it."
-          }
+          label={t("plan_route")}
+          hint={route === "intranasal" ? t("plan_route_hint_nasal") : t("plan_route_hint")}
         >
           <Select value={route} onChange={(e) => setRoute(e.target.value as Route)}>
             {routes.map((r) => (
@@ -604,21 +623,21 @@ function ProtocolForm({
       )}
 
       <Field
-        label="How the dose is decided"
+        label={t("plan_how_dose_decided")}
         hint={
           planMode === "phases"
-            ? "Your own bands of weeks. Each one can carry its own frequency as well as its own dose."
+            ? t("plan_mode_hint_phases")
             : planMode === "titration"
-              ? "A published escalation for this compound."
-              : "One dose, held for as long as the protocol runs."
+              ? t("plan_mode_hint_titration")
+              : t("plan_mode_hint_fixed")
         }
       >
         <Segmented
-          ariaLabel="Dose plan"
+          ariaLabel={t("plan_dose_plan")}
           options={[
-            { value: "fixed", label: "Fixed" },
-            { value: "titration", label: "Titration" },
-            { value: "phases", label: "By weeks" },
+            { value: "fixed", label: t("plan_fixed_short") },
+            { value: "titration", label: t("plan_titration_short") },
+            { value: "phases", label: t("plan_by_weeks") },
           ]}
           value={planMode}
           onChange={setPlanMode}
@@ -629,14 +648,14 @@ function ProtocolForm({
       {planMode === "titration" &&
         ((peptide?.titrations && peptide.titrations.length > 0) || keepingExisting ? (
           <Field
-            label="Titration plan"
-            hint={titration?.note ?? "Steps the dose up over time."}
+            label={t("plan_titration_plan")}
+            hint={titration?.note ?? t("plan_titration_hint")}
           >
             <Select value={titrationId} onChange={(e) => setTitrationId(e.target.value)}>
-              <option value="">No titration, fixed dose</option>
+              <option value="">{t("plan_no_titration")}</option>
               {keepingExisting && (
                 <option value={EXISTING_TITRATION}>
-                  Keep the existing steps ({initial!.titration!.length} of them)
+                  {t("plan_keep_existing", { n: initial!.titration!.length })}
                 </option>
               )}
               {peptide?.titrations?.map((t) => (
@@ -648,13 +667,12 @@ function ProtocolForm({
           </Field>
         ) : (
           <p className="text-[12.5px] text-[var(--muted)]">
-            No published titration exists for {peptide?.name ?? "this compound"}. Build your own
-            with By weeks, or keep a fixed dose.
+            {t("plan_no_published_titration", { name: peptide?.name ?? t("plan_this_compound") })}
           </p>
         ))}
 
       {usingPhases && (
-        <Field label="The plan, week by week">
+        <Field label={t("plan_week_by_week")}>
           <PhaseEditor
             phases={phases}
             onChange={setPhases}
@@ -673,12 +691,15 @@ function ProtocolForm({
         */}
         {!usingPhases && (
           <Field
-            label={lockedDose !== undefined ? "Starting dose" : "Dose"}
+            label={lockedDose !== undefined ? t("plan_starting_dose") : t("plan_dose")}
             hint={
               lockedDose !== undefined
-                ? `Set by the plan: ${formatDose(lockedDose)}`
+                ? t("plan_dose_set_by_plan", { dose: formatDose(lockedDose) })
                 : peptide?.doseRanges[0]
-                  ? `Typical: ${formatDose(peptide.doseRanges[0].lowMcg)}, ${formatDose(peptide.doseRanges[0].highMcg)}`
+                  ? t("plan_dose_typical", {
+                      low: formatDose(peptide.doseRanges[0].lowMcg),
+                      high: formatDose(peptide.doseRanges[0].highMcg),
+                    })
                   : undefined
             }
           >
@@ -693,7 +714,7 @@ function ProtocolForm({
           </Field>
         )}
 
-        <Field label="Start date">
+        <Field label={t("plan_start_date")}>
           <input
             type="date"
             value={toDateInput(startedAt)}
@@ -704,20 +725,16 @@ function ProtocolForm({
       </div>
 
       <Field
-        label="How often"
-        hint={
-          usingPhases
-            ? "The default for bands that do not set their own."
-            : undefined
-        }
+        label={t("plan_how_often")}
+        hint={usingPhases ? t("plan_how_often_hint") : undefined}
       >
         <Segmented
-          ariaLabel="Schedule type"
+          ariaLabel={t("plan_schedule_type")}
           options={[
-            { value: "daily", label: "Daily" },
-            { value: "interval-days", label: "Every N days" },
-            { value: "days-of-week", label: "Set days" },
-            { value: "as-needed", label: "As needed" },
+            { value: "daily", label: t("plan_daily") },
+            { value: "interval-days", label: t("plan_every_n_days_short") },
+            { value: "days-of-week", label: t("plan_set_days") },
+            { value: "as-needed", label: t("plan_as_needed") },
           ]}
           value={kind}
           onChange={setKind}
@@ -726,26 +743,26 @@ function ProtocolForm({
       </Field>
 
       {kind === "interval-days" && (
-        <Field label="Interval">
+        <Field label={t("plan_interval")}>
           <NumberInput
             value={intervalDays}
             min={1}
             max={90}
             step={1}
-            suffix="days"
+            suffix={t("days")}
             onChange={(e) => setIntervalDays(Number(e.target.value))}
           />
         </Field>
       )}
 
       {kind === "days-of-week" && (
-        <Field label="Days">
+        <Field label={t("plan_days")}>
           <div className="flex flex-wrap gap-1.5">
-            {WEEKDAYS.map((d, i) => {
+            {WEEKDAY_KEYS.map((key, i) => {
               const on = daysOfWeek.includes(i);
               return (
                 <button
-                  key={d}
+                  key={key}
                   type="button"
                   aria-pressed={on}
                   onClick={() =>
@@ -758,7 +775,7 @@ function ProtocolForm({
                       : "border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
                   }`}
                 >
-                  {d}
+                  {t(key)}
                 </button>
               );
             })}
@@ -781,7 +798,7 @@ function ProtocolForm({
             variant="field"
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Weeks on" hint="Leave at 0 to run continuously.">
+            <Field label={t("plan_weeks_on")} hint={t("plan_weeks_on_hint")}>
               <NumberInput
                 value={cycleOn}
                 min={0}
@@ -789,7 +806,7 @@ function ProtocolForm({
                 onChange={(e) => setCycleOn(Number(e.target.value))}
               />
             </Field>
-            <Field label="Weeks off">
+            <Field label={t("plan_weeks_off")}>
               <NumberInput
                 value={cycleOff}
                 min={0}
@@ -802,11 +819,11 @@ function ProtocolForm({
       )}
 
       <Field
-        label="Sites you will rotate through"
+        label={t("plan_sites_label")}
         hint={
           sites.length
-            ? `${sites.length} pinned. Logging will suggest the longest-rested of these, and you can still pick another.`
-            : "Optional. Pin a few and logging rotates through just those, leave empty to use all ten."
+            ? t("plan_sites_pinned", { n: sites.length })
+            : t("plan_sites_hint_empty")
         }
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -849,18 +866,18 @@ function ProtocolForm({
                 onClick={() => setSites([])}
                 className="px-2 py-1.5 text-[12.5px] text-[var(--faint)] underline hover:text-[var(--ink)]"
               >
-                Clear
+                {t("plan_clear_sites")}
               </button>
             )}
           </div>
         </div>
       </Field>
 
-      <Field label="Name it" hint="Something you will recognise in a list.">
+      <Field label={t("plan_name_it")} hint={t("plan_name_hint")}>
         <TextInput
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={peptide ? `${peptide.name} protocol` : "Protocol name"}
+          placeholder={peptide ? t("plan_name_example", { name: peptide.name }) : t("plan_name_empty")}
         />
       </Field>
 
@@ -868,17 +885,14 @@ function ProtocolForm({
 
       {rewritesHistory && (
         <p className="rounded border border-[var(--line)] bg-[var(--sunken)] px-3 py-2.5 text-[12.5px] leading-snug text-[var(--muted)]">
-          <span className="text-[var(--ink)]">This changes the past as well as the future.</span>{" "}
-          Adherence and progress count the doses this schedule expects, replayed over dates that
-          have already been and gone, so moving the timing moves those figures too. Your logged
-          doses are untouched, and nothing from before this edit will be reported as a missed
-          dose: the app cannot know what the plan said on those days.
+          <span className="text-[var(--ink)]">{t("plan_rewrite_title")}</span>{" "}
+          {t("plan_rewrite_body")}
         </p>
       )}
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="primary"
@@ -886,7 +900,7 @@ function ProtocolForm({
           onClick={() =>
             onSave({
               peptideId,
-              name: name.trim() || `${peptide?.name ?? "New"} protocol`,
+              name: name.trim() || t("plan_name_example", { name: peptide?.name ?? t("plan_new_short") }),
               active: initial?.active ?? true,
               endedAt: initial?.endedAt,
               startedAt,
@@ -908,7 +922,7 @@ function ProtocolForm({
             })
           }
         >
-          {initial ? "Save changes" : "Create protocol"}
+          {initial ? t("plan_save_changes") : t("plan_create_protocol")}
         </Button>
       </div>
     </Card>
