@@ -42,8 +42,9 @@ export function StackWarnings({ nowMs, compact = false }: { nowMs: number; compa
       >
         <ShieldCheck size={16} strokeWidth={2.4} className="shrink-0" />
         <span>
-          No interactions found across your {active.length} active protocols, no shared receptor
-          targets and no compound arriving twice.
+          {t("stack_all_clear", {
+            protocols: t("count_protocols", { n: active.length }),
+          })}
         </span>
       </div>
     );
@@ -63,10 +64,9 @@ export function StackWarnings({ nowMs, compact = false }: { nowMs: number; compa
         <ShieldAlert size={16} strokeWidth={2.4} className="mt-0.5 shrink-0" />
         <div className="min-w-0 text-[13px] leading-relaxed">
           <span className="font-bold">
-            {issues.length} thing{issues.length === 1 ? "" : "s"} to know about running these
-            together.
+            {t("stack_compact", { things: t("count_things", { n: issues.length }) })}
           </span>{" "}
-          {issues[0].title}. See Plan for the detail.
+          {t("stack_see_plan", { title: issues[0].title })}
         </div>
       </div>
     );
@@ -79,9 +79,7 @@ export function StackWarnings({ nowMs, compact = false }: { nowMs: number; compa
         <IssueRow key={`${issue.kind}-${i}`} issue={issue} />
       ))}
       <p className="text-[11.5px] leading-relaxed text-[var(--faint)]">
-        These are mechanism-level observations from the library, not clinical advice, and absence of a
-        warning is not a safety clearance, most of these compounds have never been studied in
-        combination at all.
+        {t("stack_footnote")}
       </p>
     </Card>
   );
