@@ -525,11 +525,11 @@ function VialRow({
               has is the day it was filled. See calc/spray.ts.
             */}
             {spray && vial.reconstitutedAt != null && (
-              <span>filled {formatDate(vial.reconstitutedAt)}</span>
+              <span>{t("stock_filled", { date: formatDate(vial.reconstitutedAt) })}</span>
             )}
             {!spray && vial.budAt != null && (
               <span className={budSoon ? "text-[var(--rose)]" : ""}>
-                use by {formatDate(vial.budAt)}
+                {t("stock_use_by", { date: formatDate(vial.budAt) })}
               </span>
             )}
           </div>

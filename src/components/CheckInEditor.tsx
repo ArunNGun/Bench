@@ -5,6 +5,7 @@ import { Textarea } from "./ui";
 import { HelpNote } from "./HelpNote";
 import { SYMPTOMS, SYMPTOM_SCALE_MAX, type SymptomId } from "@/lib/types";
 import { trim } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 export type RatingDraft = Partial<Record<SymptomId, number>>;
 
@@ -26,7 +27,7 @@ export function CheckInEditor({
   notes,
   onNotes,
   vitals,
-  notePlaceholder = "Anything worth remembering about this day",
+  notePlaceholder,
 }: {
   draft: RatingDraft;
   onDraft: (next: RatingDraft) => void;
@@ -36,6 +37,7 @@ export function CheckInEditor({
   vitals?: { sleepHours?: number; restingHrBpm?: number };
   notePlaceholder?: string;
 }) {
+  const { t } = useLang();
   return (
     <div className="space-y-3">
       {SYMPTOMS.map((s) => {
@@ -43,7 +45,7 @@ export function CheckInEditor({
           <div className="flex flex-1 items-baseline justify-between">
             <span className="text-[13px] font-semibold text-[var(--ink)]">{s.label}</span>
             <span className="text-[11px] text-[var(--faint)]">
-              {draft[s.id] ? `${s.low} to ${s.high}` : "not rated"}
+              {draft[s.id] ? `${s.low} to ${s.high}` : t("checkin_not_rated")}
             </span>
           </div>
         );
@@ -99,18 +101,25 @@ export function CheckInEditor({
       {(vitals?.sleepHours != null || vitals?.restingHrBpm != null) && (
         <p className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
           <Moon size={12} strokeWidth={2.4} />
-          Your phone recorded
-          {vitals.sleepHours != null ? ` ${trim(vitals.sleepHours, 1)} h asleep` : ""}
-          {vitals.sleepHours != null && vitals.restingHrBpm != null ? " and" : ""}
-          {vitals.restingHrBpm != null ? ` a resting pulse of ${Math.round(vitals.restingHrBpm)}` : ""}
-          .
+          {t("checkin_phone_recorded", {
+            details: [
+              vitals.sleepHours != null
+                ? t("checkin_phone_sleep", { n: trim(vitals.sleepHours, 1) })
+                : null,
+              vitals.restingHrBpm != null
+                ? t("checkin_phone_pulse", { n: Math.round(vitals.restingHrBpm) })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(` ${t("plan_and")} `),
+          })}
         </p>
       )}
 
       <Textarea
         value={notes}
         onChange={(e) => onNotes(e.target.value)}
-        placeholder={notePlaceholder}
+        placeholder={notePlaceholder ?? t("checkin_note_this_day")}
         className="text-[13px]"
       />
     </div>

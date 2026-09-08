@@ -520,3 +520,32 @@ own field rather than a second reading of the state.
 The rule this leaves: a module under `src/lib/calc` may return an id, a number
 or a date. If it is about to return a sentence, the sentence belongs to
 whoever renders it.
+
+## Finding the English a translation pass missed
+
+Four rounds of this were needed, each after a user found something. The
+searches that failed all looked for text in the shapes text usually takes:
+between JSX tags, or in a `label=` or `title=` attribute. The strings that
+survived were in none of those shapes:
+
+- returned from a plain function, like `greeting()` or `describeSplit`
+- sitting in a ternary that is assigned rather than rendered
+- a **default parameter**, like `label = "Times of day"`
+- inside a template literal built for an `aria-label`
+- returned from `src/lib/calc`, as a label beside an id
+
+The check that would have found all of them in one pass is much blunter, and
+it is about the file rather than the string: **a component under `src/app` or
+`src/components` that renders anything and does not import `useLang`**. On the
+last round that listed exactly the offenders, `DoseMarks`, `PkChart`,
+`Syringe`, `HelpNote` and `CheckInEditor`, and the only files it left were the
+ones with no words in them at all: the runners, the service worker, the layout
+and the UI primitives.
+
+```bash
+for f in $(find src/app src/components -name '*.tsx' ! -name '*.test.tsx'); do
+  grep -q 'useLang\|translate(' "$f" || echo "$f"
+done
+```
+
+Run that before claiming a translation pass is finished.

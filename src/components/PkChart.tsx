@@ -10,6 +10,7 @@ import {
   type DoseEvent,
 } from "@/lib/calc/pk";
 import { formatDate, formatTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Relative plasma level over a window, with a marker at the current moment.
@@ -69,6 +70,7 @@ export function PkChart({
    */
   weightEntries?: { at: number; weightKg: number; displayLabel: string }[];
 }) {
+  const { t } = useLang();
   const uid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -168,9 +170,11 @@ export function PkChart({
         if (e.pointerType === "mouse") onPick?.(null);
       }}
       role="img"
-      aria-label={`Relative plasma levels from ${formatDate(fromMs)} to ${formatDate(toMs)}. Peak ${(
-        maxLevel * 100
-      ).toFixed(0)} percent of a single reference dose.`}
+      aria-label={t("pk_chart_aria", {
+        from: formatDate(fromMs),
+        to: formatDate(toMs),
+        peak: (maxLevel * 100).toFixed(0),
+      })}
     >
       <defs>
         {paths.map((p) => (
@@ -359,12 +363,13 @@ export function PkChart({
 
 /** A compact level bar for list rows, where a full chart would be too much. */
 export function LevelBar({ level, color }: { level: number; color: string }) {
+  const { t } = useLang();
   const pct = Math.max(0, Math.min(1, level));
   return (
     <div
       className="h-1 w-full overflow-hidden rounded-full bg-[var(--line)]"
       role="img"
-      aria-label={`${(pct * 100).toFixed(0)} percent of peak`}
+      aria-label={t("pk_percent_of_peak_aria", { n: (pct * 100).toFixed(0) })}
     >
       <div
         className="h-full rounded-full transition-[width] duration-500"
