@@ -35,6 +35,7 @@ const LANGS: { code: Lang; label: string; native: string }[] = [
   { code: "en", label: "EN", native: "English" },
   { code: "de", label: "DE", native: "Deutsch" },
   { code: "sl", label: "SL", native: "Slovenščina" },
+  { code: "pl", label: "PL", native: "Polski" },
 ];
 
 export function LangDropdown({ menu = false }: { menu?: boolean }) {
