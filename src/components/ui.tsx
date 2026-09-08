@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { shownValue } from "@/lib/calc/numberField";
+import { splitEmphasis } from "@/lib/i18n/rich";
 import { AlertTriangle, Info } from "lucide-react";
 
 /** Named hues. Every coloured thing in the app picks from this set. */
@@ -317,6 +318,29 @@ export function Badge({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * A translated sentence with its emphasis intact.
+ *
+ * The sentence stays one string all the way through translation, and the
+ * `**markers**` inside it become `<strong>` here. See `src/lib/i18n/rich.ts`
+ * for why the alternative, splitting the sentence around JSX tags, does not
+ * survive a change of word order.
+ */
+export function Rich({ text }: { text: string }) {
+  return (
+    <>
+      {splitEmphasis(text).map((part, i) =>
+        part.strong ? (
+          <strong key={i} className="text-[var(--ink)]">
+            {part.text}
+          </strong>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ))}
+    </>
   );
 }
 
