@@ -282,6 +282,18 @@ export interface Stock {
    * which the app cannot tell you how far to draw the plunger.
    */
   needsReconstitution: boolean;
+  /**
+   * Mass sitting in vials that are excluded only because they are past a date.
+   *
+   * Zero doses with a full vial on the shelf reads as a bug from the Now page,
+   * which said nothing about why. The Stock page shows the same vial with what
+   * is in it and a past date badge, so the two screens disagreed with no
+   * explanation on the one where the number matters.
+   *
+   * Counted rather than reported as a flag so the card can name the amount,
+   * which is what makes it obviously the vial the reader is looking at.
+   */
+  expiredMcg: number;
 }
 
 export function stockFor(
@@ -290,8 +302,22 @@ export function stockFor(
   doseMcg: number,
   nowMs: number,
   container: ContainerKind = "vial"): Stock {
-  const usable = vials.filter(
-    (v) => v.peptideId === peptideId && matchesContainer(v, container) && vialUsable(v, nowMs));
+  const mine = vials.filter(
+    (v) => v.peptideId === peptideId && matchesContainer(v, container));
+  const usable = mine.filter((v) => vialUsable(v, nowMs));
+
+  /*
+   * Only the ones a date excluded. A discarded or finished vial holds nothing
+   * the reader is being denied, so counting it here would explain a zero with
+   * something that was never available.
+   */
+  const expiredMcg = mine
+    .filter(
+      (v) =>
+        !UNAVAILABLE_STATES.includes(v.state) &&
+        vialExpired(v, nowMs) &&
+        vialRemainingMcg(v) > 0)
+    .reduce((sum, v) => sum + vialRemainingMcg(v), 0);
 
   let availableMcg = 0;
   let openMcg = 0;
@@ -318,6 +344,7 @@ export function stockFor(
     dosesRemaining: per(availableMcg),
     dosesInOpenVials: per(openMcg),
     needsReconstitution: openCount === 0 && sealedCount > 0,
+    expiredMcg,
   };
 }
 

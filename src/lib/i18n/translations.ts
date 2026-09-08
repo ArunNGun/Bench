@@ -1272,6 +1272,8 @@ export const TRANSLATIONS = {
     log_unit_worth: "1 unit = {mcg} mcg at this vial's strength. One printed mark on this barrel is {marks}.",
     count_units_one: "{n} unit",
     count_units_other: "{n} units",
+    now_stock_expired: "{amount} past its date, not counted",
+    now_half_life_yours: "{hours}, {marker}",
   },
 
   de: {
@@ -2522,6 +2524,8 @@ export const TRANSLATIONS = {
     log_unit_worth: "1 Einheit = {mcg} mcg bei der Stärke dieser Ampulle. Ein gedruckter Strich auf diesem Zylinder ist {marks}.",
     count_units_one: "{n} Einheit",
     count_units_other: "{n} Einheiten",
+    now_stock_expired: "{amount} über dem Datum, nicht gezählt",
+    now_half_life_yours: "{hours}, {marker}",
   },
 
   sl: {
@@ -3850,6 +3854,8 @@ export const TRANSLATIONS = {
     count_units_two: "{n} enoti",
     count_units_few: "{n} enote",
     count_units_other: "{n} enot",
+    now_stock_expired: "{amount} čez rok, ni šteto",
+    now_half_life_yours: "{hours}, {marker}",
   },
 
   pl: {
@@ -5178,6 +5184,8 @@ export const TRANSLATIONS = {
     count_units_few: "{n} jednostki",
     count_units_many: "{n} jednostek",
     count_units_other: "{n} jednostki",
+    now_stock_expired: "{amount} po terminie, nieliczone",
+    now_half_life_yours: "{hours}, {marker}",
   },
 } satisfies Record<Lang, Record<string, string>>;
 
