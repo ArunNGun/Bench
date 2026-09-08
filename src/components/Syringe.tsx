@@ -3,6 +3,7 @@
 import { barrelTicks } from "@/lib/calc/barrel";
 import { capacityUnits, type SyringeSpec } from "@/lib/calc/reconstitution";
 import type { VialState } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 /**
  * A syringe drawn to the real proportions of the selected barrel.
@@ -39,6 +40,7 @@ interface SyringeProps {
 }
 
 export function Syringe({ spec, units, overCapacity, ghostUnits, className }: SyringeProps) {
+  const { t } = useLang();
   const capacity = capacityUnits(spec);
   const safeUnits = Number.isFinite(units) ? Math.max(0, units) : 0;
   const fraction = capacity > 0 ? Math.min(1, safeUnits / capacity) : 0;
@@ -64,9 +66,11 @@ export function Syringe({ spec, units, overCapacity, ghostUnits, className }: Sy
       viewBox={`0 0 ${VB_W} ${VB_H}`}
       className={className}
       role="img"
-      aria-label={`Syringe showing ${safeUnits.toFixed(1)} of ${capacity} units on a ${
-        spec.scale === "U100" ? "U-100" : "U-40"
-      } barrel`}
+      aria-label={t("syringe_aria_showing", {
+        units: safeUnits.toFixed(1),
+        capacity,
+        scale: spec.scale === "U100" ? "U-100" : "U-40",
+      })}
       style={{ width: "100%", height: "auto", display: "block" }}
     >
       <defs>

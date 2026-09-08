@@ -227,7 +227,11 @@ export function SyringePicker({
           active={value === spec.id}
           onChange={onChange}
           title={`${mlLabel(spec.capacityMl)} mL`}
-          detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec, t)}`}
+          detail={t("syringe_detail", {
+            scale: spec.scale === "U100" ? "U-100" : "U-40",
+            units: capacityUnits(spec),
+            marks: marksLabel(spec, t),
+          })}
           spec={spec}
         />
       ))}
@@ -264,7 +268,11 @@ export function SyringeField({
           </p>
           <p className="text-[11.5px] text-[var(--muted)]">
             {chosen
-              ? `${chosen.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(chosen)} units, ${marksLabel(chosen, t)}`
+              ? t("syringe_detail", {
+                  scale: chosen.scale === "U100" ? "U-100" : "U-40",
+                  units: capacityUnits(chosen),
+                  marks: marksLabel(chosen, t),
+                })
               : t("syringe_no_default")}
           </p>
         </div>
