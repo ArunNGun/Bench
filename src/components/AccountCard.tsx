@@ -14,7 +14,7 @@
  */
 
 import { LogOut } from "lucide-react";
-import { Button, Callout, Card, SectionLabel } from "./ui";
+import { Button, Callout, Card, Rich, SectionLabel } from "./ui";
 import { HOSTED, accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { useSignOut } from "@/lib/sync/useSignOut";
@@ -32,8 +32,7 @@ export function AccountCard() {
       <SectionLabel>{t("account_title")}</SectionLabel>
 
       <p className="text-[12.5px] text-[var(--muted)]">
-        Signed in as <span className="font-medium text-[var(--ink)]">{session.username}</span> on{" "}
-        <span className="font-mono">{HOSTED?.url}</span>.
+        <Rich text={t("account_signed_in_on", { user: session.username, url: HOSTED?.url ?? "" })} />
       </p>
 
       <p className="text-[12.5px] text-[var(--muted)]">

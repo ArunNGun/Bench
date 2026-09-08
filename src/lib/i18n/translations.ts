@@ -1274,6 +1274,13 @@ export const TRANSLATIONS = {
     count_units_other: "{n} units",
     now_stock_past_date: "past its date",
     now_half_life_yours: "{hours}, {marker}",
+    pk_in_system: "in system",
+    pk_dose_on: "{dose} on {date}",
+    pk_at_time: "at {time}",
+    pk_remaining: "remaining",
+    now_vial_label: "{name} vial",
+    now_all_past_date: "**{name}** has {doses} left, and every one of them is past its date.",
+    account_signed_in_on: "Signed in as **{user}** on {url}.",
   },
 
   de: {
@@ -2526,6 +2533,13 @@ export const TRANSLATIONS = {
     count_units_other: "{n} Einheiten",
     now_stock_past_date: "über dem Datum",
     now_half_life_yours: "{hours}, {marker}",
+    pk_in_system: "im Körper",
+    pk_dose_on: "{dose} am {date}",
+    pk_at_time: "um {time}",
+    pk_remaining: "übrig",
+    now_vial_label: "{name}-Ampulle",
+    now_all_past_date: "**{name}** hat noch {doses}, und jede davon ist über dem Datum.",
+    account_signed_in_on: "Angemeldet als **{user}** auf {url}.",
   },
 
   sl: {
@@ -3856,6 +3870,13 @@ export const TRANSLATIONS = {
     count_units_other: "{n} enot",
     now_stock_past_date: "čez rok",
     now_half_life_yours: "{hours}, {marker}",
+    pk_in_system: "v telesu",
+    pk_dose_on: "{dose} dne {date}",
+    pk_at_time: "ob {time}",
+    pk_remaining: "ostane",
+    now_vial_label: "vialka {name}",
+    now_all_past_date: "**{name}** ima še {doses}, a vse so čez rok.",
+    account_signed_in_on: "Prijavljen kot **{user}** na {url}.",
   },
 
   pl: {
@@ -5186,6 +5207,13 @@ export const TRANSLATIONS = {
     count_units_other: "{n} jednostki",
     now_stock_past_date: "po terminie",
     now_half_life_yours: "{hours}, {marker}",
+    pk_in_system: "w organizmie",
+    pk_dose_on: "{dose} dnia {date}",
+    pk_at_time: "o {time}",
+    pk_remaining: "zostaje",
+    now_vial_label: "fiolka {name}",
+    now_all_past_date: "**{name}** ma jeszcze {doses}, a każda z nich jest po terminie.",
+    account_signed_in_on: "Zalogowano jako **{user}** na {url}.",
   },
 } satisfies Record<Lang, Record<string, string>>;
 
