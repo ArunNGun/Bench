@@ -28,9 +28,11 @@ import { accountRequired, HOSTED } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { forgetKey, rememberKey } from "@/lib/sync/vault";
 import { formatDateTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 import { ConflictChoices } from "./SyncNotice";
 
 export function SyncPanel() {
+  const { t } = useLang();
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
 
@@ -141,49 +143,35 @@ export function SyncPanel() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Sync to your own server</SectionLabel>
+      <SectionLabel>{t("sync_own_server")}</SectionLabel>
 
       {HOSTED ? (
-        <Callout tone="info" title="This copy of Bench syncs to one server">
-          Your data is encrypted in this browser before it is uploaded, with a key derived from your
-          password, so the server holds something it cannot read. That includes whoever runs it:
-          they can see that your account exists and how large it is, and nothing else. It also
-          means nobody can reset your password for you. Lose it and the copy on the server is lost
-          with it, which is why you were asked to keep your own backup.
+        <Callout tone="info" title={t("sync_one_server")}>
+          {t("sync_hosted_promise")}
         </Callout>
       ) : (
-        <Callout tone="info" title="Prototype">
-          This is the one part of the app that talks to a network. Your data is encrypted in this
-          browser before it is uploaded, with a key derived from your password, so the server holds
-          something it cannot read. Lose the password and the copy on the server is lost with it.
-          Everything still works offline; the server is a copy, not the store. New accounts on a
-          server are made by invitation from whoever set it up.
+        <Callout tone="info" title={t("sync_prototype")}>
+          {t("sync_promise")}
         </Callout>
       )}
 
       {!canEncrypt && (
-        <Callout tone="danger" title="Not available on this address">
-          Your browser only allows encryption on a secure origin, which means https, or localhost on
-          the machine running the app. This page is neither, so the key cannot be derived and sync
-          is switched off. Reach the app over https, or open it on the machine it runs on.
+        <Callout tone="danger" title={t("sync_not_available_here")}>
+          {t("sync_insecure_origin")}
         </Callout>
       )}
 
       {expired && (
-        <Callout tone="warn" title="Your session on the server has expired">
+        <Callout tone="warn" title={t("sync_session_expired")}>
           <p>
-            Nothing is wrong with your data, on this device or on the server. A session lasts thirty
-            days, and every session on a server ends at once if its signing secret is changed. Type
-            your password below to sign in again. The address, the username and the key on this
-            device all stay as they are.
+            {t("sync_expired_explain")}
           </p>
         </Callout>
       )}
 
       {connected && !keyIsRemembered && (
-        <Callout tone="warn" title="You will have to sign in again after a reload">
-          This browser will not keep the key between visits, which private browsing windows in
-          particular refuse to do. Syncing works for as long as this tab stays open.
+        <Callout tone="warn" title={t("sync_reload_warning")}>
+          {t("sync_key_not_kept")}
         </Callout>
       )}
 
@@ -192,10 +180,9 @@ export function SyncPanel() {
         answer discards something, and which something is not for code to pick.
       */}
       {conflicted && (
-        <Callout tone="danger" title="Two copies have both changed">
+        <Callout tone="danger" title={t("sync_both_changed")}>
           <p>
-            This device and the server have both been edited since they last agreed. Keeping one
-            means discarding the other, so nothing has been sent or taken until you say which.
+            {t("sync_conflict_explain")}
           </p>
           {/* One implementation, used here and in the frame. Two would drift. */}
           <ConflictChoices />
@@ -204,12 +191,12 @@ export function SyncPanel() {
 
       {HOSTED ? (
         <p className="text-[12.5px] text-[var(--muted)]">
-          Server: <span className="font-mono text-[var(--text)]">{HOSTED.url}</span>
+          {t("sync_server_label")} <span className="font-mono text-[var(--text)]">{HOSTED.url}</span>
         </p>
       ) : (
         <Field
-          label="Server address"
-          hint="For example https://bench.example.com or http://localhost:8787"
+          label={t("sync_server_address")}
+          hint={t("sync_server_hint")}
         >
           <TextInput
             value={url}
@@ -221,7 +208,7 @@ export function SyncPanel() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Username">
+        <Field label={t("sync_username")}>
           <TextInput
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -230,7 +217,7 @@ export function SyncPanel() {
           />
         </Field>
         <Field
-          label="Password"
+          label={t("sync_password")}
           hint={
             expired
               ? "The same password. It signs you in and derives the same key."
@@ -256,13 +243,13 @@ export function SyncPanel() {
       */}
       {!HOSTED && !connected && registering && (
         <Field
-          label="Setup token"
-          hint="Printed in the server log when it starts, while it still has no account. docker compose logs sync"
+          label={t("sync_setup_token")}
+          hint={t("sync_setup_token_hint")}
         >
           <TextInput
             value={setupToken}
             onChange={(e) => setSetupToken(e.target.value)}
-            placeholder="a hex string from the server log"
+            placeholder={t("sync_setup_token_placeholder")}
             autoComplete="off"
           />
         </Field>
@@ -276,7 +263,7 @@ export function SyncPanel() {
               disabled={!canEncrypt || !url || !username || !password || busy != null}
               onClick={() => connect("login")}
             >
-              <CloudUpload size={15} /> Sign in
+              <CloudUpload size={15} /> {t("sync_sign_in_plain")}
             </Button>
             {/*
               Two clicks to register rather than one. The first reveals the token
@@ -286,7 +273,7 @@ export function SyncPanel() {
             {!HOSTED &&
               (!registering ? (
                 <Button disabled={!canEncrypt} onClick={() => setRegistering(true)}>
-                  Set up a new server
+                  {t("sync_setup_new")}
                 </Button>
               ) : (
                 <Button
@@ -295,7 +282,7 @@ export function SyncPanel() {
                   }
                   onClick={() => connect("register")}
                 >
-                  Create the account
+                  {t("sync_create_account")}
                 </Button>
               ))}
           </>
@@ -303,7 +290,7 @@ export function SyncPanel() {
           <>
             {expired ? (
               <Button variant="primary" disabled={!password || busy != null} onClick={reconnect}>
-                <CloudUpload size={15} /> Sign in again
+                <CloudUpload size={15} /> {t("sync_sign_in_again")}
               </Button>
             ) : (
               /*
@@ -316,7 +303,7 @@ export function SyncPanel() {
                 disabled={busy != null || conflicted}
                 onClick={() => engine?.request("now")}
               >
-                <RefreshCw size={15} /> Sync now
+                <RefreshCw size={15} /> {t("sync_now")}
               </Button>
             )}
             {/*
@@ -326,7 +313,7 @@ export function SyncPanel() {
             */}
             {!accountRequired() && (
               <Button variant="ghost" disabled={busy != null} onClick={disconnect}>
-                <CloudOff size={15} /> Sign out
+                <CloudOff size={15} /> {t("sync_sign_out")}
               </Button>
             )}
           </>
@@ -346,6 +333,7 @@ export function SyncPanel() {
  * failure, say what happened in words rather than in a state name.
  */
 function SyncLine({ busy, error }: { busy: string | null; error: string | null }) {
+  const { t } = useLang();
   const status = useSyncState((s) => s.status);
   const connected = useSyncState((s) => s.key != null);
 
@@ -365,7 +353,7 @@ function SyncLine({ busy, error }: { busy: string | null; error: string | null }
       <span>
         {status.message}
         {status.lastSyncedAt != null && status.phase === "idle" && (
-          <> Last agreed with the server {formatDateTime(status.lastSyncedAt)}.</>
+          <> {t("sync_last_agreed", { when: formatDateTime(status.lastSyncedAt) })}</>
         )}
       </span>
     </p>
