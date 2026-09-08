@@ -198,7 +198,7 @@ export default function PlanPage() {
                   </div>
                   <p className="mt-1.5 text-[12px] text-[var(--faint)]">
                     {t("plan_started")} {formatDate(p.startedAt)}
-                    {p.sites?.length ? ` · ${t("plan_rotating_sites", { n: String(p.sites.length) })}` : ""}
+                    {p.sites?.length ? ` · ${t("plan_rotating_sites", { n: p.sites.length })}` : ""}
                   </p>
                 </div>
 
@@ -246,7 +246,7 @@ export default function PlanPage() {
                   </div>
                   <p className="mt-2 text-[12px] text-[var(--faint)]">
                     {p.phases?.length
-                      ? t("plan_own_plan_bands", { n: String(bands.length) })
+                      ? t("plan_own_plan_bands", { n: bands.length })
                       : t("plan_dose_advances")}
                   </p>
                 </div>
