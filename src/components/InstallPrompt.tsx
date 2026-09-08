@@ -121,17 +121,17 @@ export function InstallPrompt() {
           <p className="text-[14px] font-bold text-[var(--ink)]">{t("install_title")}</p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--muted)]">
             {route === "ios-other-browser"
-              ? "Adding to the home screen only works from Safari on iPhone and iPad. Open this page in Safari and the option appears in the Share menu."
-              : "Add it to your home screen and it opens full screen and works offline. Installing changes nothing about where your data is kept."}
+              ? t("install_ios_safari_only")
+              : t("install_body")}
           </p>
 
           {route === "prompt" && (
             <div className="mt-2.5 flex flex-wrap gap-2">
               <Button variant="primary" onClick={install} className="py-2 text-[13px]">
-                Install
+                {t("install_install")}
               </Button>
               <Button variant="ghost" onClick={dismiss} className="py-2 text-[13px]">
-                Not now
+                {t("install_not_now")}
               </Button>
             </div>
           )}
@@ -141,17 +141,18 @@ export function InstallPrompt() {
               {expanded ? (
                 <ol className="mt-2 space-y-1.5 text-[12.5px] leading-relaxed text-[var(--ink)]">
                   <li>
-                    <span className="font-bold">1.</span> Tap{" "}
-                    <Share size={13} strokeWidth={2.2} className="inline align-[-2px]" /> Share, at
-                    the bottom of Safari
+                    <span className="font-bold">1.</span> {t("install_tap_share")}{" "}
+                    <Share size={13} strokeWidth={2.2} className="inline align-[-2px]" />{" "}
+                    {t("install_share_at_bottom")}
                   </li>
                   <li>
-                    <span className="font-bold">2.</span> Scroll down and tap{" "}
+                    <span className="font-bold">2.</span> {t("install_scroll_down")}{" "}
                     <SquarePlus size={13} strokeWidth={2.2} className="inline align-[-2px]" />{" "}
                     <span className="font-semibold">{t("install_add_to_home")}</span>
                   </li>
                   <li>
-                    <span className="font-bold">3.</span> Tap <span className="font-semibold">Add</span>
+                    <span className="font-bold">3.</span> {t("install_tap_share")}{" "}
+                    <span className="font-semibold">{t("add")}</span>
                   </li>
                 </ol>
               ) : null}
@@ -159,11 +160,11 @@ export function InstallPrompt() {
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {!expanded && (
                   <Button variant="primary" onClick={() => setExpanded(true)} className="py-2 text-[13px]">
-                    Show me how
+                    {t("install_show_me_how")}
                   </Button>
                 )}
                 <Button variant="ghost" onClick={dismiss} className="py-2 text-[13px]">
-                  {expanded ? "Got it" : "Not now"}
+                  {expanded ? t("install_got_it") : t("install_not_now")}
                 </Button>
               </div>
             </>
@@ -172,7 +173,7 @@ export function InstallPrompt() {
           {route === "ios-other-browser" && (
             <div className="mt-2.5">
               <Button variant="ghost" onClick={dismiss} className="py-2 text-[13px]">
-                Got it
+                {t("install_got_it")}
               </Button>
             </div>
           )}
@@ -181,7 +182,7 @@ export function InstallPrompt() {
         <button
           type="button"
           onClick={dismiss}
-          aria-label={t("install_dismiss")}
+          aria-label={t("dismiss")}
           className="press -mr-1 -mt-1 shrink-0 p-1 text-[var(--faint)] hover:text-[var(--ink)]"
         >
           <X size={16} />

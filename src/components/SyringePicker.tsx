@@ -19,6 +19,7 @@
 import { useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLang, type TranslationKey, type Vars } from "@/lib/i18n";
 import { barrelTicks } from "@/lib/calc/barrel";
 import { capacityUnits, SYRINGES, syringeById, type SyringeSpec } from "@/lib/calc/reconstitution";
 
@@ -53,10 +54,10 @@ function mlLabel(ml: number) {
 }
 
 /** What the marks on this barrel are worth, in the words on the box. */
-export function marksLabel(spec: SyringeSpec) {
-  if (spec.graduationUnits === 0.5) return "half-unit marks";
-  if (spec.graduationUnits === 1) return "1-unit marks";
-  return `${spec.graduationUnits}-unit marks`;
+export function marksLabel(spec: SyringeSpec, t: (key: TranslationKey, vars?: Vars) => string) {
+  if (spec.graduationUnits === 0.5) return t("marks_half_unit");
+  if (spec.graduationUnits === 1) return t("marks_one_unit");
+  return t("marks_n_unit", { n: spec.graduationUnits });
 }
 
 export function MiniSyringe({
@@ -180,6 +181,7 @@ export function SyringePicker({
   allowUnset?: boolean;
   className?: string;
 }) {
+  const { t } = useLang();
   const boxRef = useRef<HTMLDivElement>(null);
   const options = allowUnset ? ["", ...SYRINGES.map((s) => s.id)] : SYRINGES.map((s) => s.id);
 
@@ -204,7 +206,7 @@ export function SyringePicker({
     <div
       ref={boxRef}
       role="radiogroup"
-      aria-label="Syringe"
+      aria-label={t("syringe_label")}
       onKeyDown={onKeyDown}
       className={cn("grid gap-2 sm:grid-cols-2", className)}
     >
@@ -213,8 +215,8 @@ export function SyringePicker({
           id=""
           active={value === ""}
           onChange={onChange}
-          title="Ask each time"
-          detail="No default. The calculator and the log sheet start empty."
+          title={t("syringe_ask_each_time")}
+          detail={t("syringe_unset_detail")}
         />
       )}
 
@@ -225,7 +227,7 @@ export function SyringePicker({
           active={value === spec.id}
           onChange={onChange}
           title={`${mlLabel(spec.capacityMl)} mL`}
-          detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec)}`}
+          detail={`${spec.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(spec)} units, ${marksLabel(spec, t)}`}
           spec={spec}
         />
       ))}
@@ -249,6 +251,7 @@ export function SyringeField({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const chosen = value ? syringeById(value) : undefined;
 
@@ -257,12 +260,12 @@ export function SyringeField({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--r-inner)] bg-[var(--sunken)] px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-semibold text-[var(--ink)]">
-            {chosen ? `${mlLabel(chosen.capacityMl)} mL` : "Ask each time"}
+            {chosen ? `${mlLabel(chosen.capacityMl)} mL` : t("syringe_ask_each_time")}
           </p>
           <p className="text-[11.5px] text-[var(--muted)]">
             {chosen
-              ? `${chosen.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(chosen)} units, ${marksLabel(chosen)}`
-              : "No default. Chosen fresh each time."}
+              ? `${chosen.scale === "U100" ? "U-100" : "U-40"}, ${capacityUnits(chosen)} units, ${marksLabel(chosen, t)}`
+              : t("syringe_no_default")}
           </p>
         </div>
 

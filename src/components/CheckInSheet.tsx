@@ -8,6 +8,7 @@ import { useProfileData, useStore } from "@/lib/store";
 import { checkInFor, ratableDay } from "@/lib/calc/checkins";
 import { SYMPTOMS } from "@/lib/types";
 import { formatDate } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Correct, fill in or remove one day's rating.
@@ -30,6 +31,7 @@ export function CheckInSheet({
   dayMs: number | null;
   onClose: () => void;
 }) {
+  const { t } = useLang();
   const { checkIns, measurements } = useProfileData();
   const saveCheckIn = useStore((s) => s.saveCheckIn);
   const removeCheckIn = useStore((s) => s.removeCheckIn);
@@ -92,17 +94,17 @@ export function CheckInSheet({
         className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-b-none sm:rounded"
         role="dialog"
         aria-modal="true"
-        aria-label={`How ${formatDate(dayMs)} went`}
+        aria-label={t("checkin_how_went", { date: formatDate(dayMs) })}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--card)] px-4 py-3">
           <h2 className="text-[16px] font-bold text-[var(--ink)]">
-            How {formatDate(dayMs)} went
+            {t("checkin_how_went", { date: formatDate(dayMs) })}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("close")}
             className="ml-auto text-[var(--muted)] hover:text-[var(--ink)]"
           >
             <X size={18} />
@@ -112,8 +114,7 @@ export function CheckInSheet({
         <div className="space-y-4 p-4">
           {!allowed && (
             <Callout tone="warn">
-              That day has not happened yet. A rating is a report of a day you
-              lived through, so there is nothing to record for it.
+              {t("checkin_not_yet")}
             </Callout>
           )}
 
@@ -128,34 +129,35 @@ export function CheckInSheet({
           {confirmingDelete ? (
             <div className="space-y-2.5 rounded-[var(--r-inner)] border border-[var(--rose)]/40 p-3">
               <p className="text-[13px] leading-relaxed text-[var(--ink)]">
-                Delete this day&apos;s rating and its note? The doses logged that day are
-                not touched, and this cannot be undone.
+                {t("checkin_delete_confirm")}
               </p>
               <div className="flex items-center gap-2">
                 <Button variant="danger" onClick={remove} className="flex-1">
-                  <Trash2 size={15} /> Delete it
+                  <Trash2 size={15} /> {t("checkin_delete_it")}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
-                  Keep it
+                  {t("library_keep_it")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
               <Button variant="primary" onClick={save} disabled={!allowed} className="flex-1">
-                Save {rated > 0 ? `${rated} of ${SYMPTOMS.length}` : "blank"}
+                {rated > 0
+                  ? t("checkin_save_count", { rated, total: SYMPTOMS.length })
+                  : t("checkin_save_blank")}
               </Button>
               {existing && (
                 <Button
                   variant="ghost"
                   onClick={() => setConfirmingDelete(true)}
-                  aria-label="Delete this day's rating"
+                  aria-label={t("checkin_delete_rating")}
                 >
                   <Trash2 size={15} />
                 </Button>
               )}
               <Button variant="ghost" onClick={onClose}>
-                Cancel
+                {t("cancel")}
               </Button>
             </div>
           )}

@@ -18,6 +18,7 @@
 import { breakdownAt, type LevelBreakdown } from "@/lib/calc/pk";
 import type { PkSeries } from "./PkChart";
 import { formatDate, formatDose, formatTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 export interface VialNote {
   /** How to name the vial, for example "GHK-Cu, opened Aug 12". */
@@ -42,6 +43,7 @@ export function PkReadout({
   nowMs: number;
   describeVial?: (vialId: string) => VialNote | null;
 }) {
+  const { t } = useLang();
   const isNow = Math.abs(atMs - nowMs) < 60_000;
 
   const rows = series
@@ -59,12 +61,12 @@ export function PkReadout({
           {isNow ? "now" : atMs > nowMs ? "projected" : "past"}
         </span>
         <span className="ml-auto text-[11px] text-[var(--faint)]">
-          Touch or hover the chart to read another moment
+          {t("pk_touch_chart")}
         </span>
       </p>
 
       {rows.length === 0 ? (
-        <p className="text-[12.5px] text-[var(--muted)]">Nothing circulating at this point.</p>
+        <p className="text-[12.5px] text-[var(--muted)]">{t("pk_nothing_circulating")}</p>
       ) : (
         <div className="space-y-2.5">
           {rows.map(({ series: s, breakdown }) => (

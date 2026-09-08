@@ -56,7 +56,7 @@ export default function LabsPage() {
   const missing = useMemo(() => missingMarkerIds(labs, compounds), [labs, compounds]);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -78,10 +78,7 @@ export default function LabsPage() {
       {adding && <AddResult onDone={() => setAdding(false)} />}
 
       <Callout tone="info" title={t("labs_reference_ranges")}>
-        A “normal” range belongs to the laboratory that ran the sample. It shifts with the assay,
-        your sex and your age, and it is printed on your report. So enter it alongside the value and the app
-        compares against yours. The exceptions are HbA1c, fasting glucose and blood pressure, where the
-        thresholds are set by the ADA and the AHA rather than the lab, and those are built in.
+        {t("labs_reference_desc")}
       </Callout>
 
       {missing.length > 0 && (
@@ -91,10 +88,11 @@ export default function LabsPage() {
         >
           <Droplet size={16} strokeWidth={2.4} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-bold">Worth checking for what you are running</p>
+            <p className="font-bold">{t("labs_worth_checking")}</p>
             <p className="mt-0.5 opacity-90">
-              {missing.map((id) => findMarker(id)?.name ?? id).join(", ")}. Each of these is explained
-              under its own heading below.
+              {t("labs_worth_checking_list", {
+                markers: missing.map((id) => findMarker(id)?.name ?? id).join(", "),
+              })}
             </p>
           </div>
         </div>
@@ -106,12 +104,11 @@ export default function LabsPage() {
           icon={<Droplet size={22} />}
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>
-              Add your first result
+              {t("labs_add_first")}
             </Button>
           }
         >
-          Blood results are the only way to tell whether a protocol is doing what you hoped rather
-          than just changing the number on the scale.
+          {t("labs_empty_desc")}
         </EmptyState>
       )}
 
@@ -141,6 +138,7 @@ function MarkerHistory({
   results: LabResult[];
   onRemove: (id: string) => void;
 }) {
+  const { t } = useLang();
   const latest = latestResult(results, marker.id);
   const trend = labTrend(results, marker.id);
   const series = labSeries(results, marker.id);
@@ -181,7 +179,7 @@ function MarkerHistory({
               {trim(Math.abs(trend.delta), marker.decimals)} {marker.unit}
             </p>
             <p className="text-[11.5px] text-[var(--faint)]">
-              over {Math.round(trend.days)} days
+              {t("labs_over_days", { n: Math.round(trend.days) })}
               {trend.percent != null ? `, ${trim(Math.abs(trend.percent), 1)}%` : ""}
             </p>
           </div>
@@ -193,7 +191,7 @@ function MarkerHistory({
       <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">{marker.why}</p>
 
       {verdict?.basis && (
-        <p className="text-[11.5px] text-[var(--faint)]">Judged against {verdict.basis}.</p>
+        <p className="text-[11.5px] text-[var(--faint)]">{t("labs_judged_against", { basis: verdict.basis })}</p>
       )}
       {verdict?.status === "unknown" && marker.rangeNote && (
         <p className="text-[11.5px] leading-relaxed text-[var(--faint)]">{marker.rangeNote}</p>
@@ -217,16 +215,16 @@ function MarkerHistory({
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--faint)]">
                   {r.refLow != null || r.refHigh != null
-                    ? `ref ${r.refLow ?? "n/a"} to ${r.refHigh ?? "n/a"}`
+                    ? t("labs_ref_range", { low: r.refLow ?? t("not_available"), high: r.refHigh ?? t("not_available") })
                     : v.status === "unknown"
-                      ? "no range given"
+                      ? t("labs_no_range")
                       : ""}
                   {r.notes ? ` · ${r.notes}` : ""}
                 </span>
                 <button
                   type="button"
                   onClick={() => onRemove(r.id)}
-                  aria-label={`Delete ${marker.name} result from ${formatDate(r.at)}`}
+                  aria-label={t("labs_delete_result_from", { marker: marker.name, date: formatDate(r.at) })}
                   className="press shrink-0 p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                 >
                   <Trash2 size={14} />
@@ -250,6 +248,7 @@ function LabChart({
   series: { at: number; value: number }[];
   marker: LabMarker;
 }) {
+  const { t } = useLang();
   const from = series[0].at;
   const to = series[series.length - 1].at;
   const span = Math.max(1, to - from);
@@ -273,9 +272,12 @@ function LabChart({
       viewBox={`0 0 ${W} ${H}`}
       style={{ width: "100%", height: "auto", display: "block" }}
       role="img"
-      aria-label={`${marker.name} from ${trim(values[0], marker.decimals)} to ${trim(
-        values[values.length - 1],
-        marker.decimals)} ${marker.unit}`}
+      aria-label={t("labs_chart_label", {
+        marker: marker.name,
+        from: trim(values[0], marker.decimals),
+        to: trim(values[values.length - 1], marker.decimals),
+        unit: marker.unit,
+      })}
     >
       {[hi, (hi + lo) / 2, lo].map((v) => (
         <g key={v}>
@@ -352,7 +354,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
     <Card className="space-y-4 p-4">
       <SectionLabel>{t("labs_add_result")}</SectionLabel>
 
-      <Field label="Marker">
+      <Field label={t("labs_marker")}>
         <Select value={markerId} onChange={(e) => setMarkerId(e.target.value)}>
           {grouped.map(([category, markers]) => (
             <optgroup key={category} label={LAB_CATEGORY_LABEL[category] ?? category}>
@@ -370,7 +372,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
       {marker && <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">{marker.why}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Result" hint={marker ? `In ${marker.unit}.` : undefined}>
+        <Field label={t("labs_value")} hint={marker ? t("labs_in_unit", { unit: marker.unit }) : undefined}>
           <NumberInput
             autoFocus
             value={value}
@@ -381,7 +383,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
           />
         </Field>
 
-        <Field label="When">
+        <Field label={t("log_when")}>
           <input
             type="datetime-local"
             value={toDateTimeLocal(at)}
@@ -393,7 +395,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
 
       <div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Your lab's low" hint="Optional.">
+          <Field label={t("labs_your_low")} hint={t("labs_optional")}>
             <NumberInput
               value={refLow}
               step={marker ? 1 / 10 ** marker.decimals : 0.1}
@@ -401,7 +403,7 @@ function AddResult({ onDone }: { onDone: () => void }) {
               onChange={(e) => setRefLow(e.target.value === "" ? "" : Number(e.target.value))}
             />
           </Field>
-          <Field label="Your lab's high" hint="Optional.">
+          <Field label={t("labs_your_high")} hint={t("labs_optional")}>
             <NumberInput
               value={refHigh}
               step={marker ? 1 / 10 ** marker.decimals : 0.1}
@@ -412,30 +414,30 @@ function AddResult({ onDone }: { onDone: () => void }) {
         </div>
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
           {marker?.guideline
-            ? `Optional here, ${marker.name} is judged against the ${marker.guideline.source} either way. Your lab's own interval takes precedence if you enter it.`
-            : "Copy the reference interval from your report. Without it there is nothing meaningful to call this value in or out of."}
+            ? t("labs_guideline_note", { marker: marker.name, source: marker.guideline.source })
+            : t("labs_copy_interval")}
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Lab or panel" hint="Optional. Ranges differ between labs.">
-          <TextInput value={lab} onChange={(e) => setLab(e.target.value)} placeholder="e.g. Thyrocare" />
+        <Field label={t("labs_lab_name")} hint={t("labs_lab_hint")}>
+          <TextInput value={lab} onChange={(e) => setLab(e.target.value)} placeholder={t("labs_lab_placeholder")} />
         </Field>
-        <Field label="Note" hint="Optional.">
+        <Field label={t("labs_note")} hint={t("labs_optional")}>
           <TextInput
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. fasted 12 h"
+            placeholder={t("labs_note_placeholder")}
           />
         </Field>
       </div>
 
       <div className="flex gap-2.5">
         <Button variant="ghost" onClick={onDone}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button variant="primary" onClick={save} disabled={value === ""} className="flex-1 sm:flex-none">
-          Save result
+          {t("labs_save_result")}
         </Button>
       </div>
     </Card>

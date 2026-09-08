@@ -15,6 +15,7 @@ import {
   Segmented,
   Select,
   Stat,
+  Rich,
 } from "@/components/ui";
 import {
   calculateDraw,
@@ -34,33 +35,43 @@ import { formatConcentration, formatDose, formatMl, trim } from "@/lib/format";
 
 type DoseUnit = "mcg" | "mg";
 
-function useWarningCopy(t: (k: import("@/lib/i18n/translations").TranslationKey) => string): Record<DrawWarning, { tone: "warn" | "danger"; title: string; body: string }> { return {
-  "exceeds-barrel": {
-    tone: "danger",
-    title: t("calc_warn_wont_fit"),
-    body: "Use a larger syringe, split the dose across two injections, or reconstitute with less water to make it more concentrated.",
-  },
-  "below-graduation": {
-    tone: "danger",
-    title: t("calc_warn_below_mark"),
-    body: "There is no way to measure this accurately. Add more water to dilute it, or use a barrel with finer graduations.",
-  },
-  "off-graduation": {
-    tone: "warn",
-    title: t("calc_warn_between_marks"),
-    body: "You will have to settle on the nearest mark. The delivered dose below reflects that.",
-  },
-  "low-volume": {
-    tone: "warn",
-    title: t("calc_warn_very_small"),
-    body: `Under about ${MIN_RELIABLE_UNITS} marks, reading error and the syringe's dead space start to rival the dose. Consider diluting further.`,
-  },
-  "exceeds-vial": {
-    tone: "danger",
-    title: t("calc_warn_too_much"),
-    body: "The dose needs more solution than you put in. Check the vial strength and water volume.",
-  },
-}; }
+/**
+ * The warning copy, rebuilt on each render because it is translated now.
+ *
+ * `t` comes in rather than being reached for, so this stays a plain function
+ * of the language and not a second hook.
+ */
+function useWarningCopy(
+  t: ReturnType<typeof useLang>["t"],
+): Record<DrawWarning, { tone: "warn" | "danger"; title: string; body: string }> {
+  return {
+    "exceeds-barrel": {
+      tone: "danger",
+      title: t("calc_warn_wont_fit"),
+      body: t("calc_body_exceeds_barrel"),
+    },
+    "below-graduation": {
+      tone: "danger",
+      title: t("calc_warn_below_mark"),
+      body: t("calc_body_below_graduation"),
+    },
+    "off-graduation": {
+      tone: "warn",
+      title: t("calc_warn_between_marks"),
+      body: t("calc_body_off_graduation"),
+    },
+    "low-volume": {
+      tone: "warn",
+      title: t("calc_warn_very_small"),
+      body: t("calc_body_low_volume", { n: MIN_RELIABLE_UNITS }),
+    },
+    "exceeds-vial": {
+      tone: "danger",
+      title: t("calc_warn_too_much"),
+      body: t("calc_body_exceeds_vial"),
+      },
+  };
+}
 
 export default function CalculatorPage() {
   const custom = useStore((s) => s.customPeptides);
@@ -113,8 +124,7 @@ export default function CalculatorPage() {
       <header>
         <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("calc_title")}</h1>
         <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-[var(--muted)]">
-          Work out how much water to add and how far to draw the plunger. The syringe below is drawn
-          to the real proportions of the barrel you pick, so you can hold yours against the screen.
+          {t("calc_intro")}
         </p>
       </header>
 
@@ -133,10 +143,10 @@ export default function CalculatorPage() {
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge tone={syringe.scale === "U40" ? "rose" : "sky"}>
-            1 mark = {trim(mlPerUnit(syringe.scale), 4)} mL
+            {t("calc_one_mark", { ml: trim(mlPerUnit(syringe.scale), 4) })}
           </Badge>
-          <Badge>barrel reads 0 to {trim(capacityUnits(syringe), 1)}</Badge>
-          <Badge>marks every {trim(syringe.graduationUnits, 2)}</Badge>
+          <Badge>{t("calc_barrel_reads", { max: trim(capacityUnits(syringe), 1) })}</Badge>
+          <Badge>{t("calc_marks_every", { step: trim(syringe.graduationUnits, 2) })}</Badge>
         </div>
 
         {syringe.note && (
@@ -144,12 +154,7 @@ export default function CalculatorPage() {
         )}
 
         <Callout tone="warn" className="mt-3" title={t("calc_check_barrel")}>
-          A U-40 barrel numbered 0 to 40 and a U-100 barrel numbered 0 to 100 look similar, but one mark is{" "}
-          <strong className="text-[var(--ink)]">0.025 mL</strong> on U-40 against{" "}
-          <strong className="text-[var(--ink)]">0.01 mL</strong> on U-100. Reading a U-40 barrel as
-          though it were U-100 delivers <strong className="text-[var(--ink)]">2.5 times</strong> the
-          intended dose. There is no such thing as a 0.4 mL U-100 syringe, so a &ldquo;40 unit
-          syringe&rdquo; is most likely the 1 mL veterinary U-40 barrel.
+          <Rich text={t("calc_barrel_warning")} />
         </Callout>
       </Card>
 
@@ -158,9 +163,9 @@ export default function CalculatorPage() {
         <SectionLabel>{t("calc_vial_and_dose")}</SectionLabel>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Peptide (optional)" hint="Fills in a typical vial size and dose.">
+          <Field label={t("calc_peptide_optional")} hint={t("calc_peptide_hint")}>
             <Select value={peptideId} onChange={(e) => applyPeptide(e.target.value)}>
-              <option value="">Choose to prefill…</option>
+              <option value="">{t("calc_choose_prefill")}</option>
               {peptides.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -170,7 +175,7 @@ export default function CalculatorPage() {
             <AddCompoundInline onCreated={(p) => applyPeptide(p.id)} />
           </Field>
 
-          <Field label="Vial strength" htmlFor="vial">
+          <Field label={t("calc_vial_strength")} htmlFor="vial">
             <NumberInput
               id="vial"
               value={vialMg}
@@ -181,7 +186,7 @@ export default function CalculatorPage() {
             />
           </Field>
 
-          <Field label="Water added" htmlFor="water" hint="Bacteriostatic water for a multi-dose vial.">
+          <Field label={t("calc_water_to_add")} htmlFor="water" hint={t("calc_water_hint")}>
             <NumberInput
               id="water"
               value={diluentMl}
@@ -194,7 +199,7 @@ export default function CalculatorPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
-          <Field label="Dose you want" htmlFor="dose" className="min-w-40 flex-1">
+          <Field label={t("calc_dose_you_want")} htmlFor="dose" className="min-w-40 flex-1">
             <NumberInput
               id="dose"
               value={dose}
@@ -205,7 +210,7 @@ export default function CalculatorPage() {
             />
           </Field>
           <Segmented
-            ariaLabel="Dose unit"
+            ariaLabel={t("phase_dose_unit")}
             options={[
               { value: "mcg", label: "mcg" },
               { value: "mg", label: "mg" },
@@ -237,36 +242,35 @@ export default function CalculatorPage() {
             />
             {draw.warnings.includes("off-graduation") && (
               <p className="mt-1 text-center text-[11.5px] text-[var(--sky)]">
-                Dashed line marks the exact figure of {trim(draw.units, 2)}; the fill shows the mark
-                you can actually hit.
+                {t("calc_dashed_line", { units: trim(draw.units, 2) })}
               </p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-5 border-t border-[var(--line)] px-4 py-5 sm:grid-cols-4 sm:px-6">
             <Stat
-              label="Volume"
+              label={t("calc_volume")}
               value={trim(draw.volumeRoundedMl, 3)}
               unit="mL"
               tone="tangerine"
-              hint="The primary answer."
+              hint={t("calc_volume_hint")}
             />
             <Stat
-              label={syringe.scale === "U100" ? "U-100 marks" : "U-40 marks"}
+              label={t("calc_scale_marks", { scale: syringe.scale === "U100" ? "U-100" : "U-40" })}
               value={trim(draw.unitsRounded, 2)}
-              hint={`On the ${syringe.scale === "U100" ? "0 to 100" : "0 to 40"} scale.`}
+              hint={t("calc_on_the_scale", { range: syringe.scale === "U100" ? "0 to 100" : "0 to 40" })}
             />
             <Stat
-              label="Concentration"
+              label={t("calc_concentration")}
               value={formatConcentration(draw.concentrationMcgPerMl).split(" ")[0]}
               unit={formatConcentration(draw.concentrationMcgPerMl).split(" ")[1]}
-              hint={`${trim(draw.mcgPerGraduation, 2)} mcg per printed mark.`}
+              hint={t("calc_mcg_per_mark", { mcg: trim(draw.mcgPerGraduation, 2) })}
             />
             <Stat
-              label="Doses per vial"
+              label={t("calc_doses_per_vial")}
               value={draw.dosesPerVial}
               tone="sky"
-              hint={`At ${formatDose(doseMcg)} each.`}
+              hint={t("calc_at_each", { dose: formatDose(doseMcg) })}
             />
           </div>
 
@@ -289,19 +293,19 @@ export default function CalculatorPage() {
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] px-4 py-3 text-[13px] sm:px-6">
             <ArrowLeftRight size={14} className="text-[var(--faint)]" />
             <span className="text-[var(--muted)]">
-              The same {formatMl(draw.volumeRoundedMl)} reads as
+              {t("calc_same_volume_reads", { ml: formatMl(draw.volumeRoundedMl) })}
             </span>
             <strong className="tnum font-mono text-[var(--ink)]">
               {trim(draw.volumeRoundedMl * (otherScale === "U100" ? 100 : 40), 2)}
             </strong>
             <span className="text-[var(--muted)]">
-              marks on a {otherScale === "U100" ? "U-100" : "U-40"} barrel.
+              {t("calc_marks_on_barrel", { scale: otherScale === "U100" ? "U-100" : "U-40" })}
             </span>
           </div>
         </Card>
       ) : (
         <Card className="px-4 py-10 text-center text-[14px] text-[var(--muted)]">
-          Enter a vial strength, a water volume and a dose to see the draw.
+          {t("calc_enter_to_see")}
         </Card>
       )}
 
@@ -321,8 +325,7 @@ export default function CalculatorPage() {
         <Card className="p-4">
           <SectionLabel>{t("calc_cleaner_volumes")}</SectionLabel>
           <p className="mb-3 text-[13px] leading-relaxed text-[var(--muted)]">
-            Same vial, same dose, different amount of water. A draw that lands exactly on a printed
-            mark is one you can repeat accurately every time.
+            {t("calc_cleaner_desc")}
           </p>
           <ul className="space-y-1.5">
             {suggestions.map((s) => {
@@ -348,9 +351,9 @@ export default function CalculatorPage() {
                       {trim(s.concentrationMgPerMl, 3)} mg/mL · {trim(s.mcgPerGraduation, 2)} mcg per mark
                     </span>
                     {s.landsOnMark && (
-                      <Check size={15} className="shrink-0 text-[var(--leaf)]" aria-label="Lands on a mark" />
+                      <Check size={15} className="shrink-0 text-[var(--leaf)]" aria-label={t("calc_lands_on_mark")} />
                     )}
-                    {active && <Badge tone="tangerine">current</Badge>}
+                    {active && <Badge tone="tangerine">{t("calc_current")}</Badge>}
                   </button>
                 </li>
               );
@@ -377,9 +380,7 @@ export default function CalculatorPage() {
           </p>
         </div>
         <p className="mt-3.5 border-t border-[var(--line)] pt-3 text-[12.5px] leading-relaxed text-[var(--faint)]">
-          The lyophilised powder itself displaces roughly 0.7 microlitres per milligram, so a 10 mg
-          vial shifts a 2 mL reconstitution by about 0.35%, well under the finest mark on any
-          barrel. It is ignored here, as it is in clinical practice.
+          {t("calc_displacement_note")}
         </p>
       </Card>
 
@@ -387,10 +388,7 @@ export default function CalculatorPage() {
         <div className="flex gap-2.5">
           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[var(--rose)]" />
           <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
-            The arithmetic here is exact and tested. What it cannot check is whether the vial holds
-            what the label says, unregulated material has no verified identity, purity or sterility,
-            and correct maths on an unverified product does not make it safe. Nothing in this app is
-            medical advice.
+            {t("calc_disclaimer")}
           </p>
         </div>
       </Card>

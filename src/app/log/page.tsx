@@ -114,7 +114,7 @@ export default function LogPage() {
     [shown, checkIns, filter]);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -122,7 +122,7 @@ export default function LogPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">{t("log_title")}</h1>
-          <p className="mt-1 text-[13.5px] text-[var(--muted)]">Every dose, and how each day went.</p>
+          <p className="mt-1 text-[13.5px] text-[var(--muted)]">{t("log_subtitle")}</p>
         </div>
         <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
           <Plus size={16} /> {t("log_new_dose")}
@@ -131,11 +131,11 @@ export default function LogPage() {
 
       {logs.length > 0 && (
         <Card className="grid grid-cols-3 gap-4 p-4">
-          <Stat label="Doses, 30 days" value={stats.recent} />
-          <Stat label="Skipped" value={stats.skipped} tone={stats.skipped > 0 ? "rose" : "neutral"} />
+          <Stat label={t("log_doses_30_days")} value={stats.recent} />
+          <Stat label={t("now_skipped")} value={stats.skipped} tone={stats.skipped > 0 ? "rose" : "neutral"} />
           <Stat
-            label="Adherence"
-            value={stats.adherenceRate == null ? "n/a" : percent(stats.adherenceRate)}
+            label={t("log_adherence")}
+            value={stats.adherenceRate == null ? t("checkin_na") : percent(stats.adherenceRate)}
             tone={
               stats.adherenceRate == null
                 ? "neutral"
@@ -145,7 +145,7 @@ export default function LogPage() {
                     ? "tangerine"
                     : "rose"
             }
-            hint="Scheduled doses logged in the last 30 days."
+            hint={t("log_adherence_hint")}
           />
         </Card>
       )}
@@ -154,12 +154,21 @@ export default function LogPage() {
         <Card className="p-4">
           <SectionLabel>{t("log_site_rotation")}</SectionLabel>
           <SiteMap logs={shown} nowMs={now} />
+          {/*
+            Two sentences rather than one, and the number moved out of the
+            middle of it. The English read "X has taken 4+ injections", which
+            needs a verb agreeing with the count and a noun agreeing with the
+            number, and neither survives a string replace into a Slavic
+            language. The fact is the same either way: which sites, how many
+            each.
+          */}
           {overused.length > 0 && (
             <Callout tone="warn" className="mt-3">
-              {overused.map((s) => s.label).join(", ")}{" "}
-              {overused.length === 1 ? "has" : "have"} taken {overused[0].recentCount}+ injections in
-              the last two weeks. Repeatedly hitting one spot builds up firm tissue that absorbs
-              erratically, so the same dose stops delivering the same exposure, give these a rest.
+              {t("log_overused_line", {
+                sites: overused.map((s) => s.label).join(", "),
+                n: overused[0].recentCount,
+              })}{" "}
+              {t("log_overused_why")}
             </Callout>
           )}
         </Card>
@@ -170,10 +179,10 @@ export default function LogPage() {
           <Select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filter by peptide"
+            aria-label={t("log_filter_by_peptide")}
             className="flex-1"
           >
-            <option value="">All peptides</option>
+            <option value="">{t("log_all_peptides")}</option>
             {peptideIds.map((id) => (
               <option key={id} value={id}>
                 {findPeptide(custom, id)?.name ?? id}
@@ -194,7 +203,7 @@ export default function LogPage() {
         */}
         <label className="ml-auto flex items-center gap-2 text-[12.5px] text-[var(--muted)]">
           <CalendarPlus size={15} className="shrink-0" />
-          <span className="whitespace-nowrap">Rate another day</span>
+          <span className="whitespace-nowrap">{t("log_rate_another_day")}</span>
           <input
             type="date"
             max={toDateInput(now)}
@@ -207,7 +216,7 @@ export default function LogPage() {
               const day = ratableDay(fromDateInput(e.target.value), now);
               if (day != null) setRatingDay(day);
             }}
-            aria-label="Rate a day by date"
+            aria-label={t("log_rate_by_date")}
             className="rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-2.5 py-1.5 text-[13px] text-[var(--ink)]"
           />
         </label>
@@ -218,11 +227,11 @@ export default function LogPage() {
           title={t("log_no_logs")}
           action={
             <Button variant="primary" onClick={() => { setEditId(undefined); setOpen(true); }}>
-              Log your first dose
+              {t("log_first_dose_cta")}
             </Button>
           }
         >
-          Logged doses drive the plasma curves on the Now page and the adherence figure above.
+          {t("log_empty_desc")}
         </EmptyState>
       ) : (
         <div className="space-y-5">
@@ -237,7 +246,7 @@ export default function LogPage() {
             return (
             <section key={day}>
               <SectionLabel>
-                {day === startOfToday() ? "Today" : formatDate(day)}
+                {day === startOfToday() ? t("checkin_today") : formatDate(day)}
               </SectionLabel>
               <div className="space-y-1.5">
                 {entries.map((l) => {
@@ -249,7 +258,7 @@ export default function LogPage() {
                       key={l.id}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Edit dose logged ${formatDateTime(l.at)}`}
+                      aria-label={t("log_edit_dose", { when: formatDateTime(l.at) })}
                       onClick={() => {
                         setEditId(l.id);
                         setOpen(true);
@@ -283,7 +292,7 @@ export default function LogPage() {
                             </span>
                           </span>
                           {l.skipped ? (
-                            <Badge tone="rose">skipped</Badge>
+                            <Badge tone="rose">{t("log_skipped")}</Badge>
                           ) : (
                             /*
                               Neutral, not tangerine. Tangerine is one of the six
@@ -301,7 +310,7 @@ export default function LogPage() {
                         <div className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-[var(--muted)]">
                           {l.units != null && !l.skipped && (
                             <span className="tnum font-mono">
-                              {trim(l.units, 2)} marks
+                              {trim(l.units, 2)} {t("stock_marks")}
                               {l.syringeScale === "U40" ? " (U-40)" : ""}
                             </span>
                           )}
@@ -322,7 +331,7 @@ export default function LogPage() {
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {l.feeling != null && (
                               <Badge tone={FEELING_TONE[l.feeling] ?? "neutral"}>
-                                {FEELING_LABELS[l.feeling] ?? `Feeling ${l.feeling}`}
+                                {FEELING_LABELS[l.feeling] ?? t("log_feeling_n", { n: l.feeling })}
                               </Badge>
                             )}
                             {l.sideEffects?.map((effect) => (
@@ -355,7 +364,7 @@ export default function LogPage() {
                   <div
                     role="button"
                     tabIndex={0}
-                    aria-label={`Edit how ${formatDate(day)} went`}
+                    aria-label={t("log_edit_day", { date: formatDate(day) })}
                     onClick={() => setRatingDay(day)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -368,7 +377,7 @@ export default function LogPage() {
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--faint)]">
-                        How the day went
+                        {t("log_how_day_went")}
                       </span>
                       {SYMPTOMS.filter((s) => checkIn.ratings[s.id] != null).map((s) => (
                         <Badge key={s.id} tone={ratingTone(checkIn.ratings[s.id]!, s.higherIsBetter)}>
@@ -399,7 +408,7 @@ export default function LogPage() {
                     onClick={() => setRatingDay(day)}
                     className="press w-full rounded-[var(--r-inner)] border border-dashed border-[var(--line)] px-3 py-2 text-left text-[12px] text-[var(--faint)] hover:border-[var(--faint)] hover:text-[var(--muted)]"
                   >
-                    Rate how this day went
+                    {t("log_rate_this_day")}
                   </button>
                 )}
               </div>

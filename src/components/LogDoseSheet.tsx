@@ -418,7 +418,7 @@ export function LogDoseSheet({
       >
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--card)] px-4 py-3">
           <h2 className="text-[16px] font-bold text-[var(--ink)]">
-            {editing ? "Edit dose" : "Log a dose"}
+            {editing ? t("log_edit_dose_title") : t("log_log_a_dose")}
           </h2>
           <button
             type="button"
@@ -439,11 +439,11 @@ export function LogDoseSheet({
           */}
           {(activeProtocols.length > 0 || protocol) && (
             <Field
-              label="Protocol"
+              label={t("log_protocol")}
               hint={
                 protocol
-                  ? "Sets the compound, the dose and the site to rotate to."
-                  : "Recording this dose outside any plan."
+                  ? t("log_protocol_sets")
+                  : t("log_outside_plan")
               }
             >
               <Select value={protocolId} onChange={(e) => chooseProtocol(e.target.value)}>
@@ -461,15 +461,17 @@ export function LogDoseSheet({
                 */}
                 {protocol && !protocol.active && (
                   <option value={protocol.id}>
-                    {findPeptide(custom, protocol.peptideId)?.name ?? protocol.peptideId},{" "}
-                    {protocol.name}, no longer running
+                    {t("log_protocol_stopped", {
+                      peptide: findPeptide(custom, protocol.peptideId)?.name ?? protocol.peptideId,
+                      name: protocol.name,
+                    })}
                   </option>
                 )}
               </Select>
             </Field>
           )}
 
-          <Field label="Peptide">
+          <Field label={t("plan_peptide")}>
             <Select value={peptideId} onChange={(e) => choosePeptide(e.target.value)}>
               {peptides.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -482,19 +484,19 @@ export function LogDoseSheet({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Dose"
+              label={t("plan_dose")}
               hint={
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   {protocol && (
-                    <span>{`Protocol calls for ${formatDose(scheduledDoseMcg(protocol, at))}.`}</span>
+                    <span>{t("log_protocol_calls_for", { dose: formatDose(scheduledDoseMcg(protocol, at)) })}</span>
                   )}
                   <button
                     type="button"
                     onClick={() => setDoseUnit((u) => (u === "mcg" ? "mg" : "mcg"))}
                     className="rounded-full border border-[var(--line)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--muted)] hover:border-[var(--tangerine)] hover:text-[var(--tangerine)] transition-colors"
-                    aria-label={`Switch dose entry to ${doseUnit === "mcg" ? "mg" : "mcg"}`}
+                    aria-label={t("log_switch_unit", { unit: doseUnit === "mcg" ? "mg" : "mcg" })}
                   >
-                    {doseUnit === "mcg" ? "switch to mg" : "switch to mcg"}
+                    {doseUnit === "mcg" ? t("log_switch_to_mg") : t("log_switch_to_mcg")}
                   </button>
                 </span>
               }
@@ -519,20 +521,20 @@ export function LogDoseSheet({
                 press is a failed dose rather than half a dose.
               */
               <Field
-                label="Presses"
+                label={t("log_presses")}
                 hint={
                   vial && mcgPerSpray(vial) > 0
                     ? `${formatDose(mcgPerSpray(vial))} a press, ${trim(
                         mlForSprays(vial, spraysForDose(vial, doseMcg)),
                         2)} mL in total.`
-                    : "Fill a spray bottle from a made-up vial to convert between presses and dose."
+                    : t("log_fill_spray_first")
                 }
               >
                 <NumberInput
                   value={vial ? spraysForDose(vial, doseMcg) : ""}
                   min={0}
                   step={1}
-                  suffix="presses"
+                  suffix={t("log_presses_suffix")}
                   placeholder={vial ? undefined : "n/a"}
                   disabled={skipped || !vial}
                   onChange={(e) => {
@@ -543,18 +545,18 @@ export function LogDoseSheet({
               </Field>
             ) : (
             <Field
-              label="Syringe units"
+              label={t("log_syringe_units")}
               hint={
                 canConvert
                   ? `1 unit = ${trim(mcgPerUnitOfScale(concMcgPerMl, syringe.scale), 2)} mcg at this vial's strength. One printed mark on this barrel is ${syringe.graduationUnits} unit${syringe.graduationUnits === 1 ? "" : "s"}.`
-                  : "Reconstitute the vial to convert between units and dose."
+                  : t("log_reconstitute_first")
               }
             >
               <NumberInput
                 value={canConvert ? Number(units.toFixed(2)) : ""}
                 min={0}
                 step={0.5}
-                suffix="units"
+                suffix={t("log_units_suffix")}
                 placeholder={canConvert ? undefined : "n/a"}
                 disabled={skipped || !canConvert}
                 onChange={(e) => setUnitsAndDose(Number(e.target.value))}
@@ -566,15 +568,15 @@ export function LogDoseSheet({
           <div className="grid gap-4 sm:grid-cols-2">
             {!nasal && (
             <Field
-              label="Barrel"
+              label={t("log_barrel")}
               hint={
                 syringe.scale === "U40"
-                  ? "Veterinary scale, one unit is 0.025 mL."
-                  : "Standard insulin scale, one unit is 0.01 mL."
+                  ? t("log_u40_hint")
+                  : t("log_u100_hint")
               }
             >
               <Segmented
-                ariaLabel="Syringe scale"
+                ariaLabel={t("log_syringe_scale")}
                 className="w-full"
                 options={[
                   { value: "U100", label: "U-100", hint: "100 units to 1 mL" },
@@ -586,7 +588,7 @@ export function LogDoseSheet({
             </Field>
             )}
 
-            <Field label="When">
+            <Field label={t("log_when")}>
               <input
                 type="datetime-local"
                 value={toDateTimeLocal(at)}
@@ -597,7 +599,7 @@ export function LogDoseSheet({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Route">
+            <Field label={t("plan_route")}>
               <Select value={route} onChange={(e) => chooseRoute(e.target.value as Route)}>
                 {routes.map((r) => (
                   <option key={r} value={r}>
@@ -609,11 +611,11 @@ export function LogDoseSheet({
 
             {!nasal && (
             <Field
-              label="Site"
+              label={t("log_site_short")}
               hint={
                 pinned.length && !siteOverride
                   ? `Rotating through the ${pinned.length} sites pinned to this protocol.`
-                  : "Green ring marks the longest-rested spot."
+                  : t("log_green_ring")
               }
             >
               <Select value={site} onChange={(e) => setSite(e.target.value as InjectionSite)}>
@@ -655,8 +657,8 @@ export function LogDoseSheet({
                   className="text-[12px] text-[var(--sky)] underline underline-offset-2 hover:text-[var(--ink)]"
                 >
                   {siteOverride
-                    ? "Back to this protocol's sites"
-                    : "Injected somewhere else? Use any site"}
+                    ? t("log_back_to_pinned")
+                    : t("log_use_any_site")}
                 </button>
               </div>
             )}
@@ -665,10 +667,10 @@ export function LogDoseSheet({
 
           {usableVials.length > 0 ? (
             <Field
-              label={nasal ? "Sprayed from" : "Drawn from"}
-              hint={`This dose comes off the chosen ${
-                nasal ? "bottle" : "vial"
-              }. Set it to “Not recorded” to log without touching stock.`}
+              label={nasal ? t("log_sprayed_from") : t("log_drawn_from")}
+              hint={t("log_vial_hint", {
+                container: nasal ? t("log_container_bottle") : t("log_container_vial"),
+              })}
             >
               <Select value={vialId} onChange={(e) => setVialId(e.target.value)}>
                 <option value="">{t("log_not_recorded_stock")}</option>
@@ -676,11 +678,12 @@ export function LogDoseSheet({
                   const st = vialStatus(v);
                   const left =
                     v.state === "reconstituted" && v.diluentMl
-                      ? `${trim(st.remainingMl, 2)} mL left`
-                      : "sealed";
+                      ? t("log_ml_left", { ml: trim(st.remainingMl, 2) })
+                      : t("stock_sealed");
                   return (
                     <option key={v.id} value={v.id}>
-                      {v.strengthMg} mg · {left} · {formatDose(st.remainingMcg)} remaining
+                      {v.strengthMg} mg · {left} ·{" "}
+                      {t("log_mcg_remaining", { mcg: formatDose(st.remainingMcg) })}
                     </option>
                   );
                 })}
@@ -688,9 +691,7 @@ export function LogDoseSheet({
             </Field>
           ) : (
             <Callout tone="warn">
-              {nasal
-                ? "No nasal spray of this peptide is filled, so this dose will be logged without drawing anything down. Make up a vial under Stock and transfer it into a bottle to keep the count accurate."
-                : "No vial of this peptide is in stock, so this dose will be logged without drawing anything down. Add one under Stock to keep the count accurate."}
+              {nasal ? t("log_no_spray_filled") : t("log_no_vial_in_stock")}
             </Callout>
           )}
 
@@ -701,13 +702,13 @@ export function LogDoseSheet({
                   {vialDosesAfter}
                 </span>
                 <span className="text-[var(--muted)]">
-                  more {formatDose(doseMcg)} dose{vialDosesAfter === 1 ? "" : "s"} left in this vial
-                  after logging
+                  {t("log_doses_left_in_vial", { n: vialDosesAfter, dose: formatDose(doseMcg) })}
                 </span>
               </div>
               <p className="mt-1 text-[12px] text-[var(--faint)]">
-                {formatDose(vialLeftAfter)} remaining in the vial ·{" "}
-                <span className="tnum font-mono">{dosesAfter}</span> across all your stock
+                {t("log_remaining_in_vial", { left: formatDose(vialLeftAfter) })} ·{" "}
+                <span className="tnum font-mono">{dosesAfter}</span>{" "}
+                {t("log_across_your_stock")}
               </p>
             </div>
           )}
@@ -716,14 +717,15 @@ export function LogDoseSheet({
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone="tangerine">
-                  {trim(draw.unitsRounded, 2)} units · {trim(draw.volumeRoundedMl, 3)} mL
+                  {trim(draw.unitsRounded, 2)} {t("log_units_suffix")} ·{" "}
+                  {trim(draw.volumeRoundedMl, 3)} mL
                 </Badge>
                 <Badge>{syringe.scale === "U100" ? "U-100" : "U-40"}</Badge>
                 <Select
                   value={syringeId}
                   onChange={(e) => setSyringeId(e.target.value)}
                   className="ml-auto w-auto py-1 text-[12px]"
-                  aria-label="Syringe"
+                  aria-label={t("log_syringe")}
                 >
                   {SYRINGES.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -740,8 +742,7 @@ export function LogDoseSheet({
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="grape">
-                  {spraysForDose(vial, doseMcg)} press
-                  {spraysForDose(vial, doseMcg) === 1 ? "" : "es"}
+                  {t("log_press_count", { n: spraysForDose(vial, doseMcg) })}
                 </Badge>
                 <Badge>
                   {trim(mlForSprays(vial, spraysForDose(vial, doseMcg)), 2)} mL ·{" "}
@@ -749,9 +750,7 @@ export function LogDoseSheet({
                 </Badge>
               </div>
               <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--faint)]">
-                Split them between nostrils however you like. Nothing here records which, because a
-                nose has no rotation problem to solve and the record would be one nobody could act
-                on.
+                {t("log_nostrils_note")}
               </p>
             </div>
           )}
@@ -799,7 +798,7 @@ export function LogDoseSheet({
 
               <div>
                 <p className="mb-2 text-[13px] font-semibold text-[var(--ink)]">
-                  Anything to note?{" "}
+                  {t("log_anything_to_note")}{" "}
                   <span className="font-normal text-[var(--faint)]">{t("optional")}</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -830,7 +829,7 @@ export function LogDoseSheet({
             </div>
           )}
 
-          <Field label="Notes">
+          <Field label={t("labs_notes")}>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -848,7 +847,7 @@ export function LogDoseSheet({
             the thing you have to scroll past to reach Save.
           */}
           <HelpNote
-            label="A skipped dose"
+            label={t("log_skipped_dose_label")}
             control={
               <label className="flex items-center gap-2.5 text-[13.5px] text-[var(--muted)]">
                 <input
@@ -857,23 +856,21 @@ export function LogDoseSheet({
                   onChange={(e) => setSkipped(e.target.checked)}
                   className="h-4 w-4 accent-[var(--tangerine)]"
                 />
-                Record this as a skipped dose
+                {t("log_record_skipped")}
               </label>
             }
           >
             <p>
-              It is a record, not a gap. The app can tell a dose you decided against from one nobody
-              ever logged, and your adherence figure counts them separately.
+              {t("log_skipped_why")}
             </p>
             <p>
-              Nothing is drawn from a vial and no drug is modelled in your body, so the curve and the
-              projection are untouched.
+              {t("log_skipped_effects")}
             </p>
             <Link
               href="/about#skipped"
               className="block font-semibold text-[var(--mint-ink)] underline decoration-dotted"
             >
-              What else it affects
+              {t("log_what_else")}
             </Link>
           </HelpNote>
         </div>
@@ -881,7 +878,7 @@ export function LogDoseSheet({
         <div className="sticky bottom-0 space-y-2.5 border-t border-[var(--line)] bg-[var(--card)] px-4 py-3">
           {confirmDelete && editing && (
             <Callout tone="danger">
-              Deleting this dose puts {formatDose(editing.doseMcg)} back into its vial.
+              {t("log_delete_returns", { dose: formatDose(editing.doseMcg) })}
             </Callout>
           )}
 
@@ -900,10 +897,10 @@ export function LogDoseSheet({
               </Button>
             )}
             <Button variant="ghost" onClick={onClose} className="flex-1">
-              Cancel
+              {t("cancel")}
             </Button>
             <Button variant="primary" onClick={save} className="flex-[2]" disabled={!peptideId}>
-              {editing ? "Save changes" : skipped ? "Record skip" : "Save dose"}
+              {editing ? t("log_save_changes") : skipped ? t("log_record_skip") : t("log_save_dose")}
             </Button>
           </div>
         </div>

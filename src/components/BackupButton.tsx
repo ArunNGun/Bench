@@ -29,8 +29,10 @@ import { cn } from "@/lib/cn";
 import { useStore } from "@/lib/store";
 import { downloadJson, exportFileName } from "@/lib/backup/download";
 import { backupDirty } from "@/lib/calc/document";
+import { useLang } from "@/lib/i18n";
 
 export function BackupButton({ className }: { className?: string }) {
+  const { t } = useLang();
   const exportData = useStore((s) => s.exportData);
   const updateSettings = useStore((s) => s.updateSettings);
   const hydrated = useStore((s) => s.hydrated);
@@ -79,12 +81,16 @@ export function BackupButton({ className }: { className?: string }) {
       // real backup is the one way this button could destroy something.
       disabled={!hydrated}
       aria-label={
-        saved ? "Backup saved" : dirty ? "Save a backup, there are unsaved changes" : "Save a backup"
+        saved
+          ? t("backup_saved_label")
+          : dirty
+            ? t("backup_save_dirty")
+            : t("backup_save")
       }
       title={
         dirty
-          ? "Something has changed since your last backup"
-          : "Save a copy of everything to a file"
+          ? t("backup_something_changed")
+          : t("backup_save_title")
       }
       className={cn(
         "press flex h-10 items-center gap-2 rounded-[var(--r-pill)] px-3 text-[14px] font-medium transition-colors",
@@ -98,7 +104,7 @@ export function BackupButton({ className }: { className?: string }) {
         className)}
     >
       {saved ? <Check size={18} strokeWidth={2.4} /> : <Download size={18} strokeWidth={2.1} />}
-      <span className="hidden lg:inline">{saved ? "Saved" : "Backup"}</span>
+      <span className="hidden lg:inline">{saved ? t("header_saved") : t("header_backup")}</span>
     </button>
   );
 }

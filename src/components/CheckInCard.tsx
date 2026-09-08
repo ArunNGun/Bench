@@ -1,5 +1,6 @@
 "use client";
 import { useLang } from "@/lib/i18n";
+import { splitSlots } from "@/lib/i18n/rich";
 
 import Link from "next/link";
 
@@ -126,13 +127,13 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
               className="press flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--mint-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--mint-ink)]"
             >
               {existing ? <Check size={13} strokeWidth={2.8} /> : null}
-              {existing ? "Rated" : "Rate today"}
+              {existing ? t("checkin_rated") : t("checkin_rate_today")}
             </button>
           )
         }
       >
         <span className="inline-flex items-center gap-1.5">
-          <HeartPulse size={13} strokeWidth={2.6} /> How you feel
+          <HeartPulse size={13} strokeWidth={2.6} /> {t("checkin_how_you_feel")}
         </span>
       </SectionLabel>
 
@@ -144,7 +145,7 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
             notes={notes}
             onNotes={setNotes}
             vitals={vitals}
-            notePlaceholder="Anything worth remembering about today"
+            notePlaceholder={t("checkin_note_placeholder")}
           />
           {/*
             Where it goes afterwards, said here rather than left to be
@@ -164,20 +165,29 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
             discovered. Somebody wrote a note about a bad night, went looking
             for it the next week, and found no screen that showed it.
           */}
+          {/*
+            The sentence stays one key with {log} marking where the link goes,
+            so a translation can move the link by moving the placeholder.
+          */}
           <p className="text-[11.5px] text-[var(--faint)]">
-            Saved days show up in the{" "}
-            <Link href="/log" className="underline hover:text-[var(--ink)]">
-              Log
-            </Link>
-            , beside the doses from that day.
+            {splitSlots(t("checkin_saved_days"), ["log"]).map((part, i) =>
+              "text" in part ? (
+                <span key={i}>{part.text}</span>
+              ) : (
+                <Link key={i} href="/log" className="underline hover:text-[var(--ink)]">
+                  {t("checkin_log_link")}
+                </Link>
+              ))}
           </p>
 
           <div className="flex items-center gap-2">
             <Button variant="primary" onClick={save} className="flex-1">
-              Save {rated > 0 ? `${rated} of ${SYMPTOMS.length}` : "blank"}
+              {rated > 0
+                ? t("checkin_save_of", { rated, total: SYMPTOMS.length })
+                : t("checkin_save_blank_short")}
             </Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
           </div>
         </div>
@@ -202,10 +212,14 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
 
           <p className="text-[12px] text-[var(--muted)]">
             {coverage.last30 === 0
-              ? "Nothing rated yet. A week of these makes the rest of this page mean something."
-              : `Average of the last 14 days. ${coverage.last30} of the last 30 days rated${
-                  coverage.current > 1 ? `, ${coverage.current} in a row` : ""
-                }.`}
+              ? t("checkin_nothing_rated")
+              : t("checkin_average", {
+                  rated: coverage.last30,
+                  run:
+                    coverage.current > 1
+                      ? t("checkin_in_a_row", { n: coverage.current })
+                      : "",
+                })}
           </p>
 
           {shifts.length > 0 && (
@@ -231,10 +245,16 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
                       <Icon size={13} strokeWidth={2.6} style={{ color: tone }} />
                       <span className="text-[var(--muted)]">{s.label}</span>
                       <span className="tnum ml-auto font-bold" style={{ color: tone }}>
-                        {trim(s.before ?? 0, 1)} to {trim(s.after ?? 0, 1)}
+                        {t("checkin_shift", {
+                          before: trim(s.before ?? 0, 1),
+                          after: trim(s.after ?? 0, 1),
+                        })}
                       </span>
                       <span className="text-[11px] text-[var(--faint)]">
-                        {s.daysBefore}d / {s.daysAfter}d
+                        {t("checkin_days_split", {
+                          before: s.daysBefore,
+                          after: s.daysAfter,
+                        })}
                       </span>
                     </li>
                   );

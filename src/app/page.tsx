@@ -13,6 +13,7 @@ import {
   IconChip,
   Meter,
   ProgressRing,
+  Rich,
   SectionLabel,
   TONE_BG,
   TONE_FG,
@@ -58,7 +59,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
-import { useLang } from "@/lib/i18n";
+import { translate, useLang, useLangStore, type TranslationKey } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
 import { StackWarnings } from "@/components/StackWarnings";
@@ -78,6 +79,7 @@ const DAY = 86_400_000;
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
   const { t } = useLang();
+  const lang = useLangStore((s) => s.lang);
   const { protocols, logs, vials, measurements } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const overrides = useStore((s) => s.halfLifeOverrides);
@@ -126,10 +128,12 @@ export default function NowPage() {
       const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
       return {
         label: `${name} vial`,
-        concentration: Number.isFinite(conc) ? formatConcentration(conc) : "not reconstituted",
+        concentration: Number.isFinite(conc)
+          ? formatConcentration(conc)
+          : translate(lang, "now_not_reconstituted"),
       };
     },
-    [vials, custom]);
+    [vials, custom, lang]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
   /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
@@ -240,8 +244,8 @@ export default function NowPage() {
   const series: PkSeries[] = useMemo(() => {
     const out: Omit<PkSeries, "color">[] = [];
 
-    for (const t of tracks) {
-      const parts = modellableComponents(t.blendParts);
+    for (const track of tracks) {
+      const parts = modellableComponents(track.blendParts);
 
       // Prefer per-component curves for a blend even when the blend itself
       // carries an aggregate half-life: two components with 177 h and 161 h
@@ -249,9 +253,9 @@ export default function NowPage() {
       if (parts.length) {
         for (const part of parts) {
           out.push({
-            id: `${t.protocol.id}:${part.peptideId ?? part.name}`,
-            label: `${part.name} · in ${t.peptide!.name}`,
-            doses: t.doses.map((d) => ({ at: d.at, amountMcg: d.amountMcg * part.fraction })),
+            id: `${track.protocol.id}:${part.peptideId ?? part.name}`,
+            label: `${part.name} · in ${track.peptide!.name}`,
+            doses: track.doses.map((d) => ({ at: d.at, amountMcg: d.amountMcg * part.fraction })),
             params: {
               halfLifeHours: part.peptide!.halfLifeHours!,
               tmaxHours: part.peptide!.tmaxHours,
@@ -262,14 +266,14 @@ export default function NowPage() {
         continue;
       }
 
-      if (t.curve) {
+      if (track.curve) {
         out.push({
-          id: t.protocol.id,
-          label: t.peptide!.name,
-          doses: t.doses,
-          params: t.curve.params,
-          referenceMcg: t.referenceMcg,
-          basis: t.curve.basis,
+          id: track.protocol.id,
+          label: track.peptide!.name,
+          doses: track.doses,
+          params: track.curve.params,
+          referenceMcg: track.referenceMcg,
+          basis: track.curve.basis,
         });
       }
     }
@@ -290,14 +294,14 @@ export default function NowPage() {
    */
   const unplotted = useMemo(() => {
     const names = new Set<string>();
-    for (const t of tracks) {
-      for (const part of t.blendParts) {
+    for (const track of tracks) {
+      for (const part of track.blendParts) {
         if (!part.peptide || !curveFor(part.peptide, overrides?.[part.peptide.id])) {
           names.add(part.name);
         }
       }
-      if (!t.blendParts.length && t.peptide && !t.curve) {
-        names.add(t.peptide.name);
+      if (!track.blendParts.length && track.peptide && !track.curve) {
+        names.add(track.peptide.name);
       }
     }
     return [...names];
@@ -310,16 +314,16 @@ export default function NowPage() {
    */
   const estimatedFrom = useMemo(() => {
     const out: { id: string; text: string; evidence: HalfLifeEstimate["evidence"] }[] = [];
-    for (const t of tracks) {
-      const e = t.peptide?.halfLifeEstimate;
-      if (!t.curve || isMeasuredInPeople(t.curve.basis)) continue;
+    for (const track of tracks) {
+      const e = track.peptide?.halfLifeEstimate;
+      if (!track.curve || isMeasuredInPeople(track.curve.basis)) continue;
 
-      if (t.curve.basis === "yours") {
-        const mine = overrides?.[t.peptide!.id];
+      if (track.curve.basis === "yours") {
+        const mine = overrides?.[track.peptide!.id];
         if (!mine) continue;
         out.push({
-          id: t.protocol.id,
-          text: `${t.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
+          id: track.protocol.id,
+          text: `${track.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
             mine.note ? ` (${mine.note})` : ""
           }. The library has no published figure for it.`,
           evidence: "anecdotal" as const,
@@ -329,8 +333,8 @@ export default function NowPage() {
 
       if (!e) continue;
       out.push({
-        id: t.protocol.id,
-        text: `${t.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
+        id: track.protocol.id,
+        text: `${track.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
         evidence: e.evidence,
       });
     }
@@ -338,7 +342,7 @@ export default function NowPage() {
   }, [tracks, overrides]);
 
   const needsAttention = tracks.filter(
-    (t) => t.due.state === "overdue" || t.due.state === "due-now");
+    (track) => track.due.state === "overdue" || track.due.state === "due-now");
 
   /**
    * The rest of today, in order.
@@ -356,18 +360,18 @@ export default function NowPage() {
     const end = endOfLocalDay(now);
     const shownAbove = new Set(
       tracks
-        .filter((t) => t.due.state === "overdue" || t.due.state === "due-now")
-        .map((t) => `${t.protocol.id}:${t.due.at}`));
+        .filter((track) => track.due.state === "overdue" || track.due.state === "due-now")
+        .map((track) => `${track.protocol.id}:${track.due.at}`));
 
     return tracks
-      .flatMap((t) =>
-        unloggedDoseTimes(t.protocol, logsForProtocol(t.protocol, logs), now, end)
-          .filter((at) => !shownAbove.has(`${t.protocol.id}:${at}`))
-          .map((at) => ({ track: t, at })))
+      .flatMap((track) =>
+        unloggedDoseTimes(track.protocol, logsForProtocol(track.protocol, logs), now, end)
+          .filter((at) => !shownAbove.has(`${track.protocol.id}:${at}`))
+          .map((at) => ({ track, at })))
       .sort((a, b) => a.at - b.at);
   }, [tracks, logs, now]);
   const lowStock = tracks.filter(
-    (t) => t.stock.dosesRemaining <= settings.lowStockDoses && t.targetMcg > 0);
+    (track) => track.stock.dosesRemaining <= settings.lowStockDoses && track.targetMcg > 0);
   const expiringVials = vials.filter(
     (v) =>
       v.state === "reconstituted" &&
@@ -404,7 +408,7 @@ export default function NowPage() {
         <Card className="flex flex-wrap items-center gap-3 border-[var(--leaf)]/45 p-3">
           <Check size={16} className="text-[var(--leaf)]" />
           <span className="flex-1 text-[13.5px] text-[var(--ink)]">
-            {lastQuickLog.name} logged, and taken off your stock.
+            {t("now_quick_logged_note", { name: lastQuickLog.name })}
           </span>
           <Button
             variant="ghost"
@@ -413,84 +417,84 @@ export default function NowPage() {
               setLastQuickLog(null);
             }}
           >
-            <Undo2 size={15} /> Undo
+            <Undo2 size={15} /> {t("now_undo")}
           </Button>
           <Button variant="ghost" onClick={() => setLastQuickLog(null)}>
-            Dismiss
+            {t("dismiss")}
           </Button>
         </Card>
       )}
 
       {needsAttention.length > 0 && (
         <div className="space-y-2.5">
-          {needsAttention.map((t) => (
+          {needsAttention.map((track) => (
             <Card
-              key={t.protocol.id}
+              key={track.protocol.id}
               className={`flex flex-wrap items-center gap-3 p-3.5 ${
-                t.due.state === "overdue" ? "border-[var(--rose)]/45" : "border-[var(--tangerine)]/45"
+                track.due.state === "overdue" ? "border-[var(--rose)]/45" : "border-[var(--tangerine)]/45"
               }`}
             >
-              <Badge tone={t.due.state === "overdue" ? "rose" : "tangerine"}>{t.due.label}</Badge>
+              <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>{track.due.label}</Badge>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
-                  {t.color && (
+                  {track.color && (
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: t.color }}
+                      style={{ background: track.color }}
                     />
                   )}
-                  <span className="truncate font-medium" style={{ color: t.color ?? "var(--ink)" }}>
-                    {t.peptide?.name ?? t.protocol.peptideId}
+                  <span className="truncate font-medium" style={{ color: track.color ?? "var(--ink)" }}>
+                    {track.peptide?.name ?? track.protocol.peptideId}
                   </span>
                   <span className="tnum font-mono text-[13px] text-[var(--ink)]">
-                    {formatDose(t.targetMcg)}
+                    {formatDose(track.targetMcg)}
                   </span>
                   <DoseMarks
-                    peptideId={t.protocol.peptideId}
-                    doseMcg={t.targetMcg}
+                    peptideId={track.protocol.peptideId}
+                    doseMcg={track.targetMcg}
                     nowMs={now}
-                    route={t.protocol.route}
+                    route={track.protocol.route}
                     className="text-[12px] text-[var(--faint)]"
                   />
                 </div>
                 <div className="text-[12px] text-[var(--muted)]">
-                  {t.due.at != null &&
-                    (t.due.state === "overdue"
-                      ? `Was due ${relativeTime(t.due.at, now)}`
-                      : `Scheduled ${relativeTime(t.due.at, now)}`)}
+                  {track.due.at != null &&
+                    (track.due.state === "overdue"
+                      ? t("now_was_due", { when: relativeTime(track.due.at, now) })
+                      : t("now_scheduled_at", { when: relativeTime(track.due.at, now) }))}
                 </div>
               </div>
               <div className="flex gap-1.5">
                 <Button
                   variant="primary"
-                  title={`Log ${formatDose(t.targetMcg)} now with the suggested site`}
+                  title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
                   onClick={() => {
                     const id = addLog({
-                      peptideId: t.protocol.peptideId,
-                      protocolId: t.protocol.id,
+                      peptideId: track.protocol.peptideId,
+                      protocolId: track.protocol.id,
                       at: Date.now(),
-                      doseMcg: t.targetMcg,
-                      route: t.protocol.route,
+                      doseMcg: track.targetMcg,
+                      route: track.protocol.route,
                       // Rotate within the protocol's pinned sites, if it has any.
                       site: suggestSite(
-                        logs.filter((l) => l.peptideId === t.protocol.peptideId),
+                        logs.filter((l) => l.peptideId === track.protocol.peptideId),
                         Date.now(),
                         14,
-                        t.protocol.sites),
+                        track.protocol.sites),
                     });
-                    setLastQuickLog({ id, name: t.peptide?.name ?? t.protocol.peptideId });
+                    setLastQuickLog({ id, name: track.peptide?.name ?? track.protocol.peptideId });
                   }}
                 >
-                  <Check size={15} /> Taken
+                  <Check size={15} /> {t("now_logged")}
                 </Button>
                 <Button
-                  title="Open the full form"
+                  title={t("now_open_full_form")}
                   onClick={() => {
-                    setLogPeptideId(t.protocol.peptideId);
+                    setLogPeptideId(track.protocol.peptideId);
                     setLogOpen(true);
                   }}
                 >
-                  Details
+                  {t("now_details")}
                 </Button>
               </div>
             </Card>
@@ -507,8 +511,8 @@ export default function NowPage() {
         <div>
           <SectionLabel>{t("now_later_today")}</SectionLabel>
           <div className="divide-y divide-[var(--line)] rounded-[var(--r-card)] border border-[var(--line)]">
-            {laterToday.map(({ track: t, at }) => {
-              const key = `${t.protocol.id}:${at}`;
+            {laterToday.map(({ track, at }) => {
+              const key = `${track.protocol.id}:${at}`;
               const asking = confirmEarly === key;
 
               return (
@@ -518,23 +522,23 @@ export default function NowPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
-                      {t.color && (
+                      {track.color && (
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ background: t.color }}
+                          style={{ background: track.color }}
                         />
                       )}
-                      <span className="font-medium" style={{ color: t.color ?? "var(--ink)" }}>
-                        {t.peptide?.name ?? t.protocol.peptideId}
+                      <span className="font-medium" style={{ color: track.color ?? "var(--ink)" }}>
+                        {track.peptide?.name ?? track.protocol.peptideId}
                       </span>
                       <span className="tnum font-mono text-[12.5px] text-[var(--ink)]">
-                        {formatDose(t.targetMcg)}
+                        {formatDose(track.targetMcg)}
                       </span>
                       <DoseMarks
-                        peptideId={t.protocol.peptideId}
-                        doseMcg={t.targetMcg}
+                        peptideId={track.protocol.peptideId}
+                        doseMcg={track.targetMcg}
                         nowMs={now}
-                        route={t.protocol.route}
+                        route={track.protocol.route}
                         className="text-[12px] text-[var(--faint)]"
                       />
                     </span>
@@ -547,7 +551,7 @@ export default function NowPage() {
                     */}
                     {asking && (
                       <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                        Not due until {formatTime(at)}, {relativeTime(at, now)}. Log it now?
+                        {t("now_not_due_until", { time: formatTime(at), when: relativeTime(at, now) })}
                       </p>
                     )}
                   </div>
@@ -558,56 +562,56 @@ export default function NowPage() {
                           variant="primary"
                           onClick={() => {
                             const id = addLog({
-                              peptideId: t.protocol.peptideId,
-                              protocolId: t.protocol.id,
+                              peptideId: track.protocol.peptideId,
+                              protocolId: track.protocol.id,
                               at: Date.now(),
-                              doseMcg: t.targetMcg,
-                              route: t.protocol.route,
+                              doseMcg: track.targetMcg,
+                              route: track.protocol.route,
                               site: suggestSite(
-                                logs.filter((l) => l.peptideId === t.protocol.peptideId),
+                                logs.filter((l) => l.peptideId === track.protocol.peptideId),
                                 Date.now(),
                                 14,
-                                t.protocol.sites),
+                                track.protocol.sites),
                             });
                             setConfirmEarly(null);
                             setLastQuickLog({
                               id,
-                              name: t.peptide?.name ?? t.protocol.peptideId,
+                              name: track.peptide?.name ?? track.protocol.peptideId,
                             });
                           }}
                         >
-                          <Check size={15} /> Yes, log it
+                          <Check size={15} /> {t("now_yes_log_it")}
                         </Button>
                         <Button
-                          title="Open the full form"
+                          title={t("now_open_full_form")}
                           onClick={() => {
                             setConfirmEarly(null);
-                            setLogPeptideId(t.protocol.peptideId);
+                            setLogPeptideId(track.protocol.peptideId);
                             setLogOpen(true);
                           }}
                         >
-                          Details
+                          {t("now_details")}
                         </Button>
                         <Button variant="ghost" onClick={() => setConfirmEarly(null)}>
-                          Cancel
+                          {t("cancel")}
                         </Button>
                       </>
                     ) : (
                       <>
                         <Button
-                          title={`Log this ${formatTime(at)} dose ahead of time`}
+                          title={t("now_log_ahead_title", { time: formatTime(at) })}
                           onClick={() => setConfirmEarly(key)}
                         >
-                          <Check size={15} /> Taken
+                          <Check size={15} /> {t("now_logged")}
                         </Button>
                         <Button
-                          title="Open the full form"
+                          title={t("now_open_full_form")}
                           onClick={() => {
-                            setLogPeptideId(t.protocol.peptideId);
+                            setLogPeptideId(track.protocol.peptideId);
                             setLogOpen(true);
                           }}
                         >
-                          Details
+                          {t("now_details")}
                         </Button>
                       </>
                     )}
@@ -673,12 +677,7 @@ export default function NowPage() {
             describeVial={describeVial}
           />
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--faint)]">
-            Levels shown are estimated mass in circulation, not plasma concentration. The model uses
-            published half-lives and the one-compartment Bateman equation, scaled to the doses you
-            logged. Bioavailability and volume of distribution are unpublished for most of these
-            compounds, so the figure is a pharmacokinetic estimate, not a measured blood level.
-            Triangles mark logged doses.
-            Where a reading names a vial, that vial&apos;s strength is read as it stands today.
+            {t("now_curve_note")}
           </p>
 
           {estimatedFrom.length > 0 && (
@@ -694,9 +693,7 @@ export default function NowPage() {
                   {e.text}{" "}
                 </span>
               ))}
-              No percentage of peak, steady state or accumulation figure is shown for{" "}
-              {estimatedFrom.length === 1 ? "it" : "them"}, because none of those follow from a
-              half-life nobody has measured in a person taking it this way.
+              {t("now_no_pk_figures", { n: estimatedFrom.length })}
             </p>
           )}
 
@@ -705,10 +702,7 @@ export default function NowPage() {
               <strong className="font-semibold text-[var(--ink)]">
                 {unplotted.join(", ")}
               </strong>{" "}
-              {unplotted.length === 1 ? "is" : "are"} also on board but not plotted, no half-life
-              has been published for {unplotted.length === 1 ? "it" : "them"}, so any curve would be
-              invented. {unplotted.length === 1 ? "It is" : "They are"} listed under the protocol
-              below.
+              {t("now_unplotted", { n: unplotted.length })}
             </p>
           )}
         </Card>
@@ -717,23 +711,23 @@ export default function NowPage() {
       <section>
         <SectionLabel>{t("now_active_protocols")}</SectionLabel>
         <div className="space-y-2.5">
-          {tracks.map((t) => (
-            <Card key={t.protocol.id} className="p-4">
+          {tracks.map((track) => (
+            <Card key={track.protocol.id} className="p-4">
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <IconChip tone={t.tone} size={34}>
+                    <IconChip tone={track.tone} size={34}>
                       <SyringeIcon size={17} strokeWidth={2.2} />
                     </IconChip>
                     <Link
-                      href={`/library/${t.protocol.peptideId}`}
+                      href={`/library/${track.protocol.peptideId}`}
                       className="text-[15px] text-[var(--ink)] hover:underline"
                     >
-                      {t.peptide?.name ?? t.protocol.peptideId}
+                      {track.peptide?.name ?? track.protocol.peptideId}
                     </Link>
-                    {t.snap && (
-                      <Badge tone={t.snap.phase.id === "cleared" ? "neutral" : "sky"}>
-                        {t.snap.phase.label}
+                    {track.snap && (
+                      <Badge tone={track.snap.phase.id === "cleared" ? "neutral" : "sky"}>
+                        {track.snap.phase.label}
                       </Badge>
                     )}
                     {/*
@@ -743,10 +737,10 @@ export default function NowPage() {
                       most of the day, and a card that shows nothing reads as a
                       card with nothing to do.
                     */}
-                    {(t.due.state === "scheduled" || t.due.state === "upcoming") &&
-                      t.due.at != null && (
+                    {(track.due.state === "scheduled" || track.due.state === "upcoming") &&
+                      track.due.at != null && (
                         <span className="text-[12px] text-[var(--faint)]">
-                          next {relativeTime(t.due.at, now)}
+                          {t("now_next_at", { when: relativeTime(track.due.at, now) })}
                         </span>
                       )}
                   </div>
@@ -756,79 +750,80 @@ export default function NowPage() {
                     above, which are each about one dose, stay plain.
                   */}
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-[var(--muted)]">
-                    <span>{formatDosePerDay(t.targetMcg, t.perDay)}</span>
+                    <span>{formatDosePerDay(track.targetMcg, track.perDay)}</span>
                     <DoseMarks
-                      peptideId={t.protocol.peptideId}
-                      doseMcg={t.targetMcg}
+                      peptideId={track.protocol.peptideId}
+                      doseMcg={track.targetMcg}
                       nowMs={now}
-                      route={t.protocol.route}
+                      route={track.protocol.route}
                       className="text-[12px] text-[var(--faint)]"
                     />
-                    <span>· {t.protocol.name}</span>
+                    <span>· {track.protocol.name}</span>
                   </p>
                 </div>
 
                 <Button
                   onClick={() => {
-                    setLogPeptideId(t.protocol.peptideId);
+                    setLogPeptideId(track.protocol.peptideId);
                     setLogOpen(true);
                   }}
                 >
-                  <Plus size={15} /> Log
+                  <Plus size={15} /> {t("now_log_short")}
                 </Button>
               </div>
 
-              {t.snap ? (
+              {track.snap ? (
                 <div className="mt-3.5">
-                  <Meter value={Math.min(1, t.snap.level)} tone={t.tone} />
+                  <Meter value={Math.min(1, track.snap.level)} tone={track.tone} />
                   <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12.5px]">
                     <span className="tnum font-semibold text-[var(--ink)]">
-                      {t.snap.percentOfPeak.toFixed(0)}% of a single-dose peak
+                      {t("now_percent_of_peak", { pct: track.snap.percentOfPeak.toFixed(0) })}
                     </span>
-                    <span className="text-[var(--muted)]">{t.snap.phase.detail}</span>
+                    <span className="text-[var(--muted)]">{track.snap.phase.detail}</span>
                   </div>
                 </div>
-              ) : t.blendParts.length === 0 ? (
+              ) : track.blendParts.length === 0 ? (
                 <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--faint)]">
-                  No published half-life for this compound, so no level can be estimated.{" "}
-                  {t.peptide?.halfLifeNote}
+                  {t("now_no_half_life")}{" "}
+                  {track.peptide?.halfLifeNote}
                 </p>
               ) : null}
 
               {/* A blend always breaks down, whether or not it also has an
                   aggregate curve, the components are the useful detail. */}
-              {t.blendParts.length > 0 && (
+              {track.blendParts.length > 0 && (
                 <div className="mt-3">
                   <p className="mb-2 text-[12px] text-[var(--muted)]">
-                    One {formatDose(t.targetMcg)} dose delivers:
+                    {t("now_one_dose_delivers", { dose: formatDose(track.targetMcg) })}
                   </p>
                   <BlendBreakdown
-                    blend={t.peptide!}
-                    doseMcg={t.targetMcg}
+                    blend={track.peptide!}
+                    doseMcg={track.targetMcg}
                     resolve={(id) => findPeptide(custom, id)}
-                    dosesPerWeek={protocolDosesPerWeek(t.protocol, now)}
+                    dosesPerWeek={protocolDosesPerWeek(track.protocol, now)}
                   />
                 </div>
               )}
 
-              {t.phase && (
+              {track.phase && (
                 <div
                   className="mt-3 rounded-[var(--r-inner)] p-3"
-                  style={{ background: TONE_BG[t.tone] }}
+                  style={{ background: TONE_BG[track.tone] }}
                 >
                   <div className="flex items-center gap-2">
-                    <Sparkles size={14} strokeWidth={2.4} style={{ color: TONE_FG[t.tone] }} />
-                    <span className="text-[12px] font-bold" style={{ color: TONE_FG[t.tone] }}>
-                      Right now · {formatDuration(hoursSince(t.lastLoggedAt, now) ?? 0)} since your
-                      last dose
+                    <Sparkles size={14} strokeWidth={2.4} style={{ color: TONE_FG[track.tone] }} />
+                    <span className="text-[12px] font-bold" style={{ color: TONE_FG[track.tone] }}>
+                      {t("now_right_now_since", {
+                        since: formatDuration(hoursSince(track.lastLoggedAt, now) ?? 0),
+                      })}
                     </span>
                   </div>
-                  <p className="mt-1 text-[13px] leading-relaxed" style={{ color: TONE_FG[t.tone] }}>
-                    {t.phase.label}
+                  <p className="mt-1 text-[13px] leading-relaxed" style={{ color: TONE_FG[track.tone] }}>
+                    {track.phase.label}
                   </p>
-                  {t.phase.hoursToNext != null && (
-                    <p className="mt-1 text-[11.5px] opacity-75" style={{ color: TONE_FG[t.tone] }}>
-                      This phase shifts in about {formatDuration(t.phase.hoursToNext)}.
+                  {track.phase.hoursToNext != null && (
+                    <p className="mt-1 text-[11.5px] opacity-75" style={{ color: TONE_FG[track.tone] }}>
+                      {t("now_phase_shifts", { in: formatDuration(track.phase.hoursToNext) })}
                     </p>
                   )}
                 </div>
@@ -836,46 +831,46 @@ export default function NowPage() {
 
               <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-2 border-t border-[var(--line)] pt-3 text-[12px]">
                 <span className="text-[var(--muted)]">
-                  Last dose:{" "}
+                  {t("now_last_dose")}{" "}
                   <span className="text-[var(--ink)]">
-                    {t.lastLoggedAt ? relativeTime(t.lastLoggedAt, now) : "never"}
+                    {track.lastLoggedAt ? relativeTime(track.lastLoggedAt, now) : t("now_never")}
                   </span>
-                  {t.lastLog?.site && (
+                  {track.lastLog?.site && (
                     <span className="text-[var(--ink)]">
                       {" · "}
-                      {INJECTION_SITES.find((s) => s.id === t.lastLog!.site)?.label}
+                      {INJECTION_SITES.find((s) => s.id === track.lastLog!.site)?.label}
                     </span>
                   )}
                 </span>
                 <span className="text-[var(--muted)]">
-                  Half-life:{" "}
+                  {t("library_half_life")}{" "}
                   <span className="text-[var(--ink)]">
-                    {t.blendParts.length > 0
-                      ? "per component"
-                      : formatHalfLife(t.peptide?.halfLifeHours ?? null)}
+                    {track.blendParts.length > 0
+                      ? t("now_per_component")
+                      : formatHalfLife(track.peptide?.halfLifeHours ?? null)}
                   </span>
                 </span>
                 <span
                   className={
-                    t.stock.dosesRemaining <= settings.lowStockDoses
+                    track.stock.dosesRemaining <= settings.lowStockDoses
                       ? "text-[var(--rose)]"
                       : "text-[var(--muted)]"
                   }
                 >
-                  Stock:{" "}
+                  {t("now_stock_label")}{" "}
                   <span className="tnum font-mono">
-                    {t.stock.dosesRemaining} dose{t.stock.dosesRemaining === 1 ? "" : "s"}
+                    {t("count_doses", { n: track.stock.dosesRemaining })}
                   </span>
-                  {t.supplyDays != null && t.stock.dosesRemaining > 0 && (
+                  {track.supplyDays != null && track.stock.dosesRemaining > 0 && (
                     <span className="text-[var(--faint)]">
                       {" "}
-                      · about {formatDuration(t.supplyDays * 24)} left
+                      {t("now_about_left", { duration: formatDuration(track.supplyDays * 24) })}
                     </span>
                   )}
                 </span>
-                {t.stock.needsReconstitution && (
+                {track.stock.needsReconstitution && (
                   <Link href="/stock" className="text-[var(--tangerine)] hover:underline">
-                    Record a reconstitution for syringe units
+                    {t("now_record_reconstitution")}
                   </Link>
                 )}
               </div>
@@ -896,14 +891,18 @@ export default function NowPage() {
         <section>
           <SectionLabel>{t("now_worth_sorting")}</SectionLabel>
           <div className="space-y-2.5">
-            {lowStock.map((t) => (
-              <Callout key={t.protocol.id} tone="warn">
-                {t.peptide?.name} is down to{" "}
-                <strong className="tnum text-[var(--ink)]">{t.stock.dosesRemaining}</strong> dose
-                {t.stock.dosesRemaining === 1 ? "" : "s"} across {t.stock.openCount} open and{" "}
-                {t.stock.sealedCount} sealed vial{t.stock.sealedCount === 1 ? "" : "s"}.{" "}
+            {lowStock.map((track) => (
+              <Callout key={track.protocol.id} tone="warn">
+                <Rich
+                  text={t("now_low_stock", {
+                    name: track.peptide?.name ?? "",
+                    doses: t("count_doses", { n: track.stock.dosesRemaining }),
+                    open: track.stock.openCount,
+                    sealed: t("count_vials", { n: track.stock.sealedCount }),
+                  })}
+                />{" "}
                 <Link href="/stock" className="text-[var(--tangerine)] hover:underline">
-                  Check stock
+                  {t("now_check_stock")}
                 </Link>
               </Callout>
             ))}
@@ -912,12 +911,11 @@ export default function NowPage() {
               const p = findPeptide(custom, v.peptideId);
               return (
                 <Callout key={v.id} tone={days <= 0 ? "danger" : "warn"}>
-                  {p?.name ?? v.peptideId} {v.strengthMg} mg vial{" "}
+                  {t("now_vial_named", { name: p?.name ?? v.peptideId, mg: v.strengthMg })}{" "}
                   {days <= 0
-                    ? "is past its 28-day beyond-use date."
-                    : `reaches its beyond-use date in ${days} day${days === 1 ? "" : "s"}.`}{" "}
-                  That is a container-hygiene limit from first puncture, not a statement about
-                  potency.
+                    ? t("now_vial_past_bud")
+                    : t("now_vial_bud_in", { n: days })}{" "}
+                  {t("now_bud_is_hygiene")}
                 </Callout>
               );
             })}
@@ -947,6 +945,7 @@ function TodayCard({
   logs: DoseLog[];
   now: number;
 }) {
+  const { t } = useLang();
   const today = todayProgress(protocols, logs, now);
   const streak = currentStreak(protocols, logs, now);
   const week = recentDays(protocols, logs, now, 7);
@@ -961,17 +960,17 @@ function TodayCard({
           size={84}
           stroke={9}
           tone={tone}
-          label={`${today.taken} of ${today.expected} doses done today`}
+          label={t("now_done_today", { taken: today.taken, expected: today.expected })}
         >
           {today.restDay ? (
-            <span className="text-[11px] font-bold text-[var(--faint)]">rest</span>
+            <span className="text-[11px] font-bold text-[var(--faint)]">{t("now_rest")}</span>
           ) : (
             <>
               <span className="tnum text-[22px] font-extrabold leading-none text-[var(--ink)]">
                 {today.taken}
               </span>
               <span className="tnum text-[11px] font-semibold text-[var(--faint)]">
-                of {today.expected}
+                {t("plan_of")} {today.expected}
               </span>
             </>
           )}
@@ -979,21 +978,21 @@ function TodayCard({
 
         <div className="min-w-0 flex-1">
           <h1 className="text-[22px] font-extrabold leading-tight tracking-tight text-[var(--ink)]">
-            {greeting(now)}
+            {greeting(now, t)}
           </h1>
           <p className="mt-0.5 text-[13.5px] text-[var(--muted)]">
             {today.restDay
-              ? "Nothing scheduled today."
+              ? t("now_nothing_scheduled")
               : today.complete
-                ? "Everything logged for today."
-                : `${today.expected - today.taken} left to log today.`}
+                ? t("now_all_logged")
+                : t("now_left_to_log", { n: today.expected - today.taken })}
           </p>
 
           {streak > 0 && (
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-[var(--r-pill)] bg-[var(--tangerine-soft)] px-2.5 py-1">
               <Flame size={14} strokeWidth={2.4} style={{ color: "var(--tangerine-ink)" }} />
               <span className="text-[12.5px] font-bold" style={{ color: "var(--tangerine-ink)" }}>
-                {streak} day{streak === 1 ? "" : "s"} on track
+                {t("now_streak_days", { n: streak })}
               </span>
             </div>
           )}
@@ -1033,10 +1032,10 @@ function TodayCard({
                 }}
                 title={
                   d.restDay
-                    ? "Nothing scheduled"
+                    ? t("now_nothing_scheduled_day")
                     : isToday
-                      ? `${d.taken} of ${d.expected} logged, the day is not over`
-                      : `${d.taken} of ${d.expected} logged`
+                      ? t("now_day_partial", { taken: d.taken, expected: d.expected })
+                      : t("now_day_logged", { taken: d.taken, expected: d.expected })
                 }
               >
                 {(isToday || d.complete) && !d.restDay && filled > 0 && (
@@ -1061,11 +1060,17 @@ function TodayCard({
   );
 }
 
-function greeting(now: number) {
+/*
+ * Takes t rather than reading the store. It is a plain function outside the
+ * component, which is exactly why it stayed English through the whole
+ * translation run: a scan for text in JSX and in attributes never looks at
+ * what a helper returns.
+ */
+function greeting(now: number, t: (key: TranslationKey) => string) {
   const h = new Date(now).getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return t("greeting_morning");
+  if (h < 18) return t("greeting_afternoon");
+  return t("greeting_evening");
 }
 
 
@@ -1100,12 +1105,11 @@ function Insights({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <div className="mb-1 flex items-baseline justify-between gap-3">
-            <h3 className="text-[14.5px] font-bold text-[var(--ink)]">Weekly exposure</h3>
+            <h3 className="text-[14.5px] font-bold text-[var(--ink)]">{t("now_weekly_exposure")}</h3>
             <span className="text-[12px] text-[var(--muted)]">{t("now_last_8_weeks")}</span>
           </div>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
-            Total mass logged each week. A titration shows up as a staircase; a gap shows up as a
-            gap.
+            {t("now_weekly_desc")}
           </p>
 
           <div className="flex h-28 items-end gap-1.5">
@@ -1121,7 +1125,7 @@ function Insights({
                         height: `${Math.max(w.totalMcg > 0 ? 6 : 2, h)}%`,
                         background: isNow ? "var(--mint)" : "var(--mint-soft)",
                       }}
-                      title={`${formatDate(w.weekStart)}, ${formatDose(w.totalMcg)} across ${w.doses} dose${w.doses === 1 ? "" : "s"}`}
+                      title={t("now_week_tooltip", { date: formatDate(w.weekStart), total: formatDose(w.totalMcg), doses: t("count_doses", { n: w.doses }) })}
                     />
                   </div>
                   {/* Day of month, not a locale-split string, "29 Jul" and
@@ -1135,42 +1139,42 @@ function Insights({
           </div>
 
           <p className="mt-3 border-t border-[var(--line)] pt-3 text-[12.5px] text-[var(--muted)]">
-            This week:{" "}
+            {t("now_this_week")}{" "}
             <strong className="tnum text-[var(--ink)]">
               {formatDose(weeks[weeks.length - 1].totalMcg)}
             </strong>{" "}
-            across {weeks[weeks.length - 1].doses} dose
-            {weeks[weeks.length - 1].doses === 1 ? "" : "s"}
+            {t("now_across_doses", { doses: t("count_doses", { n: weeks[weeks.length - 1].doses }) })}
           </p>
         </Card>
 
         <Card className="p-5">
           <h3 className="mb-1 text-[14.5px] font-bold text-[var(--ink)]">{t("now_building_steady")}</h3>
           <p className="mb-4 text-[12px] leading-relaxed text-[var(--muted)]">
-            Levels keep rising for about five half-lives after you start. Until then, today is not
-            what a steady week will feel like.
+            {t("now_steady_desc")}
           </p>
 
           <ul className="space-y-3.5">
-            {tracks.map((t) => {
-              const first = t.doses.length ? Math.min(...t.doses.map((d) => d.at)) : null;
-              const ss = steadyStateProgress(t.peptide?.halfLifeHours ?? null, first, now);
+            {tracks.map((track) => {
+              const first = track.doses.length ? Math.min(...track.doses.map((d) => d.at)) : null;
+              const ss = steadyStateProgress(track.peptide?.halfLifeHours ?? null, first, now);
 
               return (
-                <li key={t.protocol.id}>
+                <li key={track.protocol.id}>
                   <div className="mb-1.5 flex items-baseline justify-between gap-3">
                     <span className="truncate text-[13.5px] font-semibold text-[var(--ink)]">
-                      {t.peptide?.name ?? t.protocol.peptideId}
+                      {track.peptide?.name ?? track.protocol.peptideId}
                     </span>
                     <span className="shrink-0 text-[12px] text-[var(--muted)]">
                       {ss == null
-                        ? "no half-life"
+                        ? t("library_no_half_life")
                         : ss.fraction >= 1
-                          ? "at steady state"
-                          : `${formatDuration(ss.hoursNeeded - ss.hoursElapsed)} to go`}
+                          ? t("now_at_steady")
+                          : t("now_to_go", {
+                              duration: formatDuration(ss.hoursNeeded - ss.hoursElapsed),
+                            })}
                     </span>
                   </div>
-                  <Meter value={ss?.fraction ?? 0} tone={ss ? t.tone : "neutral"} />
+                  <Meter value={ss?.fraction ?? 0} tone={ss ? track.tone : "neutral"} />
                 </li>
               );
             })}

@@ -25,9 +25,11 @@ import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button, Callout } from "./ui";
 import { useSyncState } from "@/lib/sync/state";
 import { formatDateTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /** The two answers to a conflict, usable from the frame or from Settings. */
 export function ConflictChoices({ compact = false }: { compact?: boolean }) {
+  const { t } = useLang();
   const engine = useSyncState((s) => s.engine);
   const conflict = useSyncState((s) => s.status.conflict);
 
@@ -35,15 +37,15 @@ export function ConflictChoices({ compact = false }: { compact?: boolean }) {
     <>
       {conflict != null && (
         <p className={`${compact ? "mt-1" : "mt-1.5"} text-[12.5px]`}>
-          The server&apos;s copy was written {formatDateTime(conflict.updatedAt)}.
+          {t("notice_server_copy_written", { when: formatDateTime(conflict.updatedAt) })}
         </p>
       )}
       <div className="mt-3 flex flex-wrap gap-2.5">
         <Button variant="primary" onClick={() => void engine?.resolveConflict("keep-mine")}>
-          Keep this device&apos;s copy
+          {t("notice_keep_device")}
         </Button>
         <Button onClick={() => void engine?.resolveConflict("take-theirs")}>
-          Take the server&apos;s copy
+          {t("notice_take_server")}
         </Button>
       </div>
     </>
@@ -60,6 +62,7 @@ export function ConflictChoices({ compact = false }: { compact?: boolean }) {
  * not reached the server since this morning should.
  */
 export function SyncNotice() {
+  const { t } = useLang();
   const status = useSyncState((s) => s.status);
   const engine = useSyncState((s) => s.engine);
   const connected = useSyncState((s) => s.key != null);
@@ -69,11 +72,9 @@ export function SyncNotice() {
   if (status.phase === "conflict") {
     return (
       <div className="mb-4">
-        <Callout tone="danger" title="Syncing has stopped, and needs you">
+        <Callout tone="danger" title={t("notice_sync_stopped")}>
           <p>
-            This device and the server have both changed since they last agreed. Nothing is being
-            sent or taken until you say which copy to keep, so anything you do here is staying on
-            this device for now.
+            {t("notice_conflict")}
           </p>
           <ConflictChoices />
         </Callout>
@@ -90,17 +91,16 @@ export function SyncNotice() {
   if (status.phase === "signedout") {
     return (
       <div className="mb-4">
-        <Callout tone="warn" title="Signed out of the server">
+        <Callout tone="warn" title={t("notice_signed_out")}>
           <p className="flex items-start gap-2">
             <CloudOff size={15} className="mt-0.5 shrink-0" />
             <span>
-              Your session has expired, so nothing is being sent. Everything you do here is safe on
-              this device. Sign in again in Settings, under Sync, and it will catch up.
+              {t("notice_expired")}
             </span>
           </p>
           <div className="mt-3">
             <Link href="/settings">
-              <Button>Go to Settings</Button>
+              <Button>{t("notice_go_settings")}</Button>
             </Link>
           </div>
         </Callout>
@@ -111,14 +111,14 @@ export function SyncNotice() {
   if (status.phase === "error") {
     return (
       <div className="mb-4">
-        <Callout tone="danger" title="Sync failed">
+        <Callout tone="danger" title={t("sync_error")}>
           <p className="flex items-start gap-2">
             <TriangleAlert size={15} className="mt-0.5 shrink-0" />
             <span>{status.message}</span>
           </p>
           <div className="mt-3">
             <Button onClick={() => engine.request("now")}>
-              <RefreshCw size={15} /> Try again
+              <RefreshCw size={15} /> {t("notice_try_again")}
             </Button>
           </div>
         </Callout>
@@ -138,12 +138,11 @@ export function SyncNotice() {
   if (status.phase === "offline" && staleFor > 60 * 60_000) {
     return (
       <div className="mb-4">
-        <Callout tone="warn" title="Not reaching the server">
+        <Callout tone="warn" title={t("notice_not_reaching")}>
           <p className="flex items-start gap-2">
             <CloudOff size={15} className="mt-0.5 shrink-0" />
             <span>
-              Nothing has reached the server since {formatDateTime(status.lastSyncedAt!)}. Your
-              changes are safe on this device and will go up when it can be reached.
+              {t("notice_nothing_reached", { when: formatDateTime(status.lastSyncedAt!) })}
             </span>
           </p>
         </Callout>

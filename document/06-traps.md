@@ -402,3 +402,64 @@ The old fallback also hid a second bug for as long as it was never reached: it
 doubled the step, and on a barrel numbered every five a step of two became four,
 which never lands on five, so the marks meant to carry the numbers stopped being
 drawn at all.
+
+## A key that ends in the word "other"
+
+`translate` decides a key is a plural family by asking whether `${key}_other`
+exists, and the parity test derives the list of families the same way, from
+every English key ending in `_other`. Both are looking at spelling, because
+nothing else in the file says which keys are families and which are not.
+
+So `install_ios_other`, a perfectly ordinary key holding one sentence about
+Safari, was read as the `other` form of a family called `install_ios`. The test
+then asked Slovenian for the four forms that family would need, found one, and
+failed with a message about grammar for a string that has no number in it.
+
+The fix was to rename the key. It is worth knowing that the suffix is reserved:
+a key whose last word happens to be `other`, `one`, `two`, `few` or `many` will
+be mistaken for part of a family, and the failure arrives in a test about
+plurals rather than anywhere near the key itself.
+
+## Keys nothing renders
+
+The dictionary reached 1236 keys with 246 of them unused. They were the
+original set from the first translation pass, and each screen that got wired up
+afterwards introduced more specific keys and left the old ones behind. Nothing
+failed: an unused key breaks nothing, type checks fine, and the parity test was
+perfectly happy to demand four translations of a string no screen would ever
+show.
+
+The cost lands on whoever is translating. A person working down the file has no
+way to tell which strings will be seen and which are ghosts, and a fifth of the
+work was ghosts.
+
+`src/lib/i18n/unused.test.ts` reads the source and fails when a key has no call
+site. Two things about how it reads:
+
+- A key reached as `` t(`reminders_lead_${minutes}`) `` never appears in full,
+  so the prefix is collected and everything under it counts as used.
+- The regex for that needs a lookbehind. `get(` ends in `t(`, so without one
+  the prefix `p` gets collected from `` get(`p${n}`) `` in an unrelated test,
+  and every key beginning with p is marked used. That is most of them.
+
+The test asserts both of those on a known key before it asserts anything about
+the dictionary, so a check that has quietly stopped checking fails loudly.
+
+## A key that starts with a plural family's name
+
+The trap above was a key ending in `_other`. This is its mirror image and it
+cost the same ten minutes.
+
+`settings_backup_saved` is a plural family: `_one` and `_other` in English, four
+forms in Slovenian. Adding `settings_backup_saved_plain` for the case with no
+count looked harmless. The parity test collects every key beginning with
+`settings_backup_saved_`, found three forms where the grammar wants two, and
+failed talking about plurals for a key that has nothing to do with them.
+
+The family prefix is reserved for the family. A sibling key needs a name that
+does not start with it, so `settings_backup_written`.
+
+Both halves of this come from the same decision: nothing in the file marks
+which keys are families, so the code reads spelling. That is worth keeping,
+because the alternative is a second structure to keep in step with the first,
+but it means the suffix and the prefix are both load-bearing.

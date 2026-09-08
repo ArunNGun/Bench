@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { SITE_DOTS, siteUsage } from "@/lib/calc/sites";
 import type { DoseLog, InjectionSite } from "@/lib/types";
 import { relativeTime } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Injection site rotation map using the same body figure as the landing page.
@@ -43,6 +44,7 @@ export function SiteMap({
   multi?: boolean;
   legend?: boolean;
 }) {
+  const { t } = useLang();
   const usage = useMemo(() => siteUsage(logs, nowMs, restDays), [logs, nowMs, restDays]);
   const byId = useMemo(() => new Map(usage.map((u) => [u.site, u])), [usage]);
 
@@ -66,7 +68,7 @@ export function SiteMap({
       <svg
         viewBox="0 0 200 240"
         role="group"
-        aria-label="Injection site rotation map"
+        aria-label={t("site_map_label")}
         style={{ width: "100%", height: "auto", maxWidth: 220, display: "block", margin: "0 auto" }}
       >
         {/* ── Body figure (same as landing RotationArt, scaled to 200-wide viewBox) ── */}
@@ -158,14 +160,16 @@ export function SiteMap({
               role={interactive ? "button" : undefined}
               aria-pressed={interactive ? isSelected : undefined}
               aria-label={`${u?.label ?? s.label}. ${
-                u?.lastUsedAt ? `Last used ${relativeTime(u.lastUsedAt, nowMs)}` : "Never used"
-              }${isSuggested ? ". Suggested next" : ""}${
+                u?.lastUsedAt
+                  ? t("site_last_used", { when: relativeTime(u.lastUsedAt, nowMs) })
+                  : t("site_never_used")
+              }${isSuggested ? t("site_suggested_next") : ""}${
                 multi
                   ? isSelected
-                    ? ". Pinned"
-                    : ". Not pinned"
+                    ? t("site_pinned_suffix")
+                    : t("site_not_pinned_suffix")
                   : offPlan
-                    ? ". Off plan"
+                    ? t("site_off_plan_suffix")
                     : ""
               }`}
               style={{ cursor: interactive ? "pointer" : "default", opacity: dotOpacity }}
@@ -234,31 +238,31 @@ export function SiteMap({
             <>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full border-2 border-[var(--mint)]" />
-                pinned
+                {t("site_legend_pinned")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
-                not pinned
+                {t("site_legend_not_pinned")}
               </span>
             </>
           ) : (
             <>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-[var(--tangerine)]" />
-                used recently
+                {t("site_legend_used_recently")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)]" />
-                rested
+                {t("site_legend_rested")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--mint)]" />
-                suggested next
+                {t("site_legend_suggested")}
               </span>
               {allowedSet && (
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full border border-[var(--line)] opacity-35" />
-                  off plan
+                  {t("site_legend_off_plan")}
                 </span>
               )}
             </>

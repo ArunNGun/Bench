@@ -72,7 +72,7 @@ export function CustomCompounds() {
                       setConfirming(null);
                       setOpen(false);
                     }}
-                    aria-label={`Edit ${p.name}`}
+                    aria-label={t("library_edit_name", { name: p.name })}
                     className="press ml-auto p-1 text-[var(--faint)] hover:text-[var(--ink)]"
                   >
                     <Pencil size={15} />
@@ -80,7 +80,7 @@ export function CustomCompounds() {
                   <button
                     type="button"
                     onClick={() => setConfirming(confirming === p.id ? null : p.id)}
-                    aria-label={`Delete ${p.name}`}
+                    aria-label={t("library_delete_name", { name: p.name })}
                     className="press p-1 text-[var(--faint)] hover:text-[var(--rose)]"
                   >
                     <Trash2 size={15} />

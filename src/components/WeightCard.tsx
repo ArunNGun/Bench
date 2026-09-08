@@ -33,6 +33,7 @@ const PREFILL_DAYS = 30;
  * is what makes a titration step and the response to it legible together.
  */
 export function WeightCard({ nowMs }: { nowMs: number }) {
+  const { t } = useLang();
   const { measurements, logs } = useProfileData();
   const settings = useStore((s) => s.settings);
   const addMeasurement = useStore((s) => s.addMeasurement);
@@ -139,10 +140,14 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
                   ? "bg-[var(--tangerine)] text-white"
                   : "bg-[var(--sunken)] text-[var(--muted)]"
               }`}
-              title={settings.plotWeightOnChart ? "Hide weight on chart" : "Show weight on chart"}
+              title={
+                settings.plotWeightOnChart
+                  ? t("weight_hide_on_chart")
+                  : t("weight_show_on_chart")
+              }
             >
               <LineChart size={11} strokeWidth={2.5} />
-              {settings.plotWeightOnChart ? "On chart" : "Chart"}
+              {settings.plotWeightOnChart ? t("weight_on_chart") : t("weight_chart_toggle")}
             </button>
             {!adding && (
               <button
@@ -150,19 +155,19 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
                 onClick={open}
                 className="press flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--mint-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--mint-ink)]"
               >
-                <Plus size={13} strokeWidth={2.6} /> Add
+                <Plus size={13} strokeWidth={2.6} /> {t("add")}
               </button>
             )}
           </div>
         }
       >
-        Weight
+        {t("weight_title")}
       </SectionLabel>
 
       {adding && (
         <div className="mb-4 rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
           <div className="flex flex-wrap items-end gap-2.5">
-            <Field label="Weight" className="w-32">
+            <Field label={t("weight_title")} className="w-32">
               <NumberInput
                 autoFocus
                 value={value}
@@ -177,7 +182,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
                 onKeyDown={(e) => e.key === "Enter" && save()}
               />
             </Field>
-            <Field label="When" className="min-w-44 flex-1">
+            <Field label={t("weight_when")} className="min-w-44 flex-1">
               <input
                 type="datetime-local"
                 value={toDateTimeLocal(at)}
@@ -191,7 +196,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
             {/* Kept together so they do not straddle two rows on a phone. */}
             <div className="flex w-full gap-2.5 sm:w-auto">
               <Button variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 variant="primary"
@@ -199,7 +204,7 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
                 disabled={value === ""}
                 className="flex-1 sm:flex-none"
               >
-                Save
+                {t("save")}
               </Button>
             </div>
           </div>
@@ -210,29 +215,32 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
 
       {series.length === 0 ? (
         <p className="py-4 text-center text-[13px] leading-relaxed text-[var(--muted)]">
-          Nothing recorded yet. Add a weight and this becomes a trend line against your doses, which is the only way to see whether a protocol is doing anything.
+          {t("weight_none_yet")}
         </p>
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <Stat
-              label="Latest"
+              label={t("weight_latest")}
               value={trim(toDisplay(series[series.length - 1].kg), 1)}
               unit={unit}
             />
             {change && (
               <Stat
-                label="Since you started"
+                label={t("weight_since_start")}
                 value={`${change.deltaKg > 0 ? "+" : ""}${trim(toDisplay(Math.abs(change.deltaKg)) * (change.deltaKg < 0 ? -1 : 1), 1)}`}
                 unit={unit}
                 tone={losing ? "leaf" : "tangerine"}
                 icon={losing ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-                hint={`${trim(Math.abs(change.deltaPercent), 1)}% over ${Math.round(change.days)} days.`}
+                hint={t("weight_change_hint", {
+                  percent: trim(Math.abs(change.deltaPercent), 1),
+                  days: t("count_days", { n: Math.round(change.days) }),
+                })}
               />
             )}
             {change30?.perWeekKg != null && (
               <Stat
-                label="Rate, 30 days"
+                label={t("weight_rate_30")}
                 value={`${change30.perWeekKg > 0 ? "+" : "−"}${trim(Math.abs(toDisplay(change30.perWeekKg)), 2)}`}
                 unit={`${unit}/wk`}
                 tone={change30.perWeekKg < 0 ? "leaf" : "tangerine"}
@@ -279,10 +287,12 @@ function PrefillNote({
       <p className={base} style={{ color: "var(--mint-ink)" }}>
         <Activity size={13} className="mt-0.5 shrink-0" />
         <span>
-          Filled in from Health Connect, {trim(toDisplay(prefilled.kg), 1)} {unit} on{" "}
-          {formatDate(prefilled.at)} at{" "}
-          {when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Change either field
-          if that is not what you want.
+          {t("weight_prefilled", {
+            value: trim(toDisplay(prefilled.kg), 1),
+            unit,
+            date: formatDate(prefilled.at),
+            time: when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          })}
         </span>
       </p>
     );
@@ -295,8 +305,7 @@ function PrefillNote({
   if (health === "available") {
     return (
       <p className={`${base} text-[var(--faint)]`}>
-        Health Connect has no weight from the last {PREFILL_DAYS} days, so there was nothing to fill
-        in.
+        {t("weight_no_recent", { days: t("count_days", { n: PREFILL_DAYS }) })}
       </p>
     );
   }
@@ -305,9 +314,9 @@ function PrefillNote({
     return (
       <p className={`${base} text-[var(--muted)]`}>
         <span>
-          Weigh in on a connected scale and this fills itself in.{" "}
+          {t("weight_connect_scale")}{" "}
           <Link href="/settings" className="font-semibold underline decoration-dotted">
-            Set up Health Connect
+            {t("weight_setup_health")}
           </Link>
           .
         </span>
@@ -335,6 +344,7 @@ function WeightChart({
   toDisplay: (kg: number) => number;
   nowMs: number;
 }) {
+  const { t } = useLang();
   const from = series[0].at;
   const to = Math.max(series[series.length - 1].at, nowMs);
   const span = Math.max(1, to - from);
@@ -359,7 +369,11 @@ function WeightChart({
       viewBox={`0 0 ${W} ${H}`}
       style={{ width: "100%", height: "auto", display: "block" }}
       role="img"
-      aria-label={`Weight from ${trim(values[0], 1)} to ${trim(values[values.length - 1], 1)} ${unit}`}
+      aria-label={t("weight_chart_label", {
+        from: trim(values[0], 1),
+        to: trim(values[values.length - 1], 1),
+        unit,
+      })}
     >
       {/* Dose markers, so the trend can be read against what was taken. */}
       {doses

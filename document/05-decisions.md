@@ -318,3 +318,29 @@ the fold. That happened in testing. See [06-traps.md](06-traps.md).
 `out/plan/index.html` and a request for `/plan` with no trailing slash resolves
 to no file. This is why `ButtonLink` exists: `window.location.href = "/plan"`
 silently does nothing inside the APK.
+
+## The public page stays in English
+
+Every screen inside the app is translated. `/landing` is not, and that is a
+decision rather than an omission.
+
+The language is chosen in the app and kept in a store in the browser. Every
+translated screen is a client component that reads it. `/landing` is a server
+component: it exports `metadata`, fetches its own statistics on the server, and
+ships no state, which is what lets it render instantly on a phone that has
+never opened the app before. A server render happens before any browser has
+said which language it wants, so there is nothing for `useLang` to read.
+
+Making it a client component would translate it and cost the thing it is for.
+The alternative that actually works is routed locales, `/landing/de` and the
+rest, each rendered on the server for a language known from the URL, with
+`hreflang` so a search engine indexes all four. That is a piece of work with a
+routing decision, a metadata decision and a canonical-URL decision in it. It
+belongs on its own, not appended to the end of a run of wiring PRs.
+
+Until then the public page is English, and the language picker in the app is
+what a person who wants Slovenian will find on their first screen after it.
+
+The same applies to the `metadata` export in `src/app/layout.tsx`, the page
+title and description a search engine and a browser tab show. It is computed on
+the server for the same reason and belongs to the same piece of work.

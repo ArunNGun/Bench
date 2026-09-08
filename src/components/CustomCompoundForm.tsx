@@ -18,7 +18,14 @@ import {
   type CustomDraft,
   type DraftProblem,
 } from "@/lib/calc/custom";
-import { CATEGORY_LABEL, type Peptide, type PeptideCategory, type Route } from "@/lib/types";
+import {
+  CATEGORY_LABEL,
+  ROUTE_LABEL,
+  type Peptide,
+  type PeptideCategory,
+  type Route,
+} from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 const CATEGORIES: PeptideCategory[] = [
   "metabolic",
@@ -33,13 +40,12 @@ const CATEGORIES: PeptideCategory[] = [
   "blend",
 ];
 
-const ROUTES: { id: Route; label: string }[] = [
-  { id: "subcutaneous", label: "Subcutaneous" },
-  { id: "intramuscular", label: "Intramuscular" },
-  { id: "oral", label: "Oral" },
-  { id: "intranasal", label: "Intranasal" },
-  { id: "topical", label: "Topical" },
-];
+/*
+ * The labels come from ROUTE_LABEL rather than from a copy kept here. There
+ * used to be a copy, and a route renamed in one place would have been renamed
+ * in one place only.
+ */
+const ROUTES: Route[] = ["subcutaneous", "intramuscular", "oral", "intranasal", "topical"];
 
 export const EMPTY_DRAFT: CustomDraft = {
   name: "",
@@ -74,6 +80,7 @@ export function CustomCompoundForm({
   initialName?: string;
   editing?: Peptide;
 }) {
+  const { t } = useLang();
   const addCustomPeptide = useStore((s) => s.addCustomPeptide);
   const updateCustomPeptide = useStore((s) => s.updateCustomPeptide);
   const custom = useStore((s) => s.customPeptides);
@@ -117,15 +124,15 @@ export function CustomCompoundForm({
   return (
     <div className="space-y-4 rounded-[var(--r-inner)] bg-[var(--sunken)] p-3.5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" hint={errorFor("name")?.message}>
+        <Field label={t("ccf_name")} hint={errorFor("name")?.message}>
           <TextInput
             autoFocus
             value={draft.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder="e.g. VIP, SS-31, a vendor blend"
+            placeholder={t("ccf_name_placeholder")}
           />
         </Field>
-        <Field label="Category" hint="Groups it in the library and drives the safety checks.">
+        <Field label={t("ccf_category")} hint={t("ccf_category_hint")}>
           <Select
             value={draft.category}
             onChange={(e) => set("category", e.target.value as PeptideCategory)}
@@ -139,26 +146,26 @@ export function CustomCompoundForm({
         </Field>
       </div>
 
-      <Field label="Also known as" hint="Optional, comma separated. Used when matching an import.">
+      <Field label={t("ccf_aka")} hint={t("ccf_aka_hint")}>
         <TextInput
           value={draft.aka ?? ""}
           onChange={(e) => set("aka", e.target.value)}
-          placeholder="e.g. Vasoactive intestinal peptide"
+          placeholder={t("ccf_aka_placeholder")}
         />
       </Field>
 
       <div>
-        <p className="mb-1.5 text-[12px] font-bold text-[var(--muted)]">How you take it</p>
+        <p className="mb-1.5 text-[12px] font-bold text-[var(--muted)]">{t("ccf_how_you_take")}</p>
         <div className="flex flex-wrap gap-1.5">
           {ROUTES.map((r) => {
-            const on = draft.routes.includes(r.id);
+            const on = draft.routes.includes(r);
             return (
               <button
-                key={r.id}
+                key={r}
                 type="button"
                 aria-pressed={on}
                 onClick={() =>
-                  set("routes", on ? draft.routes.filter((x) => x !== r.id) : [...draft.routes, r.id])
+                  set("routes", on ? draft.routes.filter((x) => x !== r) : [...draft.routes, r])
                 }
                 className="press rounded-[var(--r-pill)] px-3 py-1.5 text-[12.5px] font-semibold"
                 style={{
@@ -167,7 +174,7 @@ export function CustomCompoundForm({
                   border: `1px solid ${on ? "var(--mint)" : "var(--line)"}`,
                 }}
               >
-                {r.label}
+                {ROUTE_LABEL[r]}
               </button>
             );
           })}
@@ -179,34 +186,29 @@ export function CustomCompoundForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Comes as"
+          label={t("ccf_comes_as")}
           hint={
-            draft.preparation === "powder"
-              ? "You add the water yourself."
-              : "Already mixed, an oil or a pen, no reconstitution step."
+            draft.preparation === "powder" ? t("ccf_powder_hint") : t("ccf_solution_hint")
           }
         >
           <Select
             value={draft.preparation}
             onChange={(e) => set("preparation", e.target.value as "powder" | "solution")}
           >
-            <option value="powder">Lyophilised powder</option>
-            <option value="solution">Ready-mixed solution</option>
+            <option value="powder">{t("ccf_powder")}</option>
+            <option value="solution">{t("ccf_solution")}</option>
           </Select>
         </Field>
         <Field
-          label="Half-life"
-          hint={
-            errorFor("halfLifeHours")?.message ??
-            "Optional. Leave blank if unknown, no curve beats a made-up one."
-          }
+          label={t("ccf_half_life")}
+          hint={errorFor("halfLifeHours")?.message ?? t("ccf_half_life_hint")}
         >
           <NumberInput
             value={draft.halfLifeHours ?? ""}
             min={0}
             step={0.1}
-            suffix="hours"
-            placeholder="unknown"
+            suffix={t("hours")}
+            placeholder={t("ccf_unknown")}
             onChange={(e) =>
               set("halfLifeHours", e.target.value === "" ? null : Number(e.target.value))
             }
@@ -215,7 +217,7 @@ export function CustomCompoundForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Typical dose, low" hint={errorFor("doseLowMcg")?.message}>
+        <Field label={t("ccf_dose_low")} hint={errorFor("doseLowMcg")?.message}>
           <NumberInput
             value={draft.doseLowMcg ?? ""}
             min={0}
@@ -226,7 +228,7 @@ export function CustomCompoundForm({
             }
           />
         </Field>
-        <Field label="high" hint={errorFor("doseHighMcg")?.message}>
+        <Field label={t("ccf_dose_high")} hint={errorFor("doseHighMcg")?.message}>
           <NumberInput
             value={draft.doseHighMcg ?? ""}
             min={0}
@@ -237,7 +239,7 @@ export function CustomCompoundForm({
             }
           />
         </Field>
-        <Field label="Doses per week" hint={errorFor("perWeek")?.message ?? "Drives burn rate."}>
+        <Field label={t("ccf_per_week")} hint={errorFor("perWeek")?.message ?? t("ccf_per_week_hint")}>
           <NumberInput
             value={draft.perWeek ?? ""}
             min={0}
@@ -249,7 +251,7 @@ export function CustomCompoundForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Usual vial size" hint={errorFor("vialSizeMg")?.message ?? "Optional."}>
+        <Field label={t("ccf_vial_size")} hint={errorFor("vialSizeMg")?.message ?? t("labs_optional")}>
           <NumberInput
             value={draft.vialSizeMg ?? ""}
             min={0}
@@ -262,8 +264,8 @@ export function CustomCompoundForm({
           />
         </Field>
         <Field
-          label="Units per mg"
-          hint={errorFor("iuPerMg")?.message ?? "Only for things dosed in IU, like growth hormone."}
+          label={t("ccf_iu_per_mg")}
+          hint={errorFor("iuPerMg")?.message ?? t("ccf_iu_hint")}
         >
           <NumberInput
             value={draft.iuPerMg ?? ""}
@@ -276,17 +278,17 @@ export function CustomCompoundForm({
         </Field>
       </div>
 
-      <Field label="What it is, and anything worth remembering" hint="Optional.">
+      <Field label={t("ccf_notes")} hint={t("labs_optional")}>
         <Textarea
           rows={3}
           value={draft.notes ?? ""}
           onChange={(e) => set("notes", e.target.value)}
-          placeholder="Mechanism, where it came from, how it made you feel…"
+          placeholder={t("ccf_notes_placeholder")}
         />
       </Field>
 
       {submitted && problems.length > 0 && (
-        <Callout tone="danger" title="Not saved yet">
+        <Callout tone="danger" title={t("ccf_not_saved")}>
           <ul className="list-disc space-y-0.5 pl-4">
             {problems.map((p) => (
               <li key={`${p.field}-${p.message}`}>{p.message}</li>
@@ -297,10 +299,12 @@ export function CustomCompoundForm({
 
       <div className="flex flex-wrap gap-2.5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button variant="primary" onClick={save}>
-          {editing ? "Save changes" : `Add ${draft.name.trim() || "compound"}`}
+          {editing
+            ? t("ccf_save_changes")
+            : t("ccf_add", { name: draft.name.trim() || t("ccf_compound") })}
         </Button>
       </div>
     </div>

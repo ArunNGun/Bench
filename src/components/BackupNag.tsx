@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, ShieldAlert, X } from "lucide-react";
 import { Button, TONE_BG, TONE_FG } from "./ui";
+import { useLang } from "@/lib/i18n";
 import { useProfileData, useStore } from "@/lib/store";
 import { backupNag, nagMessage } from "@/lib/calc/backupnag";
 import { backupsAvailable } from "@/lib/backup/store";
@@ -20,6 +21,7 @@ import { exportFileName, downloadJson } from "@/lib/backup/download";
  * and a half rather than reappearing next session.
  */
 export function BackupNag() {
+  const { t } = useLang();
   const { logs, measurements, labs } = useProfileData();
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
@@ -68,8 +70,7 @@ export function BackupNag() {
       >
         <Download size={16} strokeWidth={2.4} className="mt-0.5 shrink-0" />
         <span>
-          Saved. Keep that file somewhere that is not this device, another phone, a drive, an email
-          to yourself. Settings → Import brings it back.
+          {t("nag_saved")}
         </span>
       </div>
     );
@@ -83,13 +84,13 @@ export function BackupNag() {
       <div className="flex items-start gap-2.5">
         <ShieldAlert size={16} strokeWidth={2.4} className="mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-bold">Nothing is backed up</p>
+          <p className="text-[13.5px] font-bold">{t("nag_nothing_backed_up")}</p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed opacity-90">
             {nagMessage(verdict, recordCount)}
           </p>
           <div className="mt-2.5 flex flex-wrap gap-2">
             <Button variant="primary" onClick={save} className="py-2 text-[13px]">
-              <Download size={14} /> Export a copy
+              <Download size={14} /> {t("nag_export_copy")}
             </Button>
             <Button
               variant="ghost"
@@ -99,13 +100,13 @@ export function BackupNag() {
               }}
               className="py-2 text-[13px]"
             >
-              Later
+              {t("later")}
             </Button>
           </div>
         </div>
         <button
           type="button"
-          aria-label="Dismiss"
+          aria-label={t("dismiss")}
           onClick={() => {
             setDismissedNow(true);
             updateSettings({ backupNagDismissedAt: Date.now() });

@@ -11,7 +11,8 @@ import { toDisplayWeight, weightChange } from "@/lib/calc/outcomes";
 import { averages } from "@/lib/calc/checkins";
 import { pctPlan } from "@/lib/calc/pct";
 import { formatDate, formatDose, trim } from "@/lib/format";
-import { CATEGORY_LABEL, FEELING_LABELS } from "@/lib/types";
+import { CATEGORY_LABEL, FEELING_LABELS, ROUTE_LABEL } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 const DAY = 86_400_000;
 
@@ -31,6 +32,7 @@ const DAY = 86_400_000;
  * rather than estimated.
  */
 export default function ReportPage() {
+  const { t } = useLang();
   const hydrated = useStore((s) => s.hydrated);
   const { protocols, logs, labs, measurements, checkIns } = useProfileData();
   const profiles = useStore((s) => s.profiles);
@@ -71,7 +73,7 @@ export default function ReportPage() {
   const recovery = useMemo(() => pctPlan(logs, resolve, now), [logs, resolve, now]);
 
   if (!hydrated) {
-    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">Loading…</div>;
+    return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
   }
 
   return (
@@ -80,58 +82,68 @@ export default function ReportPage() {
       <div className="no-print mb-6 flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <h1 className="text-[24px] font-extrabold tracking-tight text-[var(--ink)]">
-            Report for a clinician
+            {t("report_title")}
           </h1>
-          <p className="mt-1 text-[13.5px] text-[var(--muted)]">
-            Everything below prints on paper or to a PDF. It never leaves the device either way.
-          </p>
+          <p className="mt-1 text-[13.5px] text-[var(--muted)]">{t("report_subtitle")}</p>
         </div>
         <select
           value={windowDays}
           onChange={(e) => setWindowDays(Number(e.target.value))}
           className="rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-3 py-2 text-[13.5px] text-[var(--ink)]"
         >
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
-          <option value={180}>Last 6 months</option>
-          <option value={365}>Last year</option>
+          <option value={30}>{t("report_last_30")}</option>
+          <option value={90}>{t("report_last_90")}</option>
+          <option value={180}>{t("report_last_6_months")}</option>
+          <option value={365}>{t("report_last_year")}</option>
         </select>
         <Button variant="primary" onClick={() => window.print()}>
-          <Printer size={16} /> Print
+          <Printer size={16} /> {t("report_print")}
         </Button>
       </div>
 
       <Card className="print-plain p-6 print:p-0">
         <header className="border-b border-[var(--line)] pb-4">
           <h2 className="text-[20px] font-extrabold tracking-tight text-[var(--ink)]">
-            Self-administered compound record
+            {t("report_heading")}
           </h2>
           <p className="mt-1 text-[13px] text-[var(--muted)]">
-            {profile?.name ?? "Profile"} · covering {formatDate(since)} to {formatDate(now)} ·
-            printed {formatDate(now)}
+            {t("report_meta", {
+              profile: profile?.name ?? t("report_profile"),
+              from: formatDate(since),
+              to: formatDate(now),
+              printed: formatDate(now),
+            })}
           </p>
           <p className="mt-2 text-[12px] leading-relaxed text-[var(--faint)]">
-            Compiled by the person named above from their own records, using a tracking app. It is a
-            self-report, not a dispensing record, and doses are as entered rather than as verified.
+            {t("report_compiled")}
           </p>
         </header>
 
-        <Section title="Currently running">
+        <Section title={t("report_running")}>
           {active.length === 0 ? (
-            <Empty>Nothing active.</Empty>
+            <Empty>{t("report_nothing_active")}</Empty>
           ) : (
             <Table
-              head={["Compound", "Class", "Dose", "Frequency", "Since", "Adherence"]}
+              head={[
+                t("report_col_compound"),
+                t("report_col_class"),
+                t("report_col_dose"),
+                t("report_col_frequency"),
+                t("report_col_since"),
+                t("report_col_adherence"),
+              ]}
               rows={active.map((p) => {
                 const peptide = findPeptide(custom, p.peptideId);
                 const a = adherence(p, logsForProtocol(p, logs), Math.max(p.startedAt, since), now);
                 return [
                   peptide?.name ?? p.peptideId,
-                  peptide ? CATEGORY_LABEL[peptide.category] : "unknown",
+                  peptide ? CATEGORY_LABEL[peptide.category] : t("report_unknown"),
                   formatDose(scheduledDoseMcg(p, now)),
-                  `${trim(protocolDosesPerWeek(p, now), 2)} per week`,
+                  t("report_per_week", { n: trim(protocolDosesPerWeek(p, now), 2) }),
                   formatDate(p.startedAt),
-                  a.expected > 0 ? `${a.taken} of ${a.expected}` : "n/a",
+                  a.expected > 0
+                    ? t("report_taken_of", { taken: a.taken, expected: a.expected })
+                    : t("report_na"),
                 ];
               })}
             />
@@ -139,7 +151,7 @@ export default function ReportPage() {
         </Section>
 
         {issues.length > 0 && (
-          <Section title="Interactions flagged by the app">
+          <Section title={t("report_interactions")}>
             <ul className="space-y-2">
               {issues.map((i, n) => (
                 <li key={n} className="text-[12.5px] leading-relaxed">
@@ -151,12 +163,18 @@ export default function ReportPage() {
           </Section>
         )}
 
-        <Section title="Bloodwork">
+        <Section title={t("report_bloodwork")}>
           {recentLabs.length === 0 ? (
-            <Empty>No results recorded in this period.</Empty>
+            <Empty>{t("report_no_labs")}</Empty>
           ) : (
             <Table
-              head={["Date", "Marker", "Result", "Reference", "Lab"]}
+              head={[
+                t("report_col_date"),
+                t("report_col_marker"),
+                t("report_col_result"),
+                t("report_col_reference"),
+                t("report_col_lab"),
+              ]}
               rows={recentLabs.map((l) => {
                 const marker = findMarker(l.markerId);
                 return [
@@ -164,40 +182,51 @@ export default function ReportPage() {
                   marker?.name ?? l.markerId,
                   `${l.value} ${marker?.unit ?? ""}`.trim(),
                   l.refLow != null || l.refHigh != null
-                    ? `${l.refLow ?? ""} to ${l.refHigh ?? ""}`.trim()
-                    : "not recorded",
-                  l.lab ?? "not recorded",
+                    ? t("report_range", { low: l.refLow ?? "", high: l.refHigh ?? "" }).trim()
+                    : t("report_not_recorded"),
+                  l.lab ?? t("report_not_recorded"),
                 ];
               })}
             />
           )}
         </Section>
 
-        <Section title="Outcomes">
+        <Section title={t("report_outcomes")}>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12.5px] sm:grid-cols-3">
             <Pair
-              label="Weight change"
+              label={t("report_weight_change")}
               value={
                 weight
-                  ? `${weight.deltaKg > 0 ? "+" : ""}${trim(toDisplayWeight(weight.deltaKg, weightUnit), 1)} ${weightUnit} over ${windowDays} days`
-                  : "not recorded"
+                  ? t("report_weight_value", {
+                      delta: `${weight.deltaKg > 0 ? "+" : ""}${trim(toDisplayWeight(weight.deltaKg, weightUnit), 1)}`,
+                      unit: weightUnit,
+                      days: t("count_days", { n: windowDays }),
+                    })
+                  : t("report_not_recorded")
               }
             />
-            <Pair label="Doses logged" value={`${recentLogs.length}`} />
-            <Pair label="Days rated" value={`${checkIns.filter((c) => c.at >= since).length}`} />
+            <Pair label={t("report_doses_logged")} value={`${recentLogs.length}`} />
+            <Pair
+              label={t("report_days_rated")}
+              value={`${checkIns.filter((c) => c.at >= since).length}`}
+            />
           </dl>
 
           {feeling.some((f) => f.mean != null) && (
             <div className="mt-3">
               <p className="text-[12px] font-bold text-[var(--ink)]">
-                Mean self-rating, 1 to 5, over the period
+                {t("report_mean_rating")}
               </p>
               <dl className="mt-1.5 grid grid-cols-3 gap-x-6 gap-y-1 text-[12.5px] sm:grid-cols-6">
                 {feeling.map((f) => (
                   <Pair
                     key={f.id}
                     label={f.label}
-                    value={f.mean == null ? "n/a" : `${trim(f.mean, 1)} (${f.days} d)`}
+                    value={
+                      f.mean == null
+                        ? t("report_na")
+                        : t("report_mean_value", { mean: trim(f.mean, 1), days: f.days })
+                    }
                   />
                 ))}
               </dl>
@@ -206,29 +235,30 @@ export default function ReportPage() {
         </Section>
 
         {recovery.compounds.length > 0 && (
-          <Section title="Suppression">
+          <Section title={t("report_suppression")}>
             <p className="text-[12.5px] leading-relaxed text-[var(--muted)]">
-              {recovery.compounds.length} compound
-              {recovery.compounds.length === 1 ? "" : "s"} recorded that suppress endogenous
-              testosterone production. Last doses:{" "}
-              {recovery.compounds
-                .map((c) => `${c.name} on ${formatDate(c.lastDoseAt)}`)
-                .join("; ")}
-              .{" "}
+              {t("report_suppression_body", {
+                compounds: t("count_compounds", { n: recovery.compounds.length }),
+                list: recovery.compounds
+                  .map((c) =>
+                    t("report_last_dose_on", {
+                      name: c.name,
+                      date: formatDate(c.lastDoseAt),
+                    }))
+                  .join("; "),
+              })}{" "}
               {recovery.blockedBy.length
-                ? `No clearance date can be given: ${recovery.blockedBy.join(" and ")} ${
-                    recovery.blockedBy.length === 1 ? "has" : "have"
-                  } no half-life established in humans.`
+                ? t("report_no_clearance", { names: recovery.blockedBy.join(", ") })
                 : recovery.earliestStart != null
-                  ? `On a five half-life basis, the last of it clears around ${formatDate(recovery.earliestStart)}.`
+                  ? t("report_clears_around", { date: formatDate(recovery.earliestStart) })
                   : ""}
             </p>
           </Section>
         )}
 
-        <Section title="Dose history">
+        <Section title={t("report_dose_history")}>
           {recentLogs.length === 0 ? (
-            <Empty>No doses recorded in this period.</Empty>
+            <Empty>{t("report_no_doses")}</Empty>
           ) : (
             <>
               {/*
@@ -238,25 +268,31 @@ export default function ReportPage() {
                 worth appearing.
               */}
               <Table
-                head={["Date", "Compound", "Dose", "Route", "Site", "Reported"]}
+                head={[
+                  t("report_col_date"),
+                  t("report_col_compound"),
+                  t("report_col_dose"),
+                  t("report_col_route"),
+                  t("report_col_site"),
+                  t("report_col_reported"),
+                ]}
                 rows={recentLogs.slice(0, 60).map((l) => [
                   formatDate(l.at),
                   findPeptide(custom, l.peptideId)?.name ?? l.peptideId,
-                  l.skipped ? "skipped" : formatDose(l.doseMcg),
-                  l.route,
-                  l.site ?? "not recorded",
+                  l.skipped ? t("report_skipped") : formatDose(l.doseMcg),
+                  ROUTE_LABEL[l.route],
+                  l.site ?? t("report_not_recorded"),
                   [
                     l.feeling != null ? (FEELING_LABELS[l.feeling] ?? `${l.feeling}`) : null,
                     l.sideEffects?.length ? l.sideEffects.join(", ") : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "nothing reported",
+                    .join(" · ") || t("report_nothing_reported"),
                 ])}
               />
               {recentLogs.length > 60 && (
                 <p className="mt-2 text-[11.5px] text-[var(--faint)]">
-                  Showing the 60 most recent of {recentLogs.length}. The full history can be
-                  exported as a CSV from Settings.
+                  {t("report_showing_recent", { total: recentLogs.length })}
                 </p>
               )}
             </>
@@ -264,10 +300,7 @@ export default function ReportPage() {
         </Section>
 
         <footer className="mt-6 border-t border-[var(--line)] pt-3 text-[11px] leading-relaxed text-[var(--faint)]">
-          Generated by Bench, an offline tracking app. Figures are calculated from self-entered
-          records. Half-lives and dose ranges in the app come from prescribing labels and published
-          trials; where no human pharmacokinetic data exists the app makes no estimate, and any such
-          compound is named as unquantified above rather than given a figure.
+          {t("report_footer")}
         </footer>
       </Card>
     </div>
