@@ -470,10 +470,10 @@ function VialRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[14.5px] text-[var(--ink)]">{peptideName}</span>
           <span className="tnum font-mono text-[13px] text-[var(--muted)]">{vial.strengthMg} mg</span>
-          {spray && <Badge tone="grape">nasal spray</Badge>}
+          {spray && <Badge tone="grape">{t("stock_nasal_spray_badge")}</Badge>}
           {many && <Badge tone="sky">{group!.count} vials</Badge>}
-          {st.expired && <Badge tone="rose">past date</Badge>}
-          {!st.expired && budSoon && <Badge tone="tangerine">use soon</Badge>}
+          {st.expired && <Badge tone="rose">{t("stock_past_date")}</Badge>}
+          {!st.expired && budSoon && <Badge tone="tangerine">{t("stock_use_soon")}</Badge>}
         </div>
 
         {vial.state === "on-order" ? (

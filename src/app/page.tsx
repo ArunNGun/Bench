@@ -417,7 +417,7 @@ export default function NowPage() {
             <Undo2 size={15} /> {t("now_undo")}
           </Button>
           <Button variant="ghost" onClick={() => setLastQuickLog(null)}>
-            {t("install_dismiss")}
+            {t("dismiss")}
           </Button>
         </Card>
       )}

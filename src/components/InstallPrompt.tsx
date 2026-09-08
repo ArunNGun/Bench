@@ -182,7 +182,7 @@ export function InstallPrompt() {
         <button
           type="button"
           onClick={dismiss}
-          aria-label={t("install_dismiss")}
+          aria-label={t("dismiss")}
           className="press -mr-1 -mt-1 shrink-0 p-1 text-[var(--faint)] hover:text-[var(--ink)]"
         >
           <X size={16} />

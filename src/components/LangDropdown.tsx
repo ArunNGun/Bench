@@ -22,7 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Languages } from "lucide-react";
-import { useLangStore } from "@/lib/i18n";
+import { translate, useLangStore } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n/translations";
 import { cn } from "@/lib/cn";
 
@@ -40,6 +40,7 @@ const LANGS: { code: Lang; label: string; native: string }[] = [
 
 export function LangDropdown({ menu = false }: { menu?: boolean }) {
   const { lang, setLang } = useLangStore();
+  const t = (key: "select_language" | "language") => translate(lang, key);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -97,7 +98,7 @@ export function LangDropdown({ menu = false }: { menu?: boolean }) {
             : "text-[var(--muted)] hover:bg-[var(--card)] hover:text-[var(--ink)]")}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Select language"
+        aria-label={t("select_language")}
       >
         <Languages size={16} strokeWidth={2.1} className="sm:hidden" />
         <span className="hidden sm:inline">{current.label}</span>
@@ -111,7 +112,7 @@ export function LangDropdown({ menu = false }: { menu?: boolean }) {
       {open && (
         <div
           role="listbox"
-          aria-label="Language"
+          aria-label={t("language")}
           className="absolute right-0 top-full z-50 mt-1 min-w-[110px] overflow-hidden rounded-[var(--r-inner)] border border-[var(--line)] bg-[var(--card)] shadow-[var(--shadow-md)]"
         >
           {LANGS.filter((l) => l.code !== lang).map((l) => (

@@ -18,8 +18,10 @@ import { Button, Callout, Card, SectionLabel } from "./ui";
 import { HOSTED, accountRequired } from "@/lib/sync/hosted";
 import { useSyncState } from "@/lib/sync/state";
 import { useSignOut } from "@/lib/sync/useSignOut";
+import { useLang } from "@/lib/i18n";
 
 export function AccountCard() {
+  const { t } = useLang();
   const session = useSyncState((s) => s.session);
   const { go, busy, refused } = useSignOut();
 
@@ -27,7 +29,7 @@ export function AccountCard() {
 
   return (
     <Card className="space-y-4 p-4">
-      <SectionLabel>Your account</SectionLabel>
+      <SectionLabel>{t("account_title")}</SectionLabel>
 
       <p className="text-[12.5px] text-[var(--muted)]">
         Signed in as <span className="font-medium text-[var(--ink)]">{session.username}</span> on{" "}
@@ -35,13 +37,10 @@ export function AccountCard() {
       </p>
 
       <p className="text-[12.5px] text-[var(--muted)]">
-        Signing out sends anything unsent to the server first, then removes this browser&apos;s copy
-        of your data and the key that reads it. That is on purpose: on a computer somebody else
-        uses, leaving would otherwise leave your dose history behind for whoever opens it next.
-        Nothing is lost, because the server keeps it and your password brings it back.
+        {t("account_sign_out_note")}
       </p>
 
-      {refused && <Callout tone="danger" title="Not yet">{refused}</Callout>}
+      {refused && <Callout tone="danger" title={t("account_not_yet")}>{refused}</Callout>}
 
       <div>
         <Button disabled={busy} onClick={() => void go()}>
