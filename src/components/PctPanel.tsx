@@ -7,6 +7,7 @@ import { Badge, Callout, Card, SectionLabel } from "./ui";
 import { allPeptides, useProfileData, useStore } from "@/lib/store";
 import { pctPlan, remainingFraction, retestAfter, PCT_TEMPLATES, CLEARED_FRACTION } from "@/lib/calc/pct";
 import { formatDate, formatDuration } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 const DAY = 86_400_000;
 
@@ -18,6 +19,7 @@ const DAY = 86_400_000;
  * it anyway would read as a suggestion.
  */
 export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
+  const { t } = useLang();
   const { logs } = useProfileData();
   const custom = useStore((s) => s.customPeptides);
   const library = useMemo(() => allPeptides(custom), [custom]);
@@ -36,16 +38,16 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
       <SectionLabel
         action={
           plan.clear ? (
-            <Badge tone="leaf">cleared</Badge>
+            <Badge tone="leaf">{t("pct_cleared_badge")}</Badge>
           ) : plan.blockedBy.length ? (
-            <Badge tone="tangerine">not computable</Badge>
+            <Badge tone="tangerine">{t("pct_not_computable_badge")}</Badge>
           ) : (
-            <Badge tone="grape">still clearing</Badge>
+            <Badge tone="grape">{t("pct_still_clearing_badge")}</Badge>
           )
         }
       >
         <span className="inline-flex items-center gap-1.5">
-          <CalendarClock size={13} strokeWidth={2.6} /> Recovery timing
+          <CalendarClock size={13} strokeWidth={2.6} /> {t("pct_recovery_timing")}
         </span>
       </SectionLabel>
 
@@ -63,7 +65,7 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
                   {c.name}
                 </Link>
                 <span className="text-[11.5px] text-[var(--faint)]">
-                  last dose {formatDate(c.lastDoseAt)}
+                  {t("pct_last_dose", { date: formatDate(c.lastDoseAt) })}
                 </span>
               </div>
 
@@ -84,9 +86,12 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
                   </div>
                   <p className="mt-1.5 text-[12px] text-[var(--muted)]">
                     {c.clearedAt <= nowMs
-                      ? "Cleared."
-                      : `About ${Math.round((left ?? 0) * 100)}% of the last dose left. Clear around ${formatDate(
-                          c.clearedAt)}, in ${formatDuration((c.clearedAt - nowMs) / 3_600_000)}.`}
+                      ? t("pct_cleared_line")
+                      : t("pct_left_line", {
+                          percent: Math.round((left ?? 0) * 100),
+                          date: formatDate(c.clearedAt),
+                          duration: formatDuration((c.clearedAt - nowMs) / 3_600_000),
+                        })}
                   </p>
                 </>
               )}
@@ -97,16 +102,10 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
 
       {/* The answer, or an honest refusal to give one */}
       {plan.blockedBy.length > 0 ? (
-        <Callout tone="warn" title="No date can be given">
+        <Callout tone="warn" title={t("pct_no_date_title")}>
           <span className="inline-flex items-start gap-1.5">
             <TriangleAlert size={13} strokeWidth={2.6} className="mt-0.5 shrink-0" />
-            <span>
-              {plan.blockedBy.join(" and ")} {plan.blockedBy.length === 1 ? "has" : "have"} no
-              half-life established in humans, so there is no honest clearance date for
-              {plan.blockedBy.length === 1 ? " it" : " them"}. The real answer is later than the
-              other compounds here suggest, by an unknown amount. Other tools will print a number
-              anyway. This one will not.
-            </span>
+            <span>{t("pct_no_date_body", { names: plan.blockedBy.join(", ") })}</span>
           </span>
         </Callout>
       ) : plan.earliestStart != null ? (
@@ -116,14 +115,11 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
         >
           <p className="text-[13.5px] font-bold">
             {plan.clear
-              ? "Androgen has cleared"
-              : `Earliest sensible start: ${formatDate(plan.earliestStart)}`}
+              ? t("pct_androgen_cleared")
+              : t("pct_earliest_start", { date: formatDate(plan.earliestStart) })}
           </p>
           <p className="mt-1 text-[12.5px] leading-relaxed">
-            Taken as five half-lives from the last dose, which leaves about{" "}
-            {Math.round(CLEARED_FRACTION * 100)}% behind. That is the usual pharmacological
-            convention for cleared, not a physiological threshold. Starting earlier means a SERM
-            spends the protocol competing with androgen that is still arriving.
+            {t("pct_five_half_lives", { percent: Math.round(CLEARED_FRACTION * 100) })}
           </p>
         </div>
       ) : null}
@@ -131,41 +127,44 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
       {/* Templates */}
       <div>
         <p className="text-[12px] font-bold uppercase tracking-wide text-[var(--faint)]">
-          Published protocols
+          {t("pct_published")}
         </p>
         <div className="mt-2 space-y-2">
-          {PCT_TEMPLATES.map((t) => {
-            const open = openTemplate === t.id;
+          {/* Not called t: that shadows the t from useLang. */}
+          {PCT_TEMPLATES.map((template) => {
+            const open = openTemplate === template.id;
             const ends =
               plan.earliestStart != null
-                ? plan.earliestStart + t.weeks.length * 7 * DAY
+                ? plan.earliestStart + template.weeks.length * 7 * DAY
                 : null;
             return (
-              <div key={t.id} className="rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
+              <div key={template.id} className="rounded-[var(--r-inner)] bg-[var(--sunken)] p-3">
                 <button
                   type="button"
-                  onClick={() => setOpenTemplate(open ? null : t.id)}
+                  onClick={() => setOpenTemplate(open ? null : template.id)}
                   aria-expanded={open}
                   className="press flex w-full items-center gap-2 text-left"
                 >
-                  <span className="text-[13.5px] font-bold text-[var(--ink)]">{t.name}</span>
+                  <span className="text-[13.5px] font-bold text-[var(--ink)]">{template.name}</span>
                   <span className="ml-auto text-[11.5px] text-[var(--faint)]">
-                    {t.weeks.length} weeks
+                    {t("count_weeks", { n: template.weeks.length })}
                   </span>
                   <ChevronDown
                     size={14}
                     className={`shrink-0 text-[var(--faint)] transition-transform ${open ? "rotate-180" : ""}`}
                   />
                 </button>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--muted)]">{t.summary}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--muted)]">
+                  {template.summary}
+                </p>
 
                 {open && (
                   <div className="mt-2.5 space-y-2">
                     <ol className="space-y-1">
-                      {t.weeks.map((w) => (
+                      {template.weeks.map((w) => (
                         <li key={w.week} className="flex gap-2.5 text-[12.5px]">
                           <span className="w-12 shrink-0 font-mono font-bold text-[var(--faint)]">
-                            wk {w.week}
+                            {t("pep_week_abbrev", { range: w.week })}
                           </span>
                           <span className="text-[var(--ink)]">{w.detail}</span>
                         </li>
@@ -173,21 +172,21 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
                     </ol>
                     {ends != null && (
                       <p className="text-[12px] text-[var(--muted)]">
-                        Started at the earliest date above, this ends around {formatDate(ends)}.
-                        Retest no sooner than {formatDate(retestAfter(ends))}: a SERM raises
-                        testosterone while it is still present, so bloods taken during it measure
-                        the drug, not the recovery.
+                        {t("pct_ends_around", {
+                          ends: formatDate(ends),
+                          retest: formatDate(retestAfter(ends)),
+                        })}
                       </p>
                     )}
                     <p className="text-[11.5px] leading-relaxed text-[var(--faint)]">
-                      {t.source}{" "}
+                      {template.source}{" "}
                       <a
-                        href={t.citationUrl}
+                        href={template.citationUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 underline decoration-dotted"
                       >
-                        Source <ExternalLink size={10} />
+                        {t("pct_source")} <ExternalLink size={10} />
                       </a>
                     </p>
                   </div>
@@ -199,9 +198,7 @@ export function PctPanel({ nowMs = Date.now() }: { nowMs?: number }) {
       </div>
 
       <p className="text-[11.5px] leading-relaxed text-[var(--faint)]">
-        None of these is an approved treatment for suppression caused by anabolic steroids, and
-        none of it is advice to run one. What the app can tell you is when the androgen will be
-        gone. Whether to take anything at that point is a question for a doctor who can test you.
+        {t("pct_footer")}
       </p>
     </Card>
   );

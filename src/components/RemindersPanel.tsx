@@ -3,7 +3,7 @@ import { useLang } from "@/lib/i18n";
 
 import { useEffect, useMemo, useState } from "react";
 import { BellRing, CalendarPlus } from "lucide-react";
-import { Button, Callout, Card, Field, SectionLabel, Select } from "@/components/ui";
+import { Button, Callout, Card, Field, Rich, SectionLabel, Select } from "@/components/ui";
 import { allPeptides, useProfileData, useStore } from "@/lib/store";
 import { remindersFor } from "@/lib/calc/reminders";
 import { buildCalendar, calendarEventCount, calendarFileName } from "@/lib/calc/ics";
@@ -14,15 +14,7 @@ import { DEFAULT_REMINDERS } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 
 /** How far ahead the calendar file reaches. */
-const CALENDAR_SPANS = [
-  { days: 7, label: "The next week" },
-  { days: 14, label: "The next two weeks" },
-  { days: 21, label: "The next three weeks" },
-  { days: 30, label: "The next month" },
-  { days: 60, label: "The next two months" },
-  { days: 90, label: "The next three months" },
-  { days: 180, label: "The next six months" },
-] as const;
+const CALENDAR_SPANS = [7, 14, 21, 30, 60, 90, 180] as const;
 
 /**
  * How early the nudge comes.
@@ -31,12 +23,7 @@ const CALENDAR_SPANS = [
  * calendar event, because it is one setting and offering different choices in
  * the two places would suggest otherwise.
  */
-const LEAD_OPTIONS = [
-  { minutes: 0, label: "At the dose time" },
-  { minutes: 15, label: "15 minutes before" },
-  { minutes: 30, label: "30 minutes before" },
-  { minutes: 60, label: "An hour before" },
-] as const;
+const LEAD_OPTIONS = [0, 15, 30, 60] as const;
 
 /**
  * Reminders, and the calendar export that stands in for them on the web.
@@ -104,8 +91,7 @@ export function RemindersPanel() {
       await check();
 
       if (!ok) {
-        setResult(
-          "Android did not grant permission to show notifications, so nothing was scheduled.");
+        setResult(t("reminders_permission_refused"));
         return;
       }
       updateSettings({ reminders: { ...reminders, enabled: true, leadMinutes } });
@@ -123,18 +109,19 @@ export function RemindersPanel() {
       const name = calendarFileName();
 
       if (!count) {
-        setResult("Nothing to export. There are no scheduled doses in that window.");
+        setResult(t("reminders_nothing_to_export"));
         return;
       }
 
       const path = await writeToDocuments(name, ics);
       if (path) {
-        setResult(`${count} doses written to ${path}. Open it to add them to your calendar.`);
+        setResult(
+          t("reminders_written_to", { doses: t("count_doses", { n: count }), path }));
         return;
       }
 
       downloadText(ics, name, "text/calendar;charset=utf-8");
-      setResult(`${count} doses exported. Import ${name} into your calendar.`);
+      setResult(t("reminders_exported", { doses: t("count_doses", { n: count }), name }));
     } finally {
       setBusy(false);
     }
@@ -147,24 +134,22 @@ export function RemindersPanel() {
       <SectionLabel>{t("reminders_title")}</SectionLabel>
 
       <p className="text-[13px] leading-relaxed text-[var(--muted)]">
-        A reminder at the hour a dose is due. Scheduled by the phone itself, so it works with the app
-        closed and with no connection, and <strong>{t("reminders_desc")}</strong>. A dose you log
-        early cancels its own reminder, so the phone does not ask for something already in the leg.
+        <Rich text={t("reminders_intro")} />
       </p>
 
       <Callout tone={canSchedule ? "info" : "warn"}>
-        {state === "checking" ? "Checking…" : NOTIFY_MESSAGE[state]}
+        {state === "checking" ? t("reminders_checking") : NOTIFY_MESSAGE[state]}
       </Callout>
 
       {askable && (
         <Button variant="primary" onClick={() => setEnabled(true, reminders.leadMinutes)} disabled={busy}>
-          <BellRing size={15} /> {busy ? "Waiting…" : "Allow notifications"}
+          <BellRing size={15} /> {busy ? t("reminders_waiting") : t("reminders_allow")}
         </Button>
       )}
 
       {canSchedule && (
         <>
-          <Field label="Remind me" hint="At the dose time, or a little before it.">
+          <Field label={t("reminders_remind_me")} hint={t("reminders_remind_me_hint")}>
             <Select
               value={reminders.enabled ? String(reminders.leadMinutes) : "off"}
               onChange={(e) =>
@@ -174,9 +159,9 @@ export function RemindersPanel() {
               }
             >
               <option value="off">{t("reminders_never")}</option>
-              {LEAD_OPTIONS.map((o) => (
-                <option key={o.minutes} value={o.minutes}>
-                  {o.label}
+              {LEAD_OPTIONS.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {t(`reminders_lead_${minutes}`)}
                 </option>
               ))}
             </Select>
@@ -185,8 +170,11 @@ export function RemindersPanel() {
           {reminders.enabled && (
             <p className="text-[12.5px] text-[var(--muted)]">
               {next
-                ? `${armed.length} reminder${armed.length === 1 ? "" : "s"} set, next ${formatDateTime(next.at)}.`
-                : "Nothing to remind you about yet. Add a protocol with a schedule."}
+                ? t("reminders_set", {
+                    reminders: t("count_reminders", { n: armed.length }),
+                    when: formatDateTime(next.at),
+                  })
+                : t("reminders_nothing_yet")}
             </p>
           )}
         </>
@@ -200,8 +188,8 @@ export function RemindersPanel() {
         Apple, a lock screen does not.
       */}
       <Field
-        label="What it says"
-        hint="On a lock screen, and in the title of every calendar event."
+        label={t("reminders_what_it_says")}
+        hint={t("reminders_what_it_says_hint")}
       >
         <Select
           value={reminders.showCompound ? "named" : "discreet"}
@@ -218,7 +206,7 @@ export function RemindersPanel() {
 
       <div className="space-y-3 border-t border-[var(--line)] pt-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Send my doses to a calendar" hint="Re-export after changing a plan.">
+          <Field label={t("reminders_send_calendar")} hint={t("reminders_send_calendar_hint")}>
             <Select
               value={String(reminders.calendarDays)}
               onChange={(e) =>
@@ -227,9 +215,9 @@ export function RemindersPanel() {
                 })
               }
             >
-              {CALENDAR_SPANS.map((s) => (
-                <option key={s.days} value={s.days}>
-                  {s.label}
+              {CALENDAR_SPANS.map((days) => (
+                <option key={days} value={days}>
+                  {t(`reminders_span_${days}`)}
                 </option>
               ))}
             </Select>
@@ -241,7 +229,7 @@ export function RemindersPanel() {
             two controls for one value.
           */}
           {!canSchedule && (
-            <Field label="Alarm on each event" hint="Your calendar raises it, not this app.">
+            <Field label={t("reminders_alarm_each")} hint={t("reminders_alarm_each_hint")}>
               <Select
                 value={String(reminders.leadMinutes)}
                 onChange={(e) =>
@@ -250,9 +238,9 @@ export function RemindersPanel() {
                   })
                 }
               >
-                {LEAD_OPTIONS.map((o) => (
-                  <option key={o.minutes} value={o.minutes}>
-                    {o.label}
+                {LEAD_OPTIONS.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {t(`reminders_lead_${minutes}`)}
                   </option>
                 ))}
               </Select>
@@ -261,22 +249,12 @@ export function RemindersPanel() {
         </div>
 
         <Button variant="primary" onClick={exportCalendar} disabled={busy}>
-          <CalendarPlus size={15} /> {busy ? "Working…" : "Export doses to calendar"}
+          <CalendarPlus size={15} /> {busy ? t("reminders_working") : t("reminders_export")}
         </Button>
 
         <p className="text-[12px] leading-relaxed text-[var(--faint)]">
-          Each dose becomes an event with its own alarm, so your calendar does the reminding. Import
-          it into a <strong>{t("reminders_calendar_desc")}</strong> rather than your main one: changing a plan
-          means exporting again, and a separate calendar can be emptied in one go instead of hunting
-          for events one by one.
-          {reminders.showCompound && (
-            <>
-              {" "}
-              You have chosen to name the compound. A calendar that syncs to Google or Apple carries
-              that name to them, which nothing else in this app does. Switch the setting above back to
-              discreet if that matters.
-            </>
-          )}
+          <Rich text={t("reminders_calendar_note")} />
+          {reminders.showCompound && <> {t("reminders_named_warning")}</>}
         </p>
       </div>
 
