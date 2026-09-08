@@ -1205,6 +1205,12 @@ export const TRANSLATIONS = {
     times_missing: "Every time needs an hour before this can be saved.",
     phase_same_at_time: "At {time}, same as the protocol.",
     plan_starts: "Starts",
+    fmt_just_now: "just now",
+    fmt_not_established: "Not established",
+    count_hours_one: "{n} hour",
+    count_hours_other: "{n} hours",
+    count_minutes_one: "{n} minute",
+    count_minutes_other: "{n} minutes",
   },
 
   de: {
@@ -2388,6 +2394,12 @@ export const TRANSLATIONS = {
     times_missing: "Jede Zeit braucht eine Uhrzeit, bevor das gespeichert werden kann.",
     phase_same_at_time: "Um {time}, wie beim Protokoll.",
     plan_starts: "Beginnt",
+    fmt_just_now: "gerade eben",
+    fmt_not_established: "Nicht bestimmt",
+    count_hours_one: "{n} Stunde",
+    count_hours_other: "{n} Stunden",
+    count_minutes_one: "{n} Minute",
+    count_minutes_other: "{n} Minuten",
   },
 
   sl: {
@@ -3639,6 +3651,16 @@ export const TRANSLATIONS = {
     times_missing: "Vsaka ura potrebuje uro, preden je to mogoče shraniti.",
     phase_same_at_time: "Ob {time}, enako kot protokol.",
     plan_starts: "Se začne",
+    fmt_just_now: "pravkar",
+    fmt_not_established: "Ni ugotovljeno",
+    count_hours_one: "{n} ura",
+    count_hours_two: "{n} uri",
+    count_hours_few: "{n} ure",
+    count_hours_other: "{n} ur",
+    count_minutes_one: "{n} minuta",
+    count_minutes_two: "{n} minuti",
+    count_minutes_few: "{n} minute",
+    count_minutes_other: "{n} minut",
   },
 
   pl: {
@@ -4890,6 +4912,16 @@ export const TRANSLATIONS = {
     times_missing: "Każda pora potrzebuje godziny, zanim będzie można to zapisać.",
     phase_same_at_time: "O {time}, tak jak protokół.",
     plan_starts: "Zaczyna się",
+    fmt_just_now: "przed chwilą",
+    fmt_not_established: "Nie ustalono",
+    count_hours_one: "{n} godzina",
+    count_hours_few: "{n} godziny",
+    count_hours_many: "{n} godzin",
+    count_hours_other: "{n} godziny",
+    count_minutes_one: "{n} minuta",
+    count_minutes_few: "{n} minuty",
+    count_minutes_many: "{n} minut",
+    count_minutes_other: "{n} minuty",
   },
 } satisfies Record<Lang, Record<string, string>>;
 

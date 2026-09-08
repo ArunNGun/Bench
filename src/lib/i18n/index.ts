@@ -9,7 +9,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { TRANSLATIONS, type Lang, type TranslationKey } from "./translations";
 
-export type { TranslationKey };
+export type { Lang, TranslationKey };
 import { pluralCategory } from "./plural";
 
 interface LangState {

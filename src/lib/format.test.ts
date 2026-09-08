@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { useLangStore } from "./i18n";
 import {
   formatDate,
   formatDosePerDay,
+  formatHalfLife,
+  relativeTime,
   formatDateTime,
   fromDateInput,
   toDateInput,
@@ -126,5 +129,61 @@ describe("formatDosePerDay", () => {
 
   it("does not multiply by nothing", () => {
     expect(formatDosePerDay(250, 0)).toBe("250 mcg");
+  });
+});
+
+/**
+ * Dates, times and durations in the reader's language.
+ *
+ * These used to take the runtime's locale, which is the browser's, and the
+ * relative formatter was pinned to "en" outright. In Slovenian the app said
+ * "Načrtovana in 26 minutes": half the sentence translated, half not.
+ */
+describe("the language the formatters use", () => {
+  const after = () => useLangStore.setState({ lang: "en" });
+  const noon = new Date(2026, 8, 27, 12, 0).getTime();
+
+  it("names the month in the chosen language", () => {
+    useLangStore.setState({ lang: "en" });
+    const english = formatDate(noon, noon);
+    useLangStore.setState({ lang: "sl" });
+    const slovenian = formatDate(noon, noon);
+    expect(english).not.toBe(slovenian);
+    expect(slovenian).toContain("sep");
+    after();
+  });
+
+  it("phrases a relative time in the chosen language", () => {
+    useLangStore.setState({ lang: "en" });
+    expect(relativeTime(noon + 26 * 60_000, noon)).toBe("in 26 minutes");
+    useLangStore.setState({ lang: "sl" });
+    expect(relativeTime(noon + 26 * 60_000, noon)).not.toContain("in 26 minutes");
+    after();
+  });
+
+  /* Intl has no phrase for this one, so it is a key like any other. */
+  it("translates just now, which Intl does not provide", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(relativeTime(noon, noon)).toBe("pravkar");
+    after();
+  });
+
+  it("translates a half-life, including the case with no figure at all", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(formatHalfLife(null)).toBe("Ni ugotovljeno");
+    expect(formatHalfLife(30)).toContain("ur");
+    after();
+  });
+
+  /*
+   * Slovenian has a dual, so two hours is not the same word as three. The
+   * family is selected by Intl.PluralRules, which is the whole reason
+   * formatHalfLife goes through translate rather than appending an s.
+   */
+  it("uses the dual where the language has one", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(formatHalfLife(2)).toBe("2 uri");
+    expect(formatHalfLife(3)).toBe("3 ure");
+    after();
   });
 });
