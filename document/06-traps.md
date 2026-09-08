@@ -498,3 +498,25 @@ The general shape is worth remembering: a function that returns null for "not
 applicable yet" hands every caller the job of deciding what that means, and
 `?? somethingPlausible` is what they all reach for. If there is a right answer,
 return it.
+
+## The calc layer writing English
+
+`describePhase` returned `{ id, label, detail }` and `dueStatus` returned
+`{ state, label }`, where the labels and details were finished English
+sentences. So `src/lib/calc`, which the layout note calls pure logic with no
+React and no I/O, was also the author of the words on the dashboard, and those
+words could not be translated without passing a language into a pure function.
+
+The tell was already in the tests: every one of them asserted the id or the
+state and none of them asserted a label. The id was the fact and the sentence
+was decoration sitting next to it.
+
+Both now return only the id. The page keeps a `Record<PhaseId, TranslationKey>`
+and looks the words up. `dueStatus` needed one extra distinction, because
+`state: "none"` covers both a paused protocol and one with nothing scheduled,
+which are the same to the maths and different to a reader, so the name is its
+own field rather than a second reading of the state.
+
+The rule this leaves: a module under `src/lib/calc` may return an id, a number
+or a date. If it is about to return a sentence, the sentence belongs to
+whoever renders it.

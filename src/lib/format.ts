@@ -1,4 +1,5 @@
 import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
+import { translate, useLangStore, type Lang } from "./i18n";
 
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
 
@@ -58,13 +59,44 @@ export function formatConcentration(mcgPerMl: number) {
   return mgPerMl >= 0.1 ? `${trim(mgPerMl, 3)} mg/mL` : `${trim(mcgPerMl, 1)} mcg/mL`;
 }
 
-const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+/**
+ * The language the app is set to, read rather than passed in.
+ *
+ * Every date and every "3 hours ago" in the app comes through this file, from
+ * several hundred call sites. Threading the language through all of them to
+ * choose a locale would be a large change for a small fact, so this reads the
+ * same store the rest of the app subscribes to.
+ *
+ * The cost is that a component which never calls `useLang` will keep whatever
+ * it last rendered until something else re-renders it. In practice every
+ * screen calls it, because every screen has words on it as well as dates.
+ *
+ * Intl carries the data for all four languages; nothing here is translated by
+ * hand except the two phrases Intl has no opinion about.
+ */
+function lang(): Lang {
+  return useLangStore.getState().lang;
+}
+
+/** One formatter per language, built once. Constructing them is not cheap. */
+function cached<T>(store: Map<string, T>, key: string, make: () => T): T {
+  const found = store.get(key);
+  if (found) return found;
+  const made = make();
+  store.set(key, made);
+  return made;
+}
+
+const relativeFmts = new Map<string, Intl.RelativeTimeFormat>();
+const relativeFmt = () =>
+  cached(relativeFmts, lang(), () => new Intl.RelativeTimeFormat(lang(), { numeric: "auto" }));
 
 /** "in 3 hours", "2 days ago". Picks the largest sensible unit. */
 export function relativeTime(targetMs: number, nowMs = Date.now()) {
+  const rtf = relativeFmt();
   const diffMin = Math.round((targetMs - nowMs) / 60000);
   const abs = Math.abs(diffMin);
-  if (abs < 1) return "just now";
+  if (abs < 1) return translate(lang(), "fmt_just_now");
   if (abs < 60) return rtf.format(diffMin, "minute");
   const hours = Math.round(diffMin / 60);
   if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
@@ -84,20 +116,36 @@ export function formatDuration(hours: number) {
 
 /** Half-lives read better in their natural unit than always in hours. */
 export function formatHalfLife(hours: number | null) {
-  if (hours == null) return "Not established";
-  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
-  if (hours < 48) return `${trim(hours, 1)} hours`;
-  return `${trim(hours / 24, 1)} days`;
+  if (hours == null) return translate(lang(), "fmt_not_established");
+  if (hours < 1) return translate(lang(), "count_minutes", { n: Math.round(hours * 60) });
+  if (hours < 48) return translate(lang(), "count_hours", { n: trim(hours, 1) });
+  return translate(lang(), "count_days", { n: trim(hours / 24, 1) });
 }
 
-const dateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
-const dateYearFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+/*
+ * These took the runtime's locale, which is the browser's and not the app's.
+ * Someone reading the app in Slovenian on an English phone got Sep 27 in the
+ * middle of a Slovenian sentence.
+ */
+const dateFmts = new Map<string, Intl.DateTimeFormat>();
+const dateYearFmts = new Map<string, Intl.DateTimeFormat>();
+const timeFmts = new Map<string, Intl.DateTimeFormat>();
+const weekdayFmts = new Map<string, Intl.DateTimeFormat>();
+
+const dateFmt = () =>
+  cached(dateFmts, lang(), () =>
+    new Intl.DateTimeFormat(lang(), { month: "short", day: "numeric" }));
+
+const dateYearFmt = () =>
+  cached(dateYearFmts, lang(), () =>
+    new Intl.DateTimeFormat(lang(), { month: "short", day: "numeric", year: "numeric" }));
+
+const timeFmt = () =>
+  cached(timeFmts, lang(), () =>
+    new Intl.DateTimeFormat(lang(), { hour: "numeric", minute: "2-digit" }));
+
+const weekdayFmt = () =>
+  cached(weekdayFmts, lang(), () => new Intl.DateTimeFormat(lang(), { weekday: "short" }));
 
 /**
  * A date, carrying the year only when it is not the current one.
@@ -117,14 +165,14 @@ const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
  */
 export function formatDate(ms: number, nowMs = Date.now()) {
   const sameYear = new Date(ms).getFullYear() === new Date(nowMs).getFullYear();
-  return (sameYear ? dateFmt : dateYearFmt).format(ms);
+  return (sameYear ? dateFmt() : dateYearFmt()).format(ms);
 }
 
-export const formatTime = (ms: number) => timeFmt.format(ms);
-export const formatWeekday = (ms: number) => weekdayFmt.format(ms);
+export const formatTime = (ms: number) => timeFmt().format(ms);
+export const formatWeekday = (ms: number) => weekdayFmt().format(ms);
 
 export function formatDateTime(ms: number, nowMs = Date.now()) {
-  return `${formatDate(ms, nowMs)}, ${timeFmt.format(ms)}`;
+  return `${formatDate(ms, nowMs)}, ${timeFmt().format(ms)}`;
 }
 
 /** Value for a datetime-local input, in local time rather than UTC. */
