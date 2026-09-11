@@ -345,6 +345,21 @@ export function LogDoseSheet({
         })
       : null;
 
+  /*
+   * The reading for a nasal dose, recorded rather than recomputed later.
+   *
+   * The form has shown presses since sprays arrived, and then wrote nothing
+   * down, so the Log had only micrograms to show for a dose measured in pumps.
+   * Working it out afterwards from the bottle would be answering with today's
+   * concentration a question about last Tuesday's.
+   */
+  const nasalPresses =
+    nasal && vial && spraysForDose(vial, doseMcg) > 0
+      ? spraysForDose(vial, doseMcg)
+      : // A bottle that has not been made up yet gives zero presses, which is
+        // the absence of a reading rather than a reading of none.
+        undefined;
+
   // Above the early return, because it holds a ref and a hook that only runs
   // sometimes is a hook that changes order between renders.
   const dismiss = useBackdropDismiss(onClose);
@@ -365,6 +380,7 @@ export function LogDoseSheet({
         vialId: vialId || undefined,
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
+        presses: nasalPresses,
         // Both, and the id is the one that carries the capacity and the marks.
         // Scale stays because it is what the Log reads and what the CSV exports.
         syringeId: draw ? syringe.id : undefined,
@@ -388,6 +404,7 @@ export function LogDoseSheet({
       vialId: vialId || undefined,
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
+      presses: nasalPresses,
       syringeId: draw ? syringe.id : undefined,
       syringeScale: draw ? syringe.scale : undefined,
       skipped: skipped || undefined,
