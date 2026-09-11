@@ -26,6 +26,14 @@ export const DOSE_CSV_HEADER = [
   "feeling",
   "side_effects",
   "notes",
+  /*
+   * Appended rather than slotted in beside `units`, so a reader keying on
+   * position rather than on the header row does not silently shift by one.
+   * Its own column because `units` is a syringe reading: one column holding
+   * marks for one row and pumps for the next would be a column that means two
+   * things, and the CSV is what somebody takes to a spreadsheet to add up.
+   */
+  "presses",
 ] as const;
 
 /** Quote only when the value would otherwise break the row. */
@@ -64,6 +72,7 @@ export function doseCsv(logs: DoseLog[], nameFor: (peptideId: string) => string)
         // spreadsheet should not have to think about that.
         (l.sideEffects ?? []).join("; "),
         l.notes ?? "",
+        l.presses ?? "",
       ]
         .map(escapeCsv)
         .join(",");
