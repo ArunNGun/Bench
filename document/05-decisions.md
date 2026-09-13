@@ -344,3 +344,19 @@ what a person who wants Slovenian will find on their first screen after it.
 The same applies to the `metadata` export in `src/app/layout.tsx`, the page
 title and description a search engine and a browser tab show. It is computed on
 the server for the same reason and belongs to the same piece of work.
+
+## A list of choices comes from the function that produces the default
+
+`siteChoices` is `suggestSite` stopped short rather than reduced to one: the
+same ranking, the same pinned filter, the same fallback. A test asserts that
+`siteChoices(...)[0].site === suggestSite(...)`.
+
+This looks like duplication worth removing and is the opposite. The panel of
+sites stands beside a button that logs in one tap, and the row above both of
+them names the site that button will write. Three surfaces, one answer. Written
+as two rankings that happen to agree today, the day they stop agreeing is the
+day the screen offers a site, records a different one, and goes on suggesting
+from a rotation history that no longer describes the body. Nothing would fail
+loudly. The rule generalises: wherever a default is offered alongside the
+alternatives to it, the alternatives are the default's own ranking, held to it
+by a test.
