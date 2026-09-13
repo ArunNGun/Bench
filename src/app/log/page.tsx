@@ -308,12 +308,31 @@ export default function LogPage() {
                           )}
                         </div>
                         <div className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-[var(--muted)]">
-                          {l.units != null && !l.skipped && (
-                            <span className="tnum font-mono">
-                              {trim(l.units, 2)} {t("stock_marks")}
-                              {l.syringeScale === "U40" ? " (U-40)" : ""}
-                            </span>
-                          )}
+                          {/*
+                            A dose that went up a nose reads in presses.
+
+                            This said marks for everything with a number
+                            against it, which for a nasal dose is the wrong
+                            word for the wrong instrument. The route decides,
+                            not the presence of a figure: an old nasal dose
+                            carrying syringe units from before it was logged
+                            that way is still a nasal dose, and calling its
+                            units marks would be repeating the mistake with
+                            older data.
+                          */}
+                          {!l.skipped &&
+                            (l.route === "intranasal"
+                              ? l.presses != null && (
+                                  <span className="tnum font-mono">
+                                    {t("count_presses", { n: l.presses })}
+                                  </span>
+                                )
+                              : l.units != null && (
+                                  <span className="tnum font-mono">
+                                    {trim(l.units, 2)} {t("stock_marks")}
+                                    {l.syringeScale === "U40" ? " (U-40)" : ""}
+                                  </span>
+                                ))}
                           {siteLabel && (
                             <span className="font-medium text-[var(--ink)]">{siteLabel}</span>
                           )}

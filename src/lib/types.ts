@@ -405,6 +405,20 @@ export interface DoseLog {
   volumeMl?: number;
   units?: number;
   /**
+   * Presses, for a dose that went up a nose.
+   *
+   * Separate from `units` rather than sharing it. `units` is a syringe reading
+   * and travels with `syringeScale` and `syringeId`; a CSV column holding
+   * marks for one row and pumps for the next would be a column that means two
+   * things. Keeping them apart is also what lets the Log tell a dose that was
+   * measured in presses from one whose reading was never recorded.
+   *
+   * Absent on every nasal dose logged before this existed, which is honest:
+   * nothing wrote down what the bottle read at the time, and recomputing it
+   * from today's bottle would be inventing a number for a past event.
+   */
+  presses?: number;
+  /**
    * The exact barrel, by id from `SYRINGES`.
    *
    * `syringeScale` came first and is not enough: it says U-100 or U-40 and
