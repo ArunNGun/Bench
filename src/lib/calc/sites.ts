@@ -142,6 +142,33 @@ export function suggestSite(
   return ranked[0].site;
 }
 
+/**
+ * The sites worth offering for the next dose, best first.
+ *
+ * The same ranking and the same filter `suggestSite` uses, stopped short rather
+ * than reduced to one. That is the point: the first entry here and the site the
+ * one-tap button writes have to be the same site, or the list contradicts the
+ * button standing next to it. A test holds them together.
+ *
+ * `limit` keeps the panel short enough not to shove the page around. Where a
+ * protocol pins its own sites there are usually three or four of them, and the
+ * screen offers a way through to all of them for the rest.
+ */
+export function siteChoices(
+  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  nowMs: number,
+  restDays = 14,
+  allowed?: InjectionSite[] | null,
+  limit = 5): SiteUsage[] {
+  const ranked = siteUsage(logs, nowMs, restDays);
+  const set = allowed?.length ? new Set(allowed) : null;
+  const within = set ? ranked.filter((s) => set.has(s.site)) : ranked;
+
+  // An empty pinned list, or one naming sites that no longer exist, falls back
+  // to every site rather than to nothing. suggestSite does the same.
+  return (within.length ? within : ranked).slice(0, Math.max(1, limit));
+}
+
 /** Sites hit hard enough recently that they are worth resting. */
 export function overusedSites(
   logs: Pick<DoseLog, "at" | "site" | "skipped">[],

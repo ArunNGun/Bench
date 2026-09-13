@@ -41,7 +41,7 @@ import {
   unloggedDoseTimes,
 } from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
-import { suggestSite } from "@/lib/calc/sites";
+import { siteChoices, suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
   recentDays,
@@ -66,6 +66,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
+import { LogDoseButton } from "@/components/LogDoseButton";
 import { translate, useLang, useLangStore, type TranslationKey } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
@@ -78,6 +79,7 @@ import {
   INJECTION_SITES,
   type DoseLog,
   type HalfLifeEstimate,
+  type InjectionSite,
   type Protocol,
 } from "@/lib/types";
 
@@ -171,6 +173,35 @@ export default function NowPage() {
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
   /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
   const [confirmEarly, setConfirmEarly] = useState<string | null>(null);
+  /**
+   * The protocol whose site list is open, or null.
+   *
+   * Held here rather than inside each button so that opening one closes the
+   * others. Two panels open at once on a phone is two overlapping lists of the
+   * same site names, and a tap that writes a dose belongs to only one of them.
+   */
+  const [siteMenu, setSiteMenu] = useState<string | null>(null);
+
+  /**
+   * Write a dose from a row, at a given site.
+   *
+   * One place, because there are now three buttons that do this and they must
+   * not drift: the same fields, the same undo note, and the site the caller
+   * names rather than one recomputed here.
+   */
+  const logDose = useCallback(
+    (protocol: Protocol, name: string, doseMcg: number, site: InjectionSite | undefined) => {
+      const id = addLog({
+        peptideId: protocol.peptideId,
+        protocolId: protocol.id,
+        at: Date.now(),
+        doseMcg,
+        route: protocol.route,
+        site,
+      });
+      setLastQuickLog({ id, name });
+    },
+    [addLog]);
 
   const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
 
@@ -465,78 +496,109 @@ export default function NowPage() {
 
       {needsAttention.length > 0 && (
         <div className="space-y-2.5">
-          {needsAttention.map((track) => (
-            <Card
-              key={track.protocol.id}
-              className={`flex flex-wrap items-center gap-3 p-3.5 ${
-                track.due.state === "overdue" ? "border-[var(--rose)]/45" : "border-[var(--tangerine)]/45"
-              }`}
-            >
-              <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>{t(DUE_KEY[track.due.label])}</Badge>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
-                  {track.color && (
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: track.color }}
+          {needsAttention.map((track) => {
+            const name = track.peptide?.name ?? track.protocol.peptideId;
+            /*
+             * A nasal spray has no site, so its button has nothing to open and
+             * stays the plain button it was. The rule matches the full form,
+             * which hides the map on the same test.
+             *
+             * The suggestion is worked out against `now`, the ticking minute,
+             * rather than against the instant of the tap. The two cannot differ
+             * by enough to change the ranking, and reading the same clock is
+             * what lets the row name the site it is about to write.
+             */
+            const choices =
+              track.protocol.route === "intranasal"
+                ? []
+                : siteChoices(
+                    logs.filter((l) => l.peptideId === track.protocol.peptideId),
+                    now,
+                    14,
+                    track.protocol.sites);
+
+            return (
+              <Card
+                key={track.protocol.id}
+                className={`flex flex-wrap items-center gap-3 p-3.5 ${
+                  track.due.state === "overdue"
+                    ? "border-[var(--rose)]/45"
+                    : "border-[var(--tangerine)]/45"
+                }`}
+              >
+                <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>
+                  {t(DUE_KEY[track.due.label])}
+                </Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
+                    {track.color && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: track.color }}
+                      />
+                    )}
+                    <span className="truncate font-medium" style={{ color: track.color ?? "var(--ink)" }}>
+                      {name}
+                    </span>
+                    <span className="tnum font-mono text-[13px] text-[var(--ink)]">
+                      {formatDose(track.targetMcg)}
+                    </span>
+                    <DoseMarks
+                      peptideId={track.protocol.peptideId}
+                      doseMcg={track.targetMcg}
+                      nowMs={now}
+                      route={track.protocol.route}
+                      className="text-[12px] text-[var(--faint)]"
                     />
-                  )}
-                  <span className="truncate font-medium" style={{ color: track.color ?? "var(--ink)" }}>
-                    {track.peptide?.name ?? track.protocol.peptideId}
-                  </span>
-                  <span className="tnum font-mono text-[13px] text-[var(--ink)]">
-                    {formatDose(track.targetMcg)}
-                  </span>
-                  <DoseMarks
-                    peptideId={track.protocol.peptideId}
-                    doseMcg={track.targetMcg}
+                  </div>
+                  <div className="text-[12px] text-[var(--muted)]">
+                    {track.due.at != null &&
+                      (track.due.state === "overdue"
+                        ? t("now_was_due", { when: relativeTime(track.due.at, now) })
+                        : t("now_scheduled_at", { when: relativeTime(track.due.at, now) }))}
+                    {/*
+                      The site belongs here and not on the button. Site names run
+                      from "Left thigh" to "Abdomen upper-right", and a button
+                      carrying one would be a different width in every row.
+                    */}
+                    {choices.length > 0 && (
+                      <span className="text-[var(--faint)]">
+                        {" "}
+                        · {t("now_at_site", { site: choices[0].label })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <LogDoseButton
+                    label={t("now_logged")}
+                    title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
+                    dose={formatDose(track.targetMcg)}
+                    choices={choices}
                     nowMs={now}
-                    route={track.protocol.route}
-                    className="text-[12px] text-[var(--faint)]"
+                    open={siteMenu === track.protocol.id}
+                    onOpenChange={(open) => setSiteMenu(open ? track.protocol.id : null)}
+                    onLog={(site) => logDose(track.protocol, name, track.targetMcg, site)}
+                    onAllSites={() => {
+                      setLogPeptideId(track.protocol.peptideId);
+                      setLogOpen(true);
+                    }}
                   />
+                  {/* Dimmed while a panel is open, so the eye has one place to be. */}
+                  <Button
+                    title={t("now_open_full_form")}
+                    className={siteMenu === track.protocol.id ? "opacity-50" : undefined}
+                    onClick={() => {
+                      setLogPeptideId(track.protocol.peptideId);
+                      setLogOpen(true);
+                    }}
+                  >
+                    {t("now_details")}
+                  </Button>
                 </div>
-                <div className="text-[12px] text-[var(--muted)]">
-                  {track.due.at != null &&
-                    (track.due.state === "overdue"
-                      ? t("now_was_due", { when: relativeTime(track.due.at, now) })
-                      : t("now_scheduled_at", { when: relativeTime(track.due.at, now) }))}
-                </div>
-              </div>
-              <div className="flex gap-1.5">
-                <Button
-                  variant="primary"
-                  title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
-                  onClick={() => {
-                    const id = addLog({
-                      peptideId: track.protocol.peptideId,
-                      protocolId: track.protocol.id,
-                      at: Date.now(),
-                      doseMcg: track.targetMcg,
-                      route: track.protocol.route,
-                      // Rotate within the protocol's pinned sites, if it has any.
-                      site: suggestSite(
-                        logs.filter((l) => l.peptideId === track.protocol.peptideId),
-                        Date.now(),
-                        14,
-                        track.protocol.sites),
-                    });
-                    setLastQuickLog({ id, name: track.peptide?.name ?? track.protocol.peptideId });
-                  }}
-                >
-                  <Check size={15} /> {t("now_logged")}
-                </Button>
-                <Button
-                  title={t("now_open_full_form")}
-                  onClick={() => {
-                    setLogPeptideId(track.protocol.peptideId);
-                    setLogOpen(true);
-                  }}
-                >
-                  {t("now_details")}
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -599,23 +661,20 @@ export default function NowPage() {
                         <Button
                           variant="primary"
                           onClick={() => {
-                            const id = addLog({
-                              peptideId: track.protocol.peptideId,
-                              protocolId: track.protocol.id,
-                              at: Date.now(),
-                              doseMcg: track.targetMcg,
-                              route: track.protocol.route,
-                              site: suggestSite(
+                            setConfirmEarly(null);
+                            logDose(
+                              track.protocol,
+                              track.peptide?.name ?? track.protocol.peptideId,
+                              track.targetMcg,
+                              // Rotate within the protocol's pinned sites, if it has any.
+                              // This row asks before it writes and already has three
+                              // buttons, so it takes the suggestion and leaves choosing
+                              // a site to Details.
+                              suggestSite(
                                 logs.filter((l) => l.peptideId === track.protocol.peptideId),
                                 Date.now(),
                                 14,
-                                track.protocol.sites),
-                            });
-                            setConfirmEarly(null);
-                            setLastQuickLog({
-                              id,
-                              name: track.peptide?.name ?? track.protocol.peptideId,
-                            });
+                                track.protocol.sites));
                           }}
                         >
                           <Check size={15} /> {t("now_yes_log_it")}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BODY, DAY, SITE_DOTS, overusedSites, siteUsage, suggestSite } from "./sites";
+import { BODY, DAY, SITE_DOTS, overusedSites, siteChoices, siteUsage, suggestSite } from "./sites";
 import { INJECTION_SITES, type DoseLog, type InjectionSite } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
@@ -99,6 +99,52 @@ describe("suggestSite", () => {
       logs.push({ at: NOW + i * 1000, site, skipped: false });
     }
     expect(new Set(picked).size).toBe(INJECTION_SITES.length);
+  });
+});
+
+describe("siteChoices", () => {
+  const pinned: InjectionSite[] = ["thigh-l", "thigh-r", "glute-l"];
+
+  /*
+   * The one that matters. The list sits directly beside a button that logs in
+   * one tap, and the button calls suggestSite. If the two ever disagree, the
+   * row says it will use one site and uses another, which is the kind of thing
+   * nobody notices until a rotation has gone wrong for a month.
+   */
+  it("offers the suggested site first, whatever the logs look like", () => {
+    const logs: Pick<DoseLog, "at" | "site" | "skipped">[] = [];
+    for (let i = 0; i < 12; i++) {
+      const at = NOW + i * DAY;
+      expect(siteChoices(logs, at, 14, pinned)[0].site).toBe(suggestSite(logs, at, 14, pinned));
+      logs.push({ at, site: suggestSite(logs, at, 14, pinned), skipped: false });
+    }
+  });
+
+  it("agrees with suggestSite when nothing is pinned either", () => {
+    const logs = INJECTION_SITES.slice(0, 9).map((s, i) => log(s.id, i + 1));
+    expect(siteChoices(logs, NOW)[0].site).toBe(suggestSite(logs, NOW));
+  });
+
+  it("offers only pinned sites", () => {
+    const logs = [log("abdomen-ll", 30), log("thigh-l", 1)];
+    const sites = siteChoices(logs, NOW, 14, pinned).map((c) => c.site);
+    expect(sites.every((s) => pinned.includes(s))).toBe(true);
+  });
+
+  it("stops at the limit, so the panel cannot push the page around", () => {
+    expect(siteChoices([], NOW, 14, null, 3)).toHaveLength(3);
+    expect(siteChoices([], NOW, 14, null, 5)).toHaveLength(5);
+  });
+
+  /* A pinned list naming sites that no longer exist must not empty the panel. */
+  it("falls back to every site when the pinned list yields nothing", () => {
+    const stale = ["not-a-site"] as unknown as InjectionSite[];
+    expect(siteChoices([], NOW, 14, stale).length).toBeGreaterThan(0);
+  });
+
+  it("carries the rest figure the row shows, rather than making the screen recompute it", () => {
+    const choices = siteChoices([log("thigh-l", 3)], NOW, 14, ["thigh-l"]);
+    expect(Math.round(choices[0].daysSince)).toBe(3);
   });
 });
 
