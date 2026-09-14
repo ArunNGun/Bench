@@ -84,6 +84,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: false
+
+      # Force-accept all SDK licenses (setup-android@v3 exits 1 on some
+      # license prompts it can't handle non-interactively; piping yes through
+      # sdkmanager --licenses is the standard workaround).
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       # Restore the debug keystore so build.gradle can find it at
       # ~/.android/debug.keystore — exactly where it expects it.
