@@ -45,7 +45,7 @@ import {
   transferToSpray,
 } from "@/lib/calc/spray";
 import { converterUrl } from "@/lib/calc/converter";
-import { formatConcentration, formatDate, formatDose, formatDosePerDay, trim } from "@/lib/format";
+import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
   costPerVialInKit,
   formatMoney,
@@ -559,17 +559,20 @@ function VialRow({
             {/*
               The count is injections, which is what actually comes out of a
               vial, and on a plan taken twice a day that is half as many days.
-              Naming the rhythm beside the amount is what lets the reader do
-              that division; without it, "250 mcg doses" contradicts a plan
-              they entered as 500.
+              The rhythm is named so the reader can do that division, and so
+              that "250 mcg doses" does not contradict a plan they entered as
+              500. It is a clause of its own and not a multiplier on the
+              amount, which is the bug this replaces: "40 doses of 250 mcg × 2"
+              reads as forty 500 mcg doses, which is twice what the vial holds.
             */}
             <span className="text-[var(--muted)]">
               {t("stock_more_doses_suffix", {
                 n: Math.floor(remainingMcg / doseMcg),
-                per: formatDosePerDay(doseMcg, timesPerDay),
+                per: formatDose(doseMcg),
                 where: many ? t("stock_across_these_vials") : t("stock_in_this_vial"),
               })}{" "}
-              · {t("stock_left_suffix", { amount: formatDose(remainingMcg) })}
+              {timesPerDay > 1 && <>· {t("stock_times_per_day", { n: timesPerDay })} </>}·{" "}
+              {t("stock_left_suffix", { amount: formatDose(remainingMcg) })}
             </span>
           </p>
         )}

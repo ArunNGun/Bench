@@ -578,3 +578,24 @@ explaining it with the wrong vial.
 The general shape: when a screen filters something out, the filter is invisible
 and the number is not. If a zero can be caused by a rule rather than by an
 empty shelf, the rule has to say so where the zero is.
+
+## A per-day amount inside a per-dose count
+
+The Stock page said **40 more doses of 250 mcg × 2 in this vial**, of a 10 mg
+vial. The count was right: forty 250 mcg injections is 10 mg. The `× 2` came
+from `formatDosePerDay`, put there so that a reader who had entered 500 as the
+day's dose would not be told the plan was 250. But glued to the amount inside
+"doses of ...", it reads as part of the amount, and the sentence claims forty
+500 mcg doses, which is 20 mg, twice what the vial holds.
+
+`formatDosePerDay` is for a place that names a plan: the protocol summary on
+Today, the row on Plan. In a sentence that counts something, the count and the
+amount have to be about the same unit, and the rhythm needs its own clause:
+"40 more doses of 250 mcg in this vial · 2× a day · 10 mg left".
+
+The rule: **`formatDosePerDay` never goes in a slot that a number counts.** If a
+sentence has both an `n` and an amount, the amount is `formatDose`.
+
+Worth checking the neighbours when this shape appears. The log sheet's "n more
+doses of {dose} in this vial after this one" was already using `formatDose` and
+was correct.
