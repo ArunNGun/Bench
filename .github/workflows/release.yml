@@ -82,14 +82,11 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: false
-
-      # Force-accept all SDK licenses (setup-android@v3 exits 1 on some
-      # license prompts it can't handle non-interactively; piping yes through
-      # sdkmanager --licenses is the standard workaround).
+      # The ubuntu-latest runner ships with Android SDK + sdkmanager pre-installed.
+      # android-actions/setup-android@v3 was removed because it runs sdkmanager
+      # --licenses internally and exits 1 on newer cmdline-tools even with
+      # accept-android-sdk-licenses: true. We use the pre-installed SDK directly
+      # and accept licenses ourselves with `yes |`.
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
