@@ -22,11 +22,10 @@ import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { diaryDays, ratableDay } from "@/lib/calc/checkins";
 import { overusedSites } from "@/lib/calc/sites";
-import { formatDate, formatDose, formatDateTime, formatTime, percent, toDateInput, fromDateInput, trim } from "@/lib/format";
+import { formatDate, formatDose, formatDateTime, formatTime, percent, siteLabel, toDateInput, fromDateInput, trim } from "@/lib/format";
 import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
 import {
   FEELING_LABELS,
-  INJECTION_SITES,
   SYMPTOMS,
   SYMPTOM_SCALE_MAX,
   type CheckIn,
@@ -165,7 +164,7 @@ export default function LogPage() {
           {overused.length > 0 && (
             <Callout tone="warn" className="mt-3">
               {t("log_overused_line", {
-                sites: overused.map((s) => s.label).join(", "),
+                sites: overused.map((s) => siteLabel(s.site)).join(", "),
                 n: overused[0].recentCount,
               })}{" "}
               {t("log_overused_why")}
@@ -252,7 +251,7 @@ export default function LogPage() {
                 {entries.map((l) => {
                   const p = findPeptide(custom, l.peptideId);
                   const color = doseColor(palette, l);
-                  const siteLabel = INJECTION_SITES.find((s) => s.id === l.site)?.label;
+                  const site = l.site ? siteLabel(l.site) : undefined;
                   return (
                     <Card
                       key={l.id}
@@ -308,14 +307,33 @@ export default function LogPage() {
                           )}
                         </div>
                         <div className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-[var(--muted)]">
-                          {l.units != null && !l.skipped && (
-                            <span className="tnum font-mono">
-                              {trim(l.units, 2)} {t("stock_marks")}
-                              {l.syringeScale === "U40" ? " (U-40)" : ""}
-                            </span>
-                          )}
-                          {siteLabel && (
-                            <span className="font-medium text-[var(--ink)]">{siteLabel}</span>
+                          {/*
+                            A dose that went up a nose reads in presses.
+
+                            This said marks for everything with a number
+                            against it, which for a nasal dose is the wrong
+                            word for the wrong instrument. The route decides,
+                            not the presence of a figure: an old nasal dose
+                            carrying syringe units from before it was logged
+                            that way is still a nasal dose, and calling its
+                            units marks would be repeating the mistake with
+                            older data.
+                          */}
+                          {!l.skipped &&
+                            (l.route === "intranasal"
+                              ? l.presses != null && (
+                                  <span className="tnum font-mono">
+                                    {t("count_presses", { n: l.presses })}
+                                  </span>
+                                )
+                              : l.units != null && (
+                                  <span className="tnum font-mono">
+                                    {trim(l.units, 2)} {t("stock_marks")}
+                                    {l.syringeScale === "U40" ? " (U-40)" : ""}
+                                  </span>
+                                ))}
+                          {site && (
+                            <span className="font-medium text-[var(--ink)]">{site}</span>
                           )}
                         </div>
                         {/*

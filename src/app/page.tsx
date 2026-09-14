@@ -20,11 +20,18 @@ import {
   type Tone,
 } from "@/components/ui";
 import { findPeptide, stockFor, useStore, useProfileData } from "@/lib/store";
-import { curveFor, isMeasuredInPeople, snapshot, type DoseEvent } from "@/lib/calc/pk";
+import {
+  curveFor,
+  isMeasuredInPeople,
+  snapshot,
+  type DoseEvent,
+  type PhaseId,
+} from "@/lib/calc/pk";
 import { toDisplayWeight } from "@/lib/calc/outcomes";
 import {
   dosesPerDoseDay,
   dueStatus,
+  type DueLabel,
   endOfLocalDay,
   phaseSpanAt,
   logsForProtocol,
@@ -34,7 +41,7 @@ import {
   unloggedDoseTimes,
 } from "@/lib/calc/schedule";
 import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
-import { suggestSite } from "@/lib/calc/sites";
+import { siteChoices, suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
   recentDays,
@@ -57,8 +64,10 @@ import {
   formatTime,
   formatWeekday,
   relativeTime,
+  siteLabel,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
+import { LogDoseButton } from "@/components/LogDoseButton";
 import { translate, useLang, useLangStore, type TranslationKey } from "@/lib/i18n";
 import { WeightCard } from "@/components/WeightCard";
 import { CheckInCard } from "@/components/CheckInCard";
@@ -68,13 +77,39 @@ import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
 import { DoseMarks } from "@/components/DoseMarks";
 import {
-  INJECTION_SITES,
   type DoseLog,
   type HalfLifeEstimate,
+  type InjectionSite,
   type Protocol,
 } from "@/lib/types";
 
 const DAY = 86_400_000;
+
+/** The calc layer names a state; the page is where it becomes a word. */
+const DUE_KEY: Record<DueLabel, TranslationKey> = {
+  paused: "due_paused",
+  "due-now": "due_now",
+  overdue: "due_overdue",
+  none: "due_none",
+  "due-today": "due_today",
+  scheduled: "due_scheduled",
+};
+
+const CURVE_KEY: Record<PhaseId, TranslationKey> = {
+  cleared: "curve_cleared",
+  peak: "curve_peak",
+  absorbing: "curve_absorbing",
+  active: "curve_active",
+  trailing: "curve_trailing",
+};
+
+const CURVE_DETAIL_KEY: Record<PhaseId, TranslationKey> = {
+  cleared: "curve_cleared_detail",
+  peak: "curve_peak_detail",
+  absorbing: "curve_absorbing_detail",
+  active: "curve_active_detail",
+  trailing: "curve_trailing_detail",
+};
 
 export default function NowPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -127,7 +162,7 @@ export default function NowPage() {
       const conc = vialConcentration(vial);
       const name = findPeptide(custom, vial.peptideId)?.name ?? vial.peptideId;
       return {
-        label: `${name} vial`,
+        label: translate(lang, "now_vial_label", { name }),
         concentration: Number.isFinite(conc)
           ? formatConcentration(conc)
           : translate(lang, "now_not_reconstituted"),
@@ -138,6 +173,35 @@ export default function NowPage() {
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
   /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
   const [confirmEarly, setConfirmEarly] = useState<string | null>(null);
+  /**
+   * The protocol whose site list is open, or null.
+   *
+   * Held here rather than inside each button so that opening one closes the
+   * others. Two panels open at once on a phone is two overlapping lists of the
+   * same site names, and a tap that writes a dose belongs to only one of them.
+   */
+  const [siteMenu, setSiteMenu] = useState<string | null>(null);
+
+  /**
+   * Write a dose from a row, at a given site.
+   *
+   * One place, because there are now three buttons that do this and they must
+   * not drift: the same fields, the same undo note, and the site the caller
+   * names rather than one recomputed here.
+   */
+  const logDose = useCallback(
+    (protocol: Protocol, name: string, doseMcg: number, site: InjectionSite | undefined) => {
+      const id = addLog({
+        peptideId: protocol.peptideId,
+        protocolId: protocol.id,
+        at: Date.now(),
+        doseMcg,
+        route: protocol.route,
+        site,
+      });
+      setLastQuickLog({ id, name });
+    },
+    [addLog]);
 
   const active = useMemo(() => protocols.filter((p) => p.active), [protocols]);
 
@@ -323,9 +387,11 @@ export default function NowPage() {
         if (!mine) continue;
         out.push({
           id: track.protocol.id,
-          text: `${track.peptide!.name} is drawn from ${formatHalfLife(mine.hours)}, which you entered${
-            mine.note ? ` (${mine.note})` : ""
-          }. The library has no published figure for it.`,
+          text: translate(lang, "now_drawn_from_yours", {
+            name: track.peptide!.name,
+            hours: formatHalfLife(mine.hours),
+            note: mine.note ? ` (${mine.note})` : "",
+          }),
           evidence: "anecdotal" as const,
         });
         continue;
@@ -334,12 +400,15 @@ export default function NowPage() {
       if (!e) continue;
       out.push({
         id: track.protocol.id,
-        text: `${track.peptide!.name}: ${describeHalfLifeEstimate(e)}`,
+        text: translate(lang, "now_estimate_line", {
+          name: track.peptide!.name,
+          detail: describeHalfLifeEstimate(e),
+        }),
         evidence: e.evidence,
       });
     }
     return out;
-  }, [tracks, overrides]);
+  }, [tracks, overrides, lang]);
 
   const needsAttention = tracks.filter(
     (track) => track.due.state === "overdue" || track.due.state === "due-now");
@@ -427,78 +496,118 @@ export default function NowPage() {
 
       {needsAttention.length > 0 && (
         <div className="space-y-2.5">
-          {needsAttention.map((track) => (
-            <Card
-              key={track.protocol.id}
-              className={`flex flex-wrap items-center gap-3 p-3.5 ${
-                track.due.state === "overdue" ? "border-[var(--rose)]/45" : "border-[var(--tangerine)]/45"
-              }`}
-            >
-              <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>{track.due.label}</Badge>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
-                  {track.color && (
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: track.color }}
+          {needsAttention.map((track) => {
+            const name = track.peptide?.name ?? track.protocol.peptideId;
+            /*
+             * A nasal spray has no site, so its button has nothing to open and
+             * stays the plain button it was. The rule matches the full form,
+             * which hides the map on the same test.
+             *
+             * The suggestion is worked out against `now`, the ticking minute,
+             * rather than against the instant of the tap. The two cannot differ
+             * by enough to change the ranking, and reading the same clock is
+             * what lets the row name the site it is about to write.
+             */
+            const choices =
+              track.protocol.route === "intranasal"
+                ? []
+                : siteChoices(
+                    logs.filter((l) => l.peptideId === track.protocol.peptideId),
+                    now,
+                    14,
+                    track.protocol.sites);
+
+            return (
+              <Card
+                key={track.protocol.id}
+                className={`flex flex-wrap items-center gap-3 p-3.5 ${
+                  track.due.state === "overdue"
+                    ? "border-[var(--rose)]/45"
+                    : "border-[var(--tangerine)]/45"
+                }`}
+              >
+                <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>
+                  {t(DUE_KEY[track.due.label])}
+                </Badge>
+                {/*
+                  The minimum width is what makes the card wrap on a phone.
+                  `flex-1` alone is `flex: 1 1 0%`, so this column has a base
+                  size of nothing and a flex line is never over-full: the
+                  buttons stay on the first row and squeeze the name, the dose
+                  and the time into a column three characters wide. A floor
+                  under the text makes the line genuinely too long, and the
+                  buttons wrap underneath, which is what a narrow screen wants.
+                */}
+                <div className="min-w-[200px] flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
+                    {track.color && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: track.color }}
+                      />
+                    )}
+                    <span className="truncate font-medium" style={{ color: track.color ?? "var(--ink)" }}>
+                      {name}
+                    </span>
+                    <span className="tnum font-mono text-[13px] text-[var(--ink)]">
+                      {formatDose(track.targetMcg)}
+                    </span>
+                    <DoseMarks
+                      peptideId={track.protocol.peptideId}
+                      doseMcg={track.targetMcg}
+                      nowMs={now}
+                      route={track.protocol.route}
+                      className="text-[12px] text-[var(--faint)]"
                     />
-                  )}
-                  <span className="truncate font-medium" style={{ color: track.color ?? "var(--ink)" }}>
-                    {track.peptide?.name ?? track.protocol.peptideId}
-                  </span>
-                  <span className="tnum font-mono text-[13px] text-[var(--ink)]">
-                    {formatDose(track.targetMcg)}
-                  </span>
-                  <DoseMarks
-                    peptideId={track.protocol.peptideId}
-                    doseMcg={track.targetMcg}
+                  </div>
+                  <div className="text-[12px] text-[var(--muted)]">
+                    {track.due.at != null &&
+                      (track.due.state === "overdue"
+                        ? t("now_was_due", { when: relativeTime(track.due.at, now) })
+                        : t("now_scheduled_at", { when: relativeTime(track.due.at, now) }))}
+                    {/*
+                      The site belongs here and not on the button. Site names run
+                      from "Left thigh" to "Abdomen upper-right", and a button
+                      carrying one would be a different width in every row.
+                    */}
+                    {choices.length > 0 && (
+                      <span className="text-[var(--faint)]">
+                        {" "}
+                        · {t("now_at_site", { site: siteLabel(choices[0].site) })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="ml-auto flex shrink-0 gap-1.5">
+                  <LogDoseButton
+                    label={t("now_logged")}
+                    title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
+                    dose={formatDose(track.targetMcg)}
+                    choices={choices}
                     nowMs={now}
-                    route={track.protocol.route}
-                    className="text-[12px] text-[var(--faint)]"
+                    open={siteMenu === track.protocol.id}
+                    onOpenChange={(open) => setSiteMenu(open ? track.protocol.id : null)}
+                    onLog={(site) => logDose(track.protocol, name, track.targetMcg, site)}
+                    onAllSites={() => {
+                      setLogPeptideId(track.protocol.peptideId);
+                      setLogOpen(true);
+                    }}
                   />
+                  {/* Dimmed while a panel is open, so the eye has one place to be. */}
+                  <Button
+                    title={t("now_open_full_form")}
+                    className={siteMenu === track.protocol.id ? "opacity-50" : undefined}
+                    onClick={() => {
+                      setLogPeptideId(track.protocol.peptideId);
+                      setLogOpen(true);
+                    }}
+                  >
+                    {t("now_details")}
+                  </Button>
                 </div>
-                <div className="text-[12px] text-[var(--muted)]">
-                  {track.due.at != null &&
-                    (track.due.state === "overdue"
-                      ? t("now_was_due", { when: relativeTime(track.due.at, now) })
-                      : t("now_scheduled_at", { when: relativeTime(track.due.at, now) }))}
-                </div>
-              </div>
-              <div className="flex gap-1.5">
-                <Button
-                  variant="primary"
-                  title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
-                  onClick={() => {
-                    const id = addLog({
-                      peptideId: track.protocol.peptideId,
-                      protocolId: track.protocol.id,
-                      at: Date.now(),
-                      doseMcg: track.targetMcg,
-                      route: track.protocol.route,
-                      // Rotate within the protocol's pinned sites, if it has any.
-                      site: suggestSite(
-                        logs.filter((l) => l.peptideId === track.protocol.peptideId),
-                        Date.now(),
-                        14,
-                        track.protocol.sites),
-                    });
-                    setLastQuickLog({ id, name: track.peptide?.name ?? track.protocol.peptideId });
-                  }}
-                >
-                  <Check size={15} /> {t("now_logged")}
-                </Button>
-                <Button
-                  title={t("now_open_full_form")}
-                  onClick={() => {
-                    setLogPeptideId(track.protocol.peptideId);
-                    setLogOpen(true);
-                  }}
-                >
-                  {t("now_details")}
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -520,7 +629,8 @@ export default function NowPage() {
                   <span className="tnum w-12 shrink-0 font-mono text-[12.5px] text-[var(--faint)]">
                     {formatTime(at)}
                   </span>
-                  <div className="min-w-0 flex-1">
+                  {/* Same floor as the band above, for the same reason. */}
+                  <div className="min-w-[180px] flex-1">
                     <span className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
                       {track.color && (
                         <span
@@ -555,29 +665,26 @@ export default function NowPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="ml-auto flex shrink-0 flex-wrap gap-1.5">
                     {asking ? (
                       <>
                         <Button
                           variant="primary"
                           onClick={() => {
-                            const id = addLog({
-                              peptideId: track.protocol.peptideId,
-                              protocolId: track.protocol.id,
-                              at: Date.now(),
-                              doseMcg: track.targetMcg,
-                              route: track.protocol.route,
-                              site: suggestSite(
+                            setConfirmEarly(null);
+                            logDose(
+                              track.protocol,
+                              track.peptide?.name ?? track.protocol.peptideId,
+                              track.targetMcg,
+                              // Rotate within the protocol's pinned sites, if it has any.
+                              // This row asks before it writes and already has three
+                              // buttons, so it takes the suggestion and leaves choosing
+                              // a site to Details.
+                              suggestSite(
                                 logs.filter((l) => l.peptideId === track.protocol.peptideId),
                                 Date.now(),
                                 14,
-                                track.protocol.sites),
-                            });
-                            setConfirmEarly(null);
-                            setLastQuickLog({
-                              id,
-                              name: track.peptide?.name ?? track.protocol.peptideId,
-                            });
+                                track.protocol.sites));
                           }}
                         >
                           <Check size={15} /> {t("now_yes_log_it")}
@@ -682,7 +789,7 @@ export default function NowPage() {
 
           {estimatedFrom.length > 0 && (
             <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
-              A dashed line is a shape, not a level.{" "}
+              {t("now_dashed_line")}{" "}
               {estimatedFrom.map((e) => (
                 <span
                   key={e.id}
@@ -711,7 +818,18 @@ export default function NowPage() {
       <section>
         <SectionLabel>{t("now_active_protocols")}</SectionLabel>
         <div className="space-y-2.5">
-          {tracks.map((track) => (
+          {tracks.map((track) => {
+            /*
+              Only when the curve is actually drawn from it. A compound with a
+              published figure is never offered an override, so basis is the
+              honest test rather than the presence of a stored number.
+            */
+            const yourHalfLife =
+              track.curve?.basis === "yours"
+                ? (overrides?.[track.protocol.peptideId]?.hours ?? null)
+                : null;
+
+            return (
             <Card key={track.protocol.id} className="p-4">
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
@@ -726,8 +844,8 @@ export default function NowPage() {
                       {track.peptide?.name ?? track.protocol.peptideId}
                     </Link>
                     {track.snap && (
-                      <Badge tone={track.snap.phase.id === "cleared" ? "neutral" : "sky"}>
-                        {track.snap.phase.label}
+                      <Badge tone={track.snap.phase === "cleared" ? "neutral" : "sky"}>
+                        {t(CURVE_KEY[track.snap.phase])}
                       </Badge>
                     )}
                     {/*
@@ -779,7 +897,7 @@ export default function NowPage() {
                     <span className="tnum font-semibold text-[var(--ink)]">
                       {t("now_percent_of_peak", { pct: track.snap.percentOfPeak.toFixed(0) })}
                     </span>
-                    <span className="text-[var(--muted)]">{track.snap.phase.detail}</span>
+                    <span className="text-[var(--muted)]">{t(CURVE_DETAIL_KEY[track.snap.phase])}</span>
                   </div>
                 </div>
               ) : track.blendParts.length === 0 ? (
@@ -838,16 +956,28 @@ export default function NowPage() {
                   {track.lastLog?.site && (
                     <span className="text-[var(--ink)]">
                       {" · "}
-                      {INJECTION_SITES.find((s) => s.id === track.lastLog!.site)?.label}
+                      {siteLabel(track.lastLog.site)}
                     </span>
                   )}
                 </span>
                 <span className="text-[var(--muted)]">
                   {t("library_half_life")}{" "}
                   <span className="text-[var(--ink)]">
+                    {/*
+                      Your own figure when the curve is drawn from it. This
+                      read the library's number, which for a compound you
+                      entered a half-life for is null, so the same card said
+                      Not established and then drew a curve from thirty
+                      minutes you had typed in.
+                    */}
                     {track.blendParts.length > 0
                       ? t("now_per_component")
-                      : formatHalfLife(track.peptide?.halfLifeHours ?? null)}
+                      : yourHalfLife != null
+                        ? t("now_half_life_yours", {
+                            hours: formatHalfLife(yourHalfLife),
+                            marker: t("now_your_figure"),
+                          })
+                        : formatHalfLife(track.peptide?.halfLifeHours ?? null)}
                   </span>
                 </span>
                 <span
@@ -858,9 +988,27 @@ export default function NowPage() {
                   }
                 >
                   {t("now_stock_label")}{" "}
+                  {/*
+                    A shelf with eleven doses on it says eleven, and says what
+                    is wrong with them. Zero was true of what can go in a
+                    syringe and false about what is in the fridge, and the
+                    reader comparing this with the Stock page saw only the
+                    contradiction.
+
+                    The count comes from the same rounding, so it is the number
+                    that would be here if the date passed tomorrow instead.
+                  */}
                   <span className="tnum font-mono">
-                    {t("count_doses", { n: track.stock.dosesRemaining })}
+                    {t("count_doses", {
+                      n:
+                        track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0
+                          ? track.stock.dosesExpired
+                          : track.stock.dosesRemaining,
+                    })}
                   </span>
+                  {track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0 && (
+                    <span className="text-[var(--rose)]"> · {t("now_stock_past_date")}</span>
+                  )}
                   {track.supplyDays != null && track.stock.dosesRemaining > 0 && (
                     <span className="text-[var(--faint)]">
                       {" "}
@@ -875,7 +1023,8 @@ export default function NowPage() {
                 )}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -893,13 +1042,27 @@ export default function NowPage() {
           <div className="space-y-2.5">
             {lowStock.map((track) => (
               <Callout key={track.protocol.id} tone="warn">
+                {/*
+                  A shelf held back by a date is not a shelf that is running
+                  out, and the usual sentence described it as empty of open and
+                  sealed vials alike, because both counts come from the usable
+                  ones. It reads as a compound that has vanished rather than
+                  one whose vial expired yesterday.
+                */}
                 <Rich
-                  text={t("now_low_stock", {
-                    name: track.peptide?.name ?? "",
-                    doses: t("count_doses", { n: track.stock.dosesRemaining }),
-                    open: track.stock.openCount,
-                    sealed: t("count_vials", { n: track.stock.sealedCount }),
-                  })}
+                  text={
+                    track.stock.dosesRemaining === 0 && track.stock.dosesExpired > 0
+                      ? t("now_all_past_date", {
+                          name: track.peptide?.name ?? "",
+                          doses: t("count_doses", { n: track.stock.dosesExpired }),
+                        })
+                      : t("now_low_stock", {
+                          name: track.peptide?.name ?? "",
+                          doses: t("count_doses", { n: track.stock.dosesRemaining }),
+                          open: track.stock.openCount,
+                          sealed: t("count_vials", { n: track.stock.sealedCount }),
+                        })
+                  }
                 />{" "}
                 <Link href="/stock" className="text-[var(--tangerine)] hover:underline">
                   {t("now_check_stock")}

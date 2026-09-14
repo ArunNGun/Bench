@@ -65,6 +65,23 @@ describe("doseCsv", () => {
     expect(row[feeling + 1]).toBe("");
   });
 
+  /*
+   * A nasal dose is measured in presses and a syringe dose in marks. One
+   * column for both would be a column a spreadsheet cannot add up.
+   */
+  it("keeps presses in their own column, apart from syringe units", () => {
+    const nasal = log({ route: "intranasal", presses: 2 });
+    const row = cells(doseCsv([nasal], name).rows[0]);
+    expect(row[DOSE_CSV_HEADER.indexOf("presses")]).toBe("2");
+    expect(row[DOSE_CSV_HEADER.indexOf("units")]).toBe("");
+  });
+
+  it("leaves presses empty for a dose that came out of a syringe", () => {
+    const row = cells(doseCsv([log({ units: 12 })], name).rows[0]);
+    expect(row[DOSE_CSV_HEADER.indexOf("presses")]).toBe("");
+    expect(row[DOSE_CSV_HEADER.indexOf("units")]).toBe("12");
+  });
+
   it("keeps a comma inside a note from splitting the row", () => {
     const { rows } = doseCsv([log({ notes: "sore, but fine" })], name);
     expect(rows[0]).toContain('"sore, but fine"');

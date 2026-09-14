@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { useLangStore, type Lang } from "./i18n";
+import { TRANSLATIONS } from "./i18n/translations";
+import { INJECTION_SITES } from "./types";
 import {
   formatDate,
   formatDosePerDay,
+  formatHalfLife,
+  relativeTime,
   formatDateTime,
   fromDateInput,
+  siteLabel,
   toDateInput,
   toDateTimeLocal,
   fromDateTimeLocal,
 } from "./format";
+
+const LANGS = Object.keys(TRANSLATIONS) as Lang[];
 
 describe("fromDateInput", () => {
   it("reads a picked date as that date, not the evening before", () => {
@@ -126,5 +134,111 @@ describe("formatDosePerDay", () => {
 
   it("does not multiply by nothing", () => {
     expect(formatDosePerDay(250, 0)).toBe("250 mcg");
+  });
+});
+
+/**
+ * Dates, times and durations in the reader's language.
+ *
+ * These used to take the runtime's locale, which is the browser's, and the
+ * relative formatter was pinned to "en" outright. In Slovenian the app said
+ * "Načrtovana in 26 minutes": half the sentence translated, half not.
+ */
+describe("the language the formatters use", () => {
+  const after = () => useLangStore.setState({ lang: "en" });
+  const noon = new Date(2026, 8, 27, 12, 0).getTime();
+
+  it("names the month in the chosen language", () => {
+    useLangStore.setState({ lang: "en" });
+    const english = formatDate(noon, noon);
+    useLangStore.setState({ lang: "sl" });
+    const slovenian = formatDate(noon, noon);
+    expect(english).not.toBe(slovenian);
+    expect(slovenian).toContain("sep");
+    after();
+  });
+
+  it("phrases a relative time in the chosen language", () => {
+    useLangStore.setState({ lang: "en" });
+    expect(relativeTime(noon + 26 * 60_000, noon)).toBe("in 26 minutes");
+    useLangStore.setState({ lang: "sl" });
+    expect(relativeTime(noon + 26 * 60_000, noon)).not.toContain("in 26 minutes");
+    after();
+  });
+
+  /* Intl has no phrase for this one, so it is a key like any other. */
+  it("translates just now, which Intl does not provide", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(relativeTime(noon, noon)).toBe("pravkar");
+    after();
+  });
+
+  it("translates a half-life, including the case with no figure at all", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(formatHalfLife(null)).toBe("Ni ugotovljeno");
+    expect(formatHalfLife(30)).toContain("ur");
+    after();
+  });
+
+  /*
+   * Slovenian has a dual, so two hours is not the same word as three. The
+   * family is selected by Intl.PluralRules, which is the whole reason
+   * formatHalfLife goes through translate rather than appending an s.
+   */
+  it("uses the dual where the language has one", () => {
+    useLangStore.setState({ lang: "sl" });
+    expect(formatHalfLife(2)).toBe("2 uri");
+    expect(formatHalfLife(3)).toBe("3 ure");
+    after();
+  });
+});
+
+/*
+ * A body part is a description and translates; a compound is a name and does
+ * not. These hold the first half of that, and they hold it for every site
+ * rather than for the one somebody happened to look at.
+ */
+describe("siteLabel", () => {
+  const after = () => useLangStore.setState({ lang: "en" });
+
+  it("names every site in every language", () => {
+    for (const lang of LANGS) {
+      useLangStore.setState({ lang });
+      for (const s of INJECTION_SITES) {
+        const label = siteLabel(s.id);
+        expect(label).toBeTruthy();
+        // The id leaking through is the failure this catches: a missing key
+        // falls back to "thigh-l", which reads as a bug rather than a name.
+        expect(label).not.toBe(s.id);
+      }
+    }
+    after();
+  });
+
+  it("answers differently in a language that is not English", () => {
+    useLangStore.setState({ lang: "en" });
+    const english = siteLabel("thigh-l");
+    useLangStore.setState({ lang: "sl" });
+    expect(siteLabel("thigh-l")).not.toBe(english);
+    after();
+  });
+
+  /* An import naming a site this version does not know still has to render. */
+  it("falls back to whatever it was given", () => {
+    expect(siteLabel("elbow-l" as never)).toBe("elbow-l");
+    after();
+  });
+
+  /*
+   * The CSV keeps the English label on purpose, so a file with an English
+   * header does not carry Slovenian values. This is the line that says the two
+   * are allowed to differ, and that the English one still exists.
+   */
+  it("leaves the CSV label alone", () => {
+    useLangStore.setState({ lang: "sl" });
+    const csv = INJECTION_SITES.find((s) => s.id === "thigh-l")!.label;
+    expect(csv).toBe("Left thigh");
+    expect(siteLabel("thigh-l")).not.toBe(csv);
+    after();
   });
 });

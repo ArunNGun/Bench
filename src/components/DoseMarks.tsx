@@ -20,6 +20,7 @@ import { SYRINGES, syringeById, unitsToMl } from "@/lib/calc/reconstitution";
 import { useStore, useProfileData } from "@/lib/store";
 import { formatDose, trim } from "@/lib/format";
 import type { Route } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 
 /** The scale of the syringe in Settings, falling back the way the log sheet does. */
 export function useSyringeScale() {
@@ -41,6 +42,7 @@ export function DoseMarks({
   route?: Route;
   className?: string;
 }) {
+  const { t } = useLang();
   const { vials } = useProfileData();
   const scale = useSyringeScale();
 
@@ -62,10 +64,12 @@ export function DoseMarks({
     return (
       <span
         className={`tnum font-mono ${className}`}
-        title={`${trim(mlForSprays(bottle, presses), 2)} mL in total, ${formatDose(
-          mcgPerSpray(bottle))} a press`}
+        title={t("dose_presses_title", {
+          ml: trim(mlForSprays(bottle, presses), 2),
+          dose: formatDose(mcgPerSpray(bottle)),
+        })}
       >
-        {presses} press{presses === 1 ? "" : "es"}
+        {t("count_presses", { n: presses })}
       </span>
     );
   }
@@ -83,11 +87,14 @@ export function DoseMarks({
     */
     <span
       className={`tnum font-mono ${className}`}
-      title={`${trim(marks, 2)} marks on a ${
-        scale === "U40" ? "U-40" : "U-100"
-      } barrel, ${trim(unitsToMl(marks, scale), 3)} mL`}
+      title={t("stock_marks_title", {
+        marks: trim(marks, 2),
+        scale: scale === "U40" ? "U-40" : "U-100",
+        ml: trim(unitsToMl(marks, scale), 3),
+      })}
     >
-      {trim(marks, 2)} marks{scale === "U40" ? " (U-40)" : ""}
+      {t("calc_marks_count", { n: trim(marks, 2) })}
+      {scale === "U40" ? " (U-40)" : ""}
     </span>
   );
 }

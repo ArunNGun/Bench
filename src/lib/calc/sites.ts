@@ -48,7 +48,6 @@ export interface SiteDot {
   id: InjectionSite;
   cx: number;
   cy: number;
-  label: string;
 }
 
 /** Where each site is drawn on `BODY`. */
@@ -56,28 +55,33 @@ export const SITE_DOTS: SiteDot[] = [
   // Abdomen, two rows around the navel, both above the crotch line. The lower
   // row used to straddle it, which put its middle dot in the gap between the
   // legs.
-  { id: "abdomen-ul", cx: 84,  cy: 94,  label: "Abdomen upper-left"  },
-  { id: "abdomen-um", cx: 100, cy: 92,  label: "Abdomen upper-mid"   },
-  { id: "abdomen-ur", cx: 116, cy: 94,  label: "Abdomen upper-right" },
-  { id: "abdomen-ll", cx: 84,  cy: 108, label: "Abdomen lower-left"  },
-  { id: "abdomen-lm", cx: 100, cy: 110, label: "Abdomen lower-mid"   },
-  { id: "abdomen-lr", cx: 116, cy: 108, label: "Abdomen lower-right" },
+  { id: "abdomen-ul", cx: 84,  cy: 94  },
+  { id: "abdomen-um", cx: 100, cy: 92  },
+  { id: "abdomen-ur", cx: 116, cy: 94  },
+  { id: "abdomen-ll", cx: 84,  cy: 108 },
+  { id: "abdomen-lm", cx: 100, cy: 110 },
+  { id: "abdomen-lr", cx: 116, cy: 108 },
   // Deltoids, on the sleeve rather than beside it.
-  { id: "arm-l",      cx: 68,  cy: 68,  label: "Left deltoid"        },
-  { id: "arm-r",      cx: 132, cy: 68,  label: "Right deltoid"       },
+  { id: "arm-l",      cx: 68,  cy: 68  },
+  { id: "arm-r",      cx: 132, cy: 68  },
   // Glutes take the hip. A figure drawn from the front cannot show the buttock,
   // and the hip is where a person points when asked where they injected.
-  { id: "glute-l",    cx: 80,  cy: 128, label: "Left glute"          },
-  { id: "glute-r",    cx: 120, cy: 128, label: "Right glute"         },
+  { id: "glute-l",    cx: 80,  cy: 128 },
+  { id: "glute-r",    cx: 120, cy: 128 },
   // Thighs, midway down the upper leg and well clear of the knee.
-  { id: "thigh-l",    cx: 83,  cy: 146, label: "Left thigh"          },
-  { id: "thigh-r",    cx: 117, cy: 146, label: "Right thigh"         },
+  { id: "thigh-l",    cx: 83,  cy: 146 },
+  { id: "thigh-r",    cx: 117, cy: 146 },
 ];
 
 export interface SiteUsage {
   site: InjectionSite;
-  label: string;
-  group: string;
+  /*
+   * No label. This module used to carry the English name of each site
+   * alongside its id, which made it one more place the app wrote words, and
+   * the wrong place: whoever draws the row knows which language the reader
+   * picked and this file does not. `siteLabel` in format.ts turns the id into
+   * a name, at the edge, the same way a date becomes a date there.
+   */
   /** Most recent use, or null if never used. */
   lastUsedAt: number | null;
   /** Days since last use. Infinity when never used. */
@@ -104,7 +108,7 @@ export function siteUsage(
   const windowStart = nowMs - restDays * DAY;
   const relevant = logs.filter((l) => !l.skipped && l.site);
 
-  return INJECTION_SITES.map(({ id, label, group }) => {
+  return INJECTION_SITES.map(({ id }) => {
     const uses = relevant.filter((l) => l.site === id).map((l) => l.at);
     const lastUsedAt = uses.length ? Math.max(...uses) : null;
     const daysSince = lastUsedAt == null ? Infinity : (nowMs - lastUsedAt) / DAY;
@@ -112,8 +116,6 @@ export function siteUsage(
 
     return {
       site: id,
-      label,
-      group,
       lastUsedAt,
       daysSince,
       recentCount,
@@ -140,6 +142,33 @@ export function suggestSite(
     if (within.length) return within[0].site;
   }
   return ranked[0].site;
+}
+
+/**
+ * The sites worth offering for the next dose, best first.
+ *
+ * The same ranking and the same filter `suggestSite` uses, stopped short rather
+ * than reduced to one. That is the point: the first entry here and the site the
+ * one-tap button writes have to be the same site, or the list contradicts the
+ * button standing next to it. A test holds them together.
+ *
+ * `limit` keeps the panel short enough not to shove the page around. Where a
+ * protocol pins its own sites there are usually three or four of them, and the
+ * screen offers a way through to all of them for the rest.
+ */
+export function siteChoices(
+  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  nowMs: number,
+  restDays = 14,
+  allowed?: InjectionSite[] | null,
+  limit = 5): SiteUsage[] {
+  const ranked = siteUsage(logs, nowMs, restDays);
+  const set = allowed?.length ? new Set(allowed) : null;
+  const within = set ? ranked.filter((s) => set.has(s.site)) : ranked;
+
+  // An empty pinned list, or one naming sites that no longer exist, falls back
+  // to every site rather than to nothing. suggestSite does the same.
+  return (within.length ? within : ranked).slice(0, Math.max(1, limit));
 }
 
 /** Sites hit hard enough recently that they are worth resting. */

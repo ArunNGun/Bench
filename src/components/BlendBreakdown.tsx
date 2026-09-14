@@ -84,7 +84,9 @@ function ComponentRow({ part, compact }: { part: ComponentDose; compact?: boolea
       )}
 
       {part.fraction < 1 && (
-        <span className="tnum font-mono text-[11.5px] text-[var(--faint)]">{share} of blend</span>
+        <span className="tnum font-mono text-[11.5px] text-[var(--faint)]">
+          {t("blend_share_of", { share })}
+        </span>
       )}
 
       <Badge tone={TONE[part.relativeToTypical]}>{LABEL[part.relativeToTypical]}</Badge>
@@ -92,12 +94,19 @@ function ComponentRow({ part, compact }: { part: ComponentDose; compact?: boolea
       {/* The range itself, spelled out, "below usual" is useless without it. */}
       {part.comparedOn === "weekly" && part.weeklyMcg != null ? (
         <span className="w-full text-[11.5px] text-[var(--faint)] sm:w-auto">
-          {formatDose(part.weeklyMcg)}/week vs {formatDose(part.typicalWeeklyLowMcg!)}, {formatDose(part.typicalWeeklyHighMcg!)}/week on its own
+          {t("blend_weekly_vs", {
+            mine: formatDose(part.weeklyMcg),
+            low: formatDose(part.typicalWeeklyLowMcg!),
+            high: formatDose(part.typicalWeeklyHighMcg!),
+          })}
           {part.typicalFrequency ? ` (${part.typicalFrequency})` : ""}
         </span>
       ) : part.typicalLowMcg != null ? (
         <span className="w-full text-[11.5px] text-[var(--faint)] sm:w-auto">
-          usually {formatDose(part.typicalLowMcg)}, {formatDose(part.typicalHighMcg!)} per dose
+          {t("blend_usually_per_dose", {
+            low: formatDose(part.typicalLowMcg),
+            high: formatDose(part.typicalHighMcg!),
+          })}
           {part.typicalFrequency ? `, ${part.typicalFrequency}` : ""}
         </span>
       ) : (

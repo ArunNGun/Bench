@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { SITE_DOTS, siteUsage } from "@/lib/calc/sites";
 import type { DoseLog, InjectionSite } from "@/lib/types";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, siteLabel } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 /**
@@ -159,7 +159,7 @@ export function SiteMap({
               tabIndex={interactive ? 0 : undefined}
               role={interactive ? "button" : undefined}
               aria-pressed={interactive ? isSelected : undefined}
-              aria-label={`${u?.label ?? s.label}. ${
+              aria-label={`${siteLabel(s.id)}. ${
                 u?.lastUsedAt
                   ? t("site_last_used", { when: relativeTime(u.lastUsedAt, nowMs) })
                   : t("site_never_used")

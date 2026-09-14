@@ -87,6 +87,7 @@ function Row({
   breakdown: LevelBreakdown;
   describeVial?: (vialId: string) => VialNote | null;
 }) {
+  const { t } = useLang();
   // breakdown.total is normalised (1.0 = one reference dose). Multiply back to
   // get the actual mass circulating now. referenceMcg is the dose the curve is
   // scaled to, so total * referenceMcg gives mcg on board.
@@ -103,7 +104,7 @@ function Row({
         <span className="ml-auto font-mono text-[13px] font-semibold text-[var(--ink)]">
           {formatDose(actualMcg)}
         </span>
-        <span className="text-[11px] text-[var(--faint)]">in system</span>
+        <span className="text-[11px] text-[var(--faint)]">{t("pk_in_system")}</span>
       </p>
 
       {/*
@@ -122,10 +123,17 @@ function Row({
           const contributionMcg = c.share * actualMcg;
           return (
             <li key={`${c.dose.at}-${c.dose.amountMcg}`} className="text-[11.5px] text-[var(--muted)]">
-              {formatDose(c.dose.amountMcg)} on {formatDate(c.dose.at)}
-              <span className="text-[var(--faint)]"> at {formatTime(c.dose.at)}</span>
+              {t("pk_dose_on", {
+                dose: formatDose(c.dose.amountMcg),
+                date: formatDate(c.dose.at),
+              })}
+              <span className="text-[var(--faint)]">
+                {" "}
+                {t("pk_at_time", { time: formatTime(c.dose.at) })}
+              </span>
               {" · "}
-              <span className="font-mono">{formatDose(contributionMcg)}</span> remaining
+              <span className="font-mono">{formatDose(contributionMcg)}</span>{" "}
+              {t("pk_remaining")}
               {vial && (
                 <span className="text-[var(--faint)]">
                   {" · "}

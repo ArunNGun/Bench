@@ -344,3 +344,39 @@ what a person who wants Slovenian will find on their first screen after it.
 The same applies to the `metadata` export in `src/app/layout.tsx`, the page
 title and description a search engine and a browser tab show. It is computed on
 the server for the same reason and belongs to the same piece of work.
+
+## A name stays, a description translates
+
+The compound library is English in every language. BPC-157 is BPC-157 in
+Ljubljana, `mcg` is `mcg`, and a route is the word a prescription would use.
+The injection sites are not: "Abdomen, lower left" is not the name of a thing,
+it is a description of a place on a body, and a person reading their own log in
+Slovenian should get it in Slovenian.
+
+That is the line, and it is worth stating because "the data layer stays
+English" was the working rule for a while and it is too coarse. The test is
+whether the words identify something or describe it. A name identifies, and
+translating it loses the thing it points at. A description describes, and
+leaving it in English just makes the reader work.
+
+So `INJECTION_SITES` keeps an English `label`, read now by one caller, the dose
+CSV, whose header is English too; and `siteLabel` in `format.ts` answers in the
+reader's language everywhere else. The CSV was the one real question here, and
+it keeps English because a file with an English header and Slovenian values is
+a file nobody can write a formula against.
+
+## A list of choices comes from the function that produces the default
+
+`siteChoices` is `suggestSite` stopped short rather than reduced to one: the
+same ranking, the same pinned filter, the same fallback. A test asserts that
+`siteChoices(...)[0].site === suggestSite(...)`.
+
+This looks like duplication worth removing and is the opposite. The panel of
+sites stands beside a button that logs in one tap, and the row above both of
+them names the site that button will write. Three surfaces, one answer. Written
+as two rankings that happen to agree today, the day they stop agreeing is the
+day the screen offers a site, records a different one, and goes on suggesting
+from a rotation history that no longer describes the body. Nothing would fail
+loudly. The rule generalises: wherever a default is offered alongside the
+alternatives to it, the alternatives are the default's own ranking, held to it
+by a test.

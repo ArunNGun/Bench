@@ -498,3 +498,104 @@ The general shape is worth remembering: a function that returns null for "not
 applicable yet" hands every caller the job of deciding what that means, and
 `?? somethingPlausible` is what they all reach for. If there is a right answer,
 return it.
+
+## The calc layer writing English
+
+`describePhase` returned `{ id, label, detail }` and `dueStatus` returned
+`{ state, label }`, where the labels and details were finished English
+sentences. So `src/lib/calc`, which the layout note calls pure logic with no
+React and no I/O, was also the author of the words on the dashboard, and those
+words could not be translated without passing a language into a pure function.
+
+The tell was already in the tests: every one of them asserted the id or the
+state and none of them asserted a label. The id was the fact and the sentence
+was decoration sitting next to it.
+
+Both now return only the id. The page keeps a `Record<PhaseId, TranslationKey>`
+and looks the words up. `dueStatus` needed one extra distinction, because
+`state: "none"` covers both a paused protocol and one with nothing scheduled,
+which are the same to the maths and different to a reader, so the name is its
+own field rather than a second reading of the state.
+
+The rule this leaves: a module under `src/lib/calc` may return an id, a number
+or a date. If it is about to return a sentence, the sentence belongs to
+whoever renders it.
+
+## Finding the English a translation pass missed
+
+Four rounds of this were needed, each after a user found something. The
+searches that failed all looked for text in the shapes text usually takes:
+between JSX tags, or in a `label=` or `title=` attribute. The strings that
+survived were in none of those shapes:
+
+- returned from a plain function, like `greeting()` or `describeSplit`
+- sitting in a ternary that is assigned rather than rendered
+- a **default parameter**, like `label = "Times of day"`
+- inside a template literal built for an `aria-label`
+- returned from `src/lib/calc`, as a label beside an id
+
+The check that would have found all of them in one pass is much blunter, and
+it is about the file rather than the string: **a component under `src/app` or
+`src/components` that renders anything and does not import `useLang`**. On the
+last round that listed exactly the offenders, `DoseMarks`, `PkChart`,
+`Syringe`, `HelpNote` and `CheckInEditor`, and the only files it left were the
+ones with no words in them at all: the runners, the service worker, the layout
+and the UI primitives.
+
+```bash
+for f in $(find src/app src/components -name '*.tsx' ! -name '*.test.tsx'); do
+  grep -q 'useLang\|translate(' "$f" || echo "$f"
+done
+```
+
+Run that before claiming a translation pass is finished.
+
+## A shelf with something on it that reports nothing
+
+The Now card said **0 doses** for KPV while the Stock page, one tap away, said
+2.85 mg and eleven doses left in the same vial. Both were right. The vial was
+one day past its beyond-use date, `vialUsable` excludes it, and `stockFor`
+counts only usable vials.
+
+Nothing was wrong with the arithmetic. What was wrong is that the screen where
+the number matters gave no reason, so the two screens contradicted each other
+and the reader had to guess which one was broken.
+
+`Stock` now carries `dosesExpired`, and the card shows that count with a past
+date marker beside it rather than a zero. The first attempt showed the zero and
+explained it, which is worse: zero is true of what can go in a syringe and
+false about what is in the fridge, and the reader comparing the two screens
+still had a contradiction to resolve.
+
+In doses rather than in mass because the card speaks in doses everywhere else.
+Kept out of `dosesRemaining` on purpose: supply days and the reorder date are
+answers about what can actually be drawn, and a vial past its date is not that.
+
+Deliberately excludes finished and discarded vials. Neither is something the
+reader is being denied, and explaining a zero with one of those would be
+explaining it with the wrong vial.
+
+The general shape: when a screen filters something out, the filter is invisible
+and the number is not. If a zero can be caused by a rule rather than by an
+empty shelf, the rule has to say so where the zero is.
+
+## A per-day amount inside a per-dose count
+
+The Stock page said **40 more doses of 250 mcg × 2 in this vial**, of a 10 mg
+vial. The count was right: forty 250 mcg injections is 10 mg. The `× 2` came
+from `formatDosePerDay`, put there so that a reader who had entered 500 as the
+day's dose would not be told the plan was 250. But glued to the amount inside
+"doses of ...", it reads as part of the amount, and the sentence claims forty
+500 mcg doses, which is 20 mg, twice what the vial holds.
+
+`formatDosePerDay` is for a place that names a plan: the protocol summary on
+Today, the row on Plan. In a sentence that counts something, the count and the
+amount have to be about the same unit, and the rhythm needs its own clause:
+"40 more doses of 250 mcg in this vial · 2× a day · 10 mg left".
+
+The rule: **`formatDosePerDay` never goes in a slot that a number counts.** If a
+sentence has both an `n` and an amount, the amount is `formatDose`.
+
+Worth checking the neighbours when this shape appears. The log sheet's "n more
+doses of {dose} in this vial after this one" was already using `formatDose` and
+was correct.

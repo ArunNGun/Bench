@@ -45,7 +45,7 @@ import {
   transferToSpray,
 } from "@/lib/calc/spray";
 import { converterUrl } from "@/lib/calc/converter";
-import { formatConcentration, formatDate, formatDose, formatDosePerDay, trim } from "@/lib/format";
+import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
   costPerVialInKit,
   formatMoney,
@@ -519,17 +519,17 @@ function VialRow({
               lifted by the pump and priming costs some of it, none of which is
               knowable from here, so this reads high and says so.
             */}
-            {spray && <span>about {spraysRemaining(vial)} presses left</span>}
+            {spray && <span>{t("stock_presses_left", { n: spraysRemaining(vial) })}</span>}
             {/*
               A spray carries no use-by date, deliberately, so the only clock it
               has is the day it was filled. See calc/spray.ts.
             */}
             {spray && vial.reconstitutedAt != null && (
-              <span>filled {formatDate(vial.reconstitutedAt)}</span>
+              <span>{t("stock_filled", { date: formatDate(vial.reconstitutedAt) })}</span>
             )}
             {!spray && vial.budAt != null && (
               <span className={budSoon ? "text-[var(--rose)]" : ""}>
-                use by {formatDate(vial.budAt)}
+                {t("stock_use_by", { date: formatDate(vial.budAt) })}
               </span>
             )}
           </div>
@@ -559,17 +559,20 @@ function VialRow({
             {/*
               The count is injections, which is what actually comes out of a
               vial, and on a plan taken twice a day that is half as many days.
-              Naming the rhythm beside the amount is what lets the reader do
-              that division; without it, "250 mcg doses" contradicts a plan
-              they entered as 500.
+              The rhythm is named so the reader can do that division, and so
+              that "250 mcg doses" does not contradict a plan they entered as
+              500. It is a clause of its own and not a multiplier on the
+              amount, which is the bug this replaces: "40 doses of 250 mcg × 2"
+              reads as forty 500 mcg doses, which is twice what the vial holds.
             */}
             <span className="text-[var(--muted)]">
               {t("stock_more_doses_suffix", {
                 n: Math.floor(remainingMcg / doseMcg),
-                per: formatDosePerDay(doseMcg, timesPerDay),
+                per: formatDose(doseMcg),
                 where: many ? t("stock_across_these_vials") : t("stock_in_this_vial"),
               })}{" "}
-              · {formatDose(remainingMcg)} left
+              {timesPerDay > 1 && <>· {t("stock_times_per_day", { n: timesPerDay })} </>}·{" "}
+              {t("stock_left_suffix", { amount: formatDose(remainingMcg) })}
             </span>
           </p>
         )}
@@ -1060,8 +1063,10 @@ function ReconstituteForm({
 
       {short && (
         <Callout tone="warn">
-          That bottle holds {trim(bottleRemainingMl(chosen!), 2)} mL and you are drawing {trim(ml, 2)}{" "}
-          mL. It will be recorded as empty, and the rest came from somewhere this app cannot see.
+          {t("stock_bottle_short", {
+            has: trim(bottleRemainingMl(chosen!), 2),
+            want: trim(ml, 2),
+          })}
         </Callout>
       )}
 
@@ -1072,9 +1077,9 @@ function ReconstituteForm({
       )}
 
       <p className="text-[12.5px] leading-relaxed text-[var(--faint)]">
-        Run the water down the inside wall rather than spraying it onto the powder, and swirl rather
-        than shake. Shaking creates an air, liquid interface that denatures and aggregates peptide.
-        The beyond-use date will be set {MULTI_DOSE_VIAL_BUD_DAYS} days from now.
+        {t("stock_swirl_note", {
+          days: t("count_days", { n: MULTI_DOSE_VIAL_BUD_DAYS }),
+        })}
       </p>
 
       <div className="flex gap-2.5">
@@ -1412,8 +1417,10 @@ function DiluentShelf() {
 
       {stock.remainingMl > 0 && (
         <p className="mb-2 text-[12.5px] text-[var(--muted)]">
-          {trim(stock.remainingMl, 1)} mL of bacteriostatic water across {stock.bottles}{" "}
-          {stock.bottles === 1 ? "bottle" : "bottles"}.
+          {t("stock_water_across", {
+            ml: trim(stock.remainingMl, 1),
+            n: stock.bottles,
+          })}
         </p>
       )}
 
@@ -1553,7 +1560,7 @@ function DiluentShelf() {
                       setUsingId(null);
                     }}
                   >
-                    Take out {trim(Math.min(usedMl, left), 2)} mL
+                    {t("stock_take_out", { ml: trim(Math.min(usedMl, left), 2) })}
                   </Button>
                 </div>
               )}

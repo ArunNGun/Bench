@@ -29,6 +29,7 @@
 import { useEffect, useId, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLang } from "@/lib/i18n";
 
 export function HelpNote({
   label,
@@ -43,6 +44,7 @@ export function HelpNote({
   children: React.ReactNode;
   className?: string;
 }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const noteId = useId();
 
@@ -65,7 +67,7 @@ export function HelpNote({
         {control}
         <button
           type="button"
-          aria-label={`What ${label} means`}
+          aria-label={t("help_what_means", { label })}
           aria-expanded={open}
           aria-controls={open ? noteId : undefined}
           onClick={() => setOpen((v) => !v)}

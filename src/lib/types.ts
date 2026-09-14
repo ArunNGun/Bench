@@ -405,6 +405,20 @@ export interface DoseLog {
   volumeMl?: number;
   units?: number;
   /**
+   * Presses, for a dose that went up a nose.
+   *
+   * Separate from `units` rather than sharing it. `units` is a syringe reading
+   * and travels with `syringeScale` and `syringeId`; a CSV column holding
+   * marks for one row and pumps for the next would be a column that means two
+   * things. Keeping them apart is also what lets the Log tell a dose that was
+   * measured in presses from one whose reading was never recorded.
+   *
+   * Absent on every nasal dose logged before this existed, which is honest:
+   * nothing wrote down what the bottle read at the time, and recomputing it
+   * from today's bottle would be inventing a number for a past event.
+   */
+  presses?: number;
+  /**
    * The exact barrel, by id from `SYRINGES`.
    *
    * `syringeScale` came first and is not enough: it says U-100 or U-40 and
@@ -1077,6 +1091,17 @@ export const CURRENCIES: { code: string; label: string }[] = [
   { code: "SGD", label: "Singapore dollar (S$)" },
 ];
 
+/**
+ * The twelve sites, and where each one sits on the body.
+ *
+ * `label` is the English name and is read by one thing only: the dose CSV,
+ * whose header is English as well. Screens go through `siteLabel` in format.ts,
+ * which answers in the reader's language. A body part is a description rather
+ * than a name, so unlike a compound it translates; a CSV with an English header
+ * and Slovenian values is a file nobody can write a formula against.
+ *
+ * `group` is not rendered anywhere. It is kept because it is true.
+ */
 export const INJECTION_SITES: { id: InjectionSite; label: string; group: string }[] = [
   { id: "abdomen-ul", label: "Abdomen, upper left", group: "Abdomen" },
   { id: "abdomen-um", label: "Abdomen, upper middle", group: "Abdomen" },

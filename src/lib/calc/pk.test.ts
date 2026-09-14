@@ -224,28 +224,28 @@ describe("snapshot", () => {
   it("calls it absorbing on the way up", () => {
     const s = snapshot(now, [{ at: now - 2 * HOUR, amountMcg: 1000 }], params, 1000);
     expect(s.rising).toBe(true);
-    expect(s.phase.id).toBe("absorbing");
+    expect(s.phase).toBe("absorbing");
   });
 
   it("calls it peak at Tmax", () => {
     const s = snapshot(now, [{ at: now - 6 * HOUR, amountMcg: 1000 }], params, 1000);
-    expect(s.phase.id).toBe("peak");
+    expect(s.phase).toBe("peak");
     expect(s.percentOfPeak).toBeGreaterThan(99);
   });
 
   it("calls it active shortly after peak", () => {
     const s = snapshot(now, [{ at: now - 20 * HOUR, amountMcg: 1000 }], params, 1000);
     expect(s.rising).toBe(false);
-    expect(s.phase.id).toBe("active");
+    expect(s.phase).toBe("active");
   });
 
   it("calls it cleared long after the last dose", () => {
     const s = snapshot(now, [{ at: now - 200 * HOUR, amountMcg: 1000 }], params, 1000);
-    expect(s.phase.id).toBe("cleared");
+    expect(s.phase).toBe("cleared");
   });
 
   it("calls it cleared when nothing has ever been logged", () => {
-    expect(snapshot(now, [], params, 1000).phase.id).toBe("cleared");
+    expect(snapshot(now, [], params, 1000).phase).toBe("cleared");
   });
 
   it("reports percent of peak consistently with level", () => {
