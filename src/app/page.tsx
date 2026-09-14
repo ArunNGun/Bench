@@ -64,6 +64,7 @@ import {
   formatTime,
   formatWeekday,
   relativeTime,
+  siteLabel,
 } from "@/lib/format";
 import { LogDoseSheet } from "@/components/LogDoseSheet";
 import { LogDoseButton } from "@/components/LogDoseButton";
@@ -76,7 +77,6 @@ import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
 import { DoseMarks } from "@/components/DoseMarks";
 import {
-  INJECTION_SITES,
   type DoseLog,
   type HalfLifeEstimate,
   type InjectionSite,
@@ -573,7 +573,7 @@ export default function NowPage() {
                     {choices.length > 0 && (
                       <span className="text-[var(--faint)]">
                         {" "}
-                        · {t("now_at_site", { site: choices[0].label })}
+                        · {t("now_at_site", { site: siteLabel(choices[0].site) })}
                       </span>
                     )}
                   </div>
@@ -956,7 +956,7 @@ export default function NowPage() {
                   {track.lastLog?.site && (
                     <span className="text-[var(--ink)]">
                       {" · "}
-                      {INJECTION_SITES.find((s) => s.id === track.lastLog!.site)?.label}
+                      {siteLabel(track.lastLog.site)}
                     </span>
                   )}
                 </span>

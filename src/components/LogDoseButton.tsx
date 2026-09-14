@@ -27,7 +27,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { buttonClasses } from "./ui";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, siteLabel } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import type { SiteUsage } from "@/lib/calc/sites";
 import type { InjectionSite } from "@/lib/types";
@@ -143,12 +143,13 @@ export function LogDoseButton({
           </p>
           {choices.map((c) => {
             const isSuggested = c.site === suggested;
+            const name = siteLabel(c.site);
             return (
               <button
                 key={c.site}
                 role="menuitem"
                 className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--sunken)]"
-                title={t("now_log_at_site", { dose, site: c.label })}
+                title={t("now_log_at_site", { dose, site: name })}
                 onClick={() => {
                   onOpenChange(false);
                   onLog(c.site);
@@ -159,7 +160,7 @@ export function LogDoseButton({
                   style={dotStyle(c, isSuggested)}
                 />
                 <span className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--ink)]">
-                  {c.label}
+                  {name}
                 </span>
                 {/*
                   The suggestion is the longest-rested site by construction, so

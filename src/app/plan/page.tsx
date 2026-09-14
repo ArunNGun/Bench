@@ -39,6 +39,7 @@ import {
   formatTime,
   fromDateInput,
   relativeTime,
+  siteLabel,
   toDateInput,
   trim,
 } from "@/lib/format";
@@ -888,7 +889,7 @@ function ProtocolForm({
                       : "border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
                   }`}
                 >
-                  {s.label}
+                  {siteLabel(s.id)}
                 </button>
               );
             })}

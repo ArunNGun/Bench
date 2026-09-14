@@ -5,8 +5,7 @@ import { CalendarPlus, Sparkles } from "lucide-react";
 import { Badge, Button, ButtonLink, Card, EmptyState, SectionLabel, TONE_BG } from "./ui";
 import { findPeptide, useProfileData, useStore } from "@/lib/store";
 import { inferAllProtocols, type InferredProtocol } from "@/lib/calc/infer";
-import { formatDate, formatDose } from "@/lib/format";
-import { INJECTION_SITES } from "@/lib/types";
+import { formatDate, formatDose, siteLabel } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 /**
@@ -106,7 +105,7 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
                   last: formatDate(s.lastAt),
                 })}
                 {s.sites.length
-                  ? ` · ${s.sites.map((id) => INJECTION_SITES.find((x) => x.id === id)?.label ?? id).join(", ")}`
+                  ? ` · ${s.sites.map((id) => siteLabel(id)).join(", ")}`
                   : ""}
               </p>
 
@@ -146,7 +145,7 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
                 <span className="text-[var(--muted)]">{formatDate(l.at)}</span>
                 {l.site && (
                   <span className="text-[var(--faint)]">
-                    {INJECTION_SITES.find((s) => s.id === l.site)?.label}
+                    {siteLabel(l.site)}
                   </span>
                 )}
                 {l.at > nowMs && <Badge tone="sky">{t("hwp_future")}</Badge>}

@@ -1091,6 +1091,17 @@ export const CURRENCIES: { code: string; label: string }[] = [
   { code: "SGD", label: "Singapore dollar (S$)" },
 ];
 
+/**
+ * The twelve sites, and where each one sits on the body.
+ *
+ * `label` is the English name and is read by one thing only: the dose CSV,
+ * whose header is English as well. Screens go through `siteLabel` in format.ts,
+ * which answers in the reader's language. A body part is a description rather
+ * than a name, so unlike a compound it translates; a CSV with an English header
+ * and Slovenian values is a file nobody can write a formula against.
+ *
+ * `group` is not rendered anywhere. It is kept because it is true.
+ */
 export const INJECTION_SITES: { id: InjectionSite; label: string; group: string }[] = [
   { id: "abdomen-ul", label: "Abdomen, upper left", group: "Abdomen" },
   { id: "abdomen-um", label: "Abdomen, upper middle", group: "Abdomen" },

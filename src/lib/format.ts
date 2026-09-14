@@ -1,4 +1,4 @@
-import { ROUTE_LABEL, type HalfLifeEstimate } from "./types";
+import { ROUTE_LABEL, type HalfLifeEstimate, type InjectionSite } from "./types";
 import { translate, useLangStore, type Lang, type TranslationKey } from "./i18n";
 
 /** Display helpers. Everything here is presentation only, no arithmetic that matters. */
@@ -41,6 +41,43 @@ export function formatDoseParts(mcg: number, force?: "mcg" | "mg") {
   return unit === "mg"
     ? { value: trim(mcg / 1000, 3), unit: "mg" }
     : { value: trim(mcg, 2), unit: "mcg" };
+}
+
+/**
+ * Which body part, in the reader's language.
+ *
+ * A compound name is a name and stays as it is in every language: BPC-157 is
+ * BPC-157 in Ljubljana. A body part is not a name, it is a description, and a
+ * person reading their own log in Slovenian should not be told the dose went
+ * into the "Abdomen, lower left". So the sites translate while the library
+ * does not, and the line between them is whether the words describe something
+ * or merely identify it.
+ *
+ * `INJECTION_SITES` keeps its English label, which is now read by exactly one
+ * thing: the CSV export, whose header is English too. A file with an English
+ * header and Slovenian values is a file nobody can write a formula against.
+ *
+ * Falls back to the raw id rather than to nothing, so an imported file naming
+ * a site this version has never heard of still shows something on the screen.
+ */
+const SITE_KEY: Record<InjectionSite, TranslationKey> = {
+  "abdomen-ul": "site_abdomen_ul",
+  "abdomen-um": "site_abdomen_um",
+  "abdomen-ur": "site_abdomen_ur",
+  "abdomen-ll": "site_abdomen_ll",
+  "abdomen-lm": "site_abdomen_lm",
+  "abdomen-lr": "site_abdomen_lr",
+  "thigh-l": "site_thigh_l",
+  "thigh-r": "site_thigh_r",
+  "arm-l": "site_arm_l",
+  "arm-r": "site_arm_r",
+  "glute-l": "site_glute_l",
+  "glute-r": "site_glute_r",
+};
+
+export function siteLabel(site: InjectionSite | string): string {
+  const key = SITE_KEY[site as InjectionSite];
+  return key ? translate(lang(), key) : String(site);
 }
 
 export function formatMl(ml: number, dp = 3) {
