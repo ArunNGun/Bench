@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { useLangStore } from "./i18n";
+import { useLangStore, type Lang } from "./i18n";
+import { TRANSLATIONS } from "./i18n/translations";
+import { INJECTION_SITES } from "./types";
 import {
   formatDate,
   formatDosePerDay,
@@ -7,10 +9,13 @@ import {
   relativeTime,
   formatDateTime,
   fromDateInput,
+  siteLabel,
   toDateInput,
   toDateTimeLocal,
   fromDateTimeLocal,
 } from "./format";
+
+const LANGS = Object.keys(TRANSLATIONS) as Lang[];
 
 describe("fromDateInput", () => {
   it("reads a picked date as that date, not the evening before", () => {
@@ -184,6 +189,56 @@ describe("the language the formatters use", () => {
     useLangStore.setState({ lang: "sl" });
     expect(formatHalfLife(2)).toBe("2 uri");
     expect(formatHalfLife(3)).toBe("3 ure");
+    after();
+  });
+});
+
+/*
+ * A body part is a description and translates; a compound is a name and does
+ * not. These hold the first half of that, and they hold it for every site
+ * rather than for the one somebody happened to look at.
+ */
+describe("siteLabel", () => {
+  const after = () => useLangStore.setState({ lang: "en" });
+
+  it("names every site in every language", () => {
+    for (const lang of LANGS) {
+      useLangStore.setState({ lang });
+      for (const s of INJECTION_SITES) {
+        const label = siteLabel(s.id);
+        expect(label).toBeTruthy();
+        // The id leaking through is the failure this catches: a missing key
+        // falls back to "thigh-l", which reads as a bug rather than a name.
+        expect(label).not.toBe(s.id);
+      }
+    }
+    after();
+  });
+
+  it("answers differently in a language that is not English", () => {
+    useLangStore.setState({ lang: "en" });
+    const english = siteLabel("thigh-l");
+    useLangStore.setState({ lang: "sl" });
+    expect(siteLabel("thigh-l")).not.toBe(english);
+    after();
+  });
+
+  /* An import naming a site this version does not know still has to render. */
+  it("falls back to whatever it was given", () => {
+    expect(siteLabel("elbow-l" as never)).toBe("elbow-l");
+    after();
+  });
+
+  /*
+   * The CSV keeps the English label on purpose, so a file with an English
+   * header does not carry Slovenian values. This is the line that says the two
+   * are allowed to differ, and that the English one still exists.
+   */
+  it("leaves the CSV label alone", () => {
+    useLangStore.setState({ lang: "sl" });
+    const csv = INJECTION_SITES.find((s) => s.id === "thigh-l")!.label;
+    expect(csv).toBe("Left thigh");
+    expect(siteLabel("thigh-l")).not.toBe(csv);
     after();
   });
 });

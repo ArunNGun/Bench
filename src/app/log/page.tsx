@@ -22,11 +22,10 @@ import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { diaryDays, ratableDay } from "@/lib/calc/checkins";
 import { overusedSites } from "@/lib/calc/sites";
-import { formatDate, formatDose, formatDateTime, formatTime, percent, toDateInput, fromDateInput, trim } from "@/lib/format";
+import { formatDate, formatDose, formatDateTime, formatTime, percent, siteLabel, toDateInput, fromDateInput, trim } from "@/lib/format";
 import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
 import {
   FEELING_LABELS,
-  INJECTION_SITES,
   SYMPTOMS,
   SYMPTOM_SCALE_MAX,
   type CheckIn,
@@ -165,7 +164,7 @@ export default function LogPage() {
           {overused.length > 0 && (
             <Callout tone="warn" className="mt-3">
               {t("log_overused_line", {
-                sites: overused.map((s) => s.label).join(", "),
+                sites: overused.map((s) => siteLabel(s.site)).join(", "),
                 n: overused[0].recentCount,
               })}{" "}
               {t("log_overused_why")}
@@ -252,7 +251,7 @@ export default function LogPage() {
                 {entries.map((l) => {
                   const p = findPeptide(custom, l.peptideId);
                   const color = doseColor(palette, l);
-                  const siteLabel = INJECTION_SITES.find((s) => s.id === l.site)?.label;
+                  const site = l.site ? siteLabel(l.site) : undefined;
                   return (
                     <Card
                       key={l.id}
@@ -333,8 +332,8 @@ export default function LogPage() {
                                     {l.syringeScale === "U40" ? " (U-40)" : ""}
                                   </span>
                                 ))}
-                          {siteLabel && (
-                            <span className="font-medium text-[var(--ink)]">{siteLabel}</span>
+                          {site && (
+                            <span className="font-medium text-[var(--ink)]">{site}</span>
                           )}
                         </div>
                         {/*

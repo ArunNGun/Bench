@@ -45,7 +45,7 @@ import {
   type Route,
 } from "@/lib/types";
 
-import { formatDose, fromDateTimeLocal, toDateTimeLocal, trim } from "@/lib/format";
+import { formatDose, fromDateTimeLocal, siteLabel, toDateTimeLocal, trim } from "@/lib/format";
 
 /**
  * Logging a dose. Opens as a bottom sheet on mobile and a centred panel on
@@ -642,7 +642,7 @@ export function LogDoseSheet({
                 <option value="">{t("log_not_recorded")}</option>
                 {siteChoices.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.label}
+                    {siteLabel(s.id)}
                   </option>
                 ))}
               </Select>

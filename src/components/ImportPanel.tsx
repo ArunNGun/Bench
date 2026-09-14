@@ -7,8 +7,8 @@ import { Badge, Button, Callout, Card, Rich, SectionLabel, TONE_BG, TONE_FG } fr
 import { allPeptides, useProfileData, useStore } from "@/lib/store";
 import { ACCEPTED_EXTENSIONS, ImportError, readImportFile, type ReadResult } from "@/lib/import/pipeline";
 import { describePlan, planIsEmpty, planSpan } from "@/lib/import/plan";
-import { formatDate, formatDose } from "@/lib/format";
-import { INJECTION_SITES, type AppData } from "@/lib/types";
+import { formatDate, formatDose, siteLabel } from "@/lib/format";
+import { type AppData } from "@/lib/types";
 import type { LabCandidate } from "@/lib/import/labreport";
 
 /**
@@ -301,7 +301,7 @@ function Preview({
                 </span>
                 {d.site && (
                   <span className="text-[var(--faint)]">
-                    {INJECTION_SITES.find((s) => s.id === d.site)?.label}
+                    {siteLabel(d.site)}
                   </span>
                 )}
                 <span className="ml-auto text-[11px] text-[var(--faint)]">
