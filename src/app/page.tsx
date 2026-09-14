@@ -529,7 +529,16 @@ export default function NowPage() {
                 <Badge tone={track.due.state === "overdue" ? "rose" : "tangerine"}>
                   {t(DUE_KEY[track.due.label])}
                 </Badge>
-                <div className="min-w-0 flex-1">
+                {/*
+                  The minimum width is what makes the card wrap on a phone.
+                  `flex-1` alone is `flex: 1 1 0%`, so this column has a base
+                  size of nothing and a flex line is never over-full: the
+                  buttons stay on the first row and squeeze the name, the dose
+                  and the time into a column three characters wide. A floor
+                  under the text makes the line genuinely too long, and the
+                  buttons wrap underneath, which is what a narrow screen wants.
+                */}
+                <div className="min-w-[200px] flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
                     {track.color && (
                       <span
@@ -569,7 +578,7 @@ export default function NowPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="ml-auto flex shrink-0 gap-1.5">
                   <LogDoseButton
                     label={t("now_logged")}
                     title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
@@ -620,7 +629,8 @@ export default function NowPage() {
                   <span className="tnum w-12 shrink-0 font-mono text-[12.5px] text-[var(--faint)]">
                     {formatTime(at)}
                   </span>
-                  <div className="min-w-0 flex-1">
+                  {/* Same floor as the band above, for the same reason. */}
+                  <div className="min-w-[180px] flex-1">
                     <span className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
                       {track.color && (
                         <span
@@ -655,7 +665,7 @@ export default function NowPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="ml-auto flex shrink-0 flex-wrap gap-1.5">
                     {asking ? (
                       <>
                         <Button
