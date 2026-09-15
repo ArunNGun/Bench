@@ -448,6 +448,83 @@ describe("v7 to v8: bottles of water", () => {
   });
 });
 
+describe("v8 to v9: what you worked out about a compound", () => {
+  const note = {
+    id: "n1",
+    profileId: "me",
+    peptideId: "ghk-cu",
+    text: "Stings under 1 mg/mL.",
+    updatedAt: 1_700_000_000_000,
+  };
+
+  it("gives older data an empty list rather than nothing", () => {
+    expect(migrateAppData({ version: 8, logs: [] }).compoundNotes).toEqual([]);
+  });
+
+  it("carries a note through untouched", () => {
+    expect(migrateAppData({ version: 9, compoundNotes: [note] }).compoundNotes).toEqual([note]);
+  });
+
+  it("adopts a note that arrived without an owner", () => {
+    const out = migrateAppData({
+      version: 9,
+      compoundNotes: [{ ...note, profileId: undefined }],
+    });
+    expect(out.compoundNotes[0].profileId).toBe(out.activeProfileId);
+  });
+
+  /*
+   * An empty note is how the screen says there is no note. Storing one would
+   * put an empty box on a page that should have offered a blank one.
+   */
+  it("drops a note with nothing written in it", () => {
+    const out = migrateAppData({
+      version: 9,
+      compoundNotes: [note, { ...note, id: "n2", peptideId: "bpc-157", text: "   " }],
+    });
+    expect(out.compoundNotes.map((c) => c.id)).toEqual(["n1"]);
+  });
+
+  it("drops a note about no compound at all", () => {
+    const out = migrateAppData({
+      version: 9,
+      compoundNotes: [{ ...note, id: "n3", peptideId: "" }],
+    });
+    expect(out.compoundNotes).toEqual([]);
+  });
+
+  /* One note per compound per profile. The newest is the one that was meant. */
+  it("keeps the newest of two notes about the same compound", () => {
+    const out = migrateAppData({
+      version: 9,
+      compoundNotes: [
+        note,
+        { ...note, id: "n2", text: "Half that again and it is fine.", updatedAt: note.updatedAt + 1 },
+      ],
+    });
+    expect(out.compoundNotes).toHaveLength(1);
+    expect(out.compoundNotes[0].id).toBe("n2");
+  });
+
+  it("lets two profiles disagree about the same compound", () => {
+    const out = migrateAppData({
+      version: 9,
+      profiles: [
+        { id: "me", name: "Me", tone: "mint", createdAt: 0 },
+        { id: "you", name: "You", tone: "sky", createdAt: 0 },
+      ],
+      activeProfileId: "me",
+      compoundNotes: [note, { ...note, id: "n2", profileId: "you", text: "Never hurts." }],
+    });
+    expect(out.compoundNotes).toHaveLength(2);
+  });
+
+  it("stays the same when run twice", () => {
+    const once = migrateAppData({ version: 8, compoundNotes: [note] });
+    expect(migrateAppData(once)).toEqual(once);
+  });
+});
+
 describe("a document written by a newer build", () => {
   /*
    * The direction the guarantee never covered. Someone tracking bottles of

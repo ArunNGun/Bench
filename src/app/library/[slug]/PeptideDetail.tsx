@@ -6,6 +6,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Badge, Callout, Card, NumberInput, SectionLabel, Stat, type Tone } from "@/components/ui";
 import { PkChart } from "@/components/PkChart";
 import { YourHalfLife } from "@/components/YourHalfLife";
+import { CompoundNotes } from "@/components/CompoundNotes";
 import { findPeptide, useStore } from "@/lib/store";
 import { BlendBreakdown } from "@/components/BlendBreakdown";
 import { isBlend } from "@/lib/calc/blend";
@@ -247,6 +248,19 @@ export function PeptideDetail({ slug }: { slug: string }) {
             {p.halfLifeNote}
           </p>
         )}
+      </Card>
+
+      {/*
+        Yours, directly under the library's. Offered on every compound, unlike
+        the half-life above it: a published figure is a reason not to invite a
+        contradicting one, and nothing here contradicts anything, because the
+        library has no opinion about how your own arm reacts.
+      */}
+      <Card>
+        <div className="px-4 pb-1 pt-3.5">
+          <SectionLabel className="mb-0">{t("note_heading")}</SectionLabel>
+        </div>
+        <CompoundNotes peptideId={p.id} name={p.name} />
       </Card>
 
       {p.timeline && p.timeline.length > 0 && (

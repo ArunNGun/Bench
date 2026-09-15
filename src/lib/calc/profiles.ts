@@ -32,6 +32,9 @@ export const PROFILE_OWNED_KEYS = [
   "checkIns",
   "orders",
   "diluents",
+  // How a compound treats you is not how it treats the person sharing the
+  // device, which is what keeps this out of SHARED_KEYS beside the half-lives.
+  "compoundNotes",
 ] as const satisfies readonly (keyof AppData)[];
 
 /** Shared by the whole install, with the reason rather than the implication. */
