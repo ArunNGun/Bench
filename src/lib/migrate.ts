@@ -27,6 +27,7 @@ import {
   DEFAULT_SETTINGS,
   type AppData,
   type CheckIn,
+  type CompoundNote,
   type DiluentBottle,
   type Order,
   type Vial,
@@ -150,6 +151,9 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     orders: saneOrders(own(data.orders)),
     // v8. Bottles of water, counted apart from vials because they are not one.
     diluents: saneBottles(own(data.diluents)),
+    // v9. What you worked out about a compound. Absent in every older payload,
+    // and an empty list behaves exactly as the field not existing did.
+    compoundNotes: dedupeByCompound(own(data.compoundNotes)),
   };
 }
 
@@ -215,6 +219,7 @@ function emptyLike(): AppData {
     customPeptides: [],
     checkIns: [],
     halfLifeOverrides: {},
+    compoundNotes: [],
     orders: [],
     diluents: [],
   };
@@ -227,6 +232,27 @@ function emptyLike(): AppData {
  * imported file is not under our control and two rows for one day would render
  * as two points on a chart that is meant to have one per day.
  */
+/**
+ * At most one note per profile per compound, newest kept.
+ *
+ * The store upserts on that pair, so duplicates should not arise here either,
+ * but an imported file is not under our control. A note with no compound or
+ * nothing written in it is dropped rather than kept: an empty note is how the
+ * screen says there is no note, so storing one would put an empty box on a
+ * page that should have offered a blank one.
+ */
+function dedupeByCompound(rows: CompoundNote[]): CompoundNote[] {
+  const byCompound = new Map<string, CompoundNote>();
+  for (const row of rows) {
+    if (!row?.peptideId || typeof row.text !== "string" || !row.text.trim()) continue;
+    const at = Number(row.updatedAt) || 0;
+    const key = `${row.profileId}:${row.peptideId}`;
+    const seen = byCompound.get(key);
+    if (!seen || at >= seen.updatedAt) byCompound.set(key, { ...row, updatedAt: at });
+  }
+  return [...byCompound.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 function dedupeByDay(rows: CheckIn[]): CheckIn[] {
   const byDay = new Map<string, CheckIn>();
   for (const row of rows) {
