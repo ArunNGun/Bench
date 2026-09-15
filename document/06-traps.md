@@ -521,6 +521,32 @@ The rule this leaves: a module under `src/lib/calc` may return an id, a number
 or a date. If it is about to return a sentence, the sentence belongs to
 whoever renders it.
 
+## A comment as the first thing inside `{cond && (`
+
+```tsx
+{open && (
+  {/* why this panel is the width it is */}
+  <div>...</div>
+)}
+```
+
+`TS1005: ')' expected`, and five more errors after it, none of them pointing at
+the comment.
+
+Inside `{cond && ( ... )}` the parentheses hold an **expression**, not JSX
+children. `{/* ... */}` is only a comment where children are expected; in
+expression position it is an empty object literal followed by a block comment,
+and the parser gives up at the next attribute. The same line one level deeper,
+between an element's tags, is perfectly legal, which is why it looks right.
+
+Put the comment above the `{cond && (` line, where the surrounding element's
+children genuinely are children. That reads better anyway: the comment explains
+the thing that is conditional, and it is visible whether or not the condition is
+being met when you read the file.
+
+This has now happened five times in this codebase, always while adding a comment
+to explain a decision, which is to say always while doing the right thing.
+
 ## Finding the English a translation pass missed
 
 Four rounds of this were needed, each after a user found something. The

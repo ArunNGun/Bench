@@ -132,13 +132,35 @@ export function LogDoseButton({
         </button>
       </div>
 
+      {/*
+        The panel is wide enough for its longest row, rather than a fixed 240px.
+
+        It was fixed, and the site names were English and short. Then they were
+        translated, and "Trebuh, zgoraj sredina" against a right-hand column
+        reading "Nikoli uporabljeno" left the name about a hundred pixels and an
+        ellipsis. A list of places you cannot read is not a list you can choose
+        from, and the tooltip is not an answer on a phone, where there is no
+        hovering.
+
+        `w-max` sizes to the widest row. The floor is what it used to be, so a
+        short list does not produce a narrow panel; the ceiling is the viewport,
+        and `truncate` on the name is what gives at that point, which on a phone
+        only the longest names ever reach.
+      */}
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1.5 w-60 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--card)] shadow-[var(--shadow-pop)]"
+          className="absolute right-0 z-30 mt-1.5 w-max min-w-[15rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--card)] shadow-[var(--shadow-pop)]"
         >
-          {/* Said once, at the top, because tapping a row writes the dose. */}
-          <p className="px-3 pb-1.5 pt-2.5 text-[11.5px] text-[var(--faint)]">
+          {/*
+            Said once, at the top, because tapping a row writes the dose.
+
+            Capped, and that is not cosmetic. Inside a `w-max` box a paragraph
+            counts as its whole string on one line, so without a ceiling this
+            sentence, not the rows, would decide how wide the panel is, and in
+            German it is a long sentence.
+          */}
+          <p className="max-w-[15rem] px-3 pb-1.5 pt-2.5 text-[11.5px] text-[var(--faint)]">
             {t("now_site_hint")}
           </p>
           {choices.map((c) => {
