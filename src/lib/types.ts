@@ -927,6 +927,39 @@ export interface HalfLifeOverride {
 }
 
 /**
+ * What you worked out about a compound, in your own words.
+ *
+ * Raised as a question with no answer: the Library lets you write notes on a
+ * compound you added yourself and offers nowhere to write them on GHK-Cu,
+ * which is the one somebody wanted to record twenty attempts at injecting
+ * without it stinging.
+ *
+ * Not in the library, for the reason `HalfLifeOverride` gives above: the
+ * library is a reference every install downloads, and what you learned about
+ * your own arm is not a fact about the compound. Yours lives in your data and
+ * travels in your backup.
+ *
+ * One note per compound, on purpose, and it is a different thing from the note
+ * on a dose. A dose note is evidence: it carries the day, the vial, the
+ * concentration and the site, and there are twenty of them. This is the
+ * conclusion drawn from them, written once and corrected as it changes. Put
+ * the two in one place and the conclusion is buried under its own workings.
+ *
+ * Owned by a profile, unlike a half-life. A half-life is a belief about a
+ * molecule and the same for everyone on the device; how much an injection
+ * stings is not.
+ */
+export interface CompoundNote {
+  id: string;
+  profileId?: string;
+  /** The compound this is about: a library id, or one of your own. */
+  peptideId: string;
+  text: string;
+  /** When it was last written, so the screen can say how old it is. */
+  updatedAt: number;
+}
+
+/**
  * One purchase, and the only thing the app knows about it: what the postage
  * cost.
  *
@@ -1009,6 +1042,8 @@ export interface AppData {
    * would otherwise have to be retyped for every profile on the device.
    */
   halfLifeOverrides?: Record<string, HalfLifeOverride>;
+  /** What you learned about a compound, one note each, owned by a profile. */
+  compoundNotes: CompoundNote[];
   /** Purchases whose shipping was recorded, referenced by their vials. */
   orders: Order[];
   /** Bottles of water and saline, counted in millilitres rather than mass. */
@@ -1060,7 +1095,7 @@ export const DEFAULT_PROFILE: Profile = {
  * stamped "version 1" holding version 5 data: EMPTY_DATA hard-coded 1, resetAll
  * restored it, and exportData faithfully wrote the lie into the file.
  */
-export const DATA_VERSION = 8;
+export const DATA_VERSION = 9;
 
 export const EMPTY_DATA: AppData = {
   version: DATA_VERSION,
@@ -1075,6 +1110,7 @@ export const EMPTY_DATA: AppData = {
   customPeptides: [],
   checkIns: [],
   halfLifeOverrides: {},
+  compoundNotes: [],
   orders: [],
   diluents: [],
 };

@@ -15,6 +15,7 @@ import {
   type Measurement,
   type LabResult,
   type CheckIn,
+  type CompoundNote,
   type Protocol,
   type Profile,
   type Settings,
@@ -331,6 +332,17 @@ interface StoreState extends AppData {
    * the compound, not a fact about a person.
    */
   setHalfLifeOverride: (peptideId: string, hours: number | null, note?: string) => void;
+
+  /**
+   * What you worked out about a compound, in your own words. Upserts on the
+   * pair of profile and compound, so writing it again corrects the note rather
+   * than adding a second one, and blank text removes it.
+   *
+   * Per profile, unlike a half-life: a half-life is a belief about a molecule
+   * and the same for everyone on the device; how much an injection stings is
+   * not.
+   */
+  setCompoundNote: (peptideId: string, text: string) => void;
 
   importData: (data: AppData) => void;
   /**
@@ -734,6 +746,24 @@ export const useStore = create<StoreState>()(
           else next[peptideId] = { hours, setAt: Date.now(), note };
           return { halfLifeOverrides: next };
         }),
+      setCompoundNote: (peptideId, text) =>
+        set((s) => {
+          const mine = (c: CompoundNote) =>
+            c.profileId === s.activeProfileId && c.peptideId === peptideId;
+          const rest = s.compoundNotes.filter((c) => !mine(c));
+          const body = text.trim();
+          if (!body) return { compoundNotes: rest };
+
+          const existing = s.compoundNotes.find(mine);
+          const row: CompoundNote = {
+            id: existing?.id ?? nanoid(10),
+            profileId: s.activeProfileId,
+            peptideId,
+            text: body,
+            updatedAt: Date.now(),
+          };
+          return { compoundNotes: [row, ...rest] };
+        }),
       updateCustomPeptide: (id, next) =>
         set((st) => ({
           customPeptides: st.customPeptides.map((p) => (p.id === id ? { ...next, id } : p)),
@@ -765,6 +795,7 @@ export const useStore = create<StoreState>()(
           customPeptides: migrated.customPeptides,
           checkIns: migrated.checkIns,
           halfLifeOverrides: migrated.halfLifeOverrides ?? {},
+          compoundNotes: migrated.compoundNotes,
           orders: migrated.orders,
           diluents: migrated.diluents,
         }));
@@ -878,6 +909,7 @@ export function useProfileData() {
   const checkIns = useStore((s) => s.checkIns);
   const orders = useStore((s) => s.orders);
   const diluents = useStore((s) => s.diluents);
+  const compoundNotes = useStore((s) => s.compoundNotes);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -890,8 +922,12 @@ export function useProfileData() {
       checkIns: checkIns.filter((x) => x.profileId === activeId),
       orders: orders.filter((x) => x.profileId === activeId),
       diluents: diluents.filter((x) => x.profileId === activeId),
+      compoundNotes: compoundNotes.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, checkIns, orders, diluents, activeId]);
+    [
+      protocols, logs, vials, measurements, labs, checkIns, orders, diluents, compoundNotes,
+      activeId,
+    ]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */
