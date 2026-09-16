@@ -201,6 +201,19 @@ export default function SettingsPage() {
             <option value="on">{t("settings_one_row_compound")}</option>
           </Select>
         </Field>
+
+        <Field
+          label={t("settings_water_position")}
+          hint={t("settings_water_position_desc")}
+        >
+          <Select
+            value={settings.waterAtBottom ? "bottom" : "top"}
+            onChange={(e) => updateSettings({ waterAtBottom: e.target.value === "bottom" })}
+          >
+            <option value="top">{t("settings_water_top")}</option>
+            <option value="bottom">{t("settings_water_bottom")}</option>
+          </Select>
+        </Field>
       </Card>
 
       <Card className="space-y-4 p-4">

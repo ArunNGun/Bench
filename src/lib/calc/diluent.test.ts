@@ -10,6 +10,7 @@ import {
   pickBottle,
   returnToBottle,
   shelfOrder,
+  shelfRows,
 } from "./diluent";
 import type { DiluentBottle } from "../types";
 
@@ -279,5 +280,101 @@ describe("shelfOrder", () => {
 
   it("handles an empty shelf", () => {
     expect(shelfOrder([], NOW)).toEqual([]);
+  });
+});
+
+describe("shelfRows", () => {
+  const keys = (rows: ReturnType<typeof shelfRows>) => rows.map((r) => r.key);
+  const counts = (rows: ReturnType<typeof shelfRows>) => rows.map((r) => r.count);
+
+  it("gives every bottle its own row when grouping is off", () => {
+    const shelf = [
+      bottle({ id: "a" }),
+      bottle({ id: "b" }),
+      bottle({ id: "c" }),
+    ];
+    expect(counts(shelfRows(shelf, NOW, false))).toEqual([1, 1, 1]);
+    expect(keys(shelfRows(shelf, NOW, false))).toEqual(["a", "b", "c"]);
+  });
+
+  it("collapses sealed bottles of the same kind and size", () => {
+    const shelf = [
+      bottle({ id: "a" }),
+      bottle({ id: "b" }),
+      bottle({ id: "c" }),
+      bottle({ id: "d" }),
+    ];
+    const rows = shelfRows(shelf, NOW, true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].count).toBe(4);
+    expect(rows[0].bottles.map((b) => b.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  /* The whole point of the request: two kinds of water are two things. */
+  it("keeps kinds and sizes apart", () => {
+    const shelf = [
+      bottle({ id: "bac-30" }),
+      bottle({ id: "bac-30-b" }),
+      bottle({ id: "sal-10", kind: "saline", volumeMl: 10 }),
+      bottle({ id: "bac-10", volumeMl: 10 }),
+    ];
+    const rows = shelfRows(shelf, NOW, true);
+    expect(rows).toHaveLength(3);
+    // Keyed on kind and size, so the row holding two is the 30 mL
+    // bacteriostatic pair and the other two stand alone.
+    expect(rows.find((r) => r.key === "bacteriostatic:30")!.count).toBe(2);
+    expect(rows.find((r) => r.key === "bacteriostatic:10")!.count).toBe(1);
+    expect(rows.find((r) => r.key === "saline:10")!.count).toBe(1);
+  });
+
+  /*
+   * An open bottle has a beyond-use date of its own, running from the day it
+   * was punctured. A group would have to hide that or invent one.
+   */
+  it("never collapses an open bottle", () => {
+    const shelf = [
+      bottle({ id: "open-1", state: "open", budAt: NOW + 10 * DAY }),
+      bottle({ id: "open-2", state: "open", budAt: NOW + 20 * DAY }),
+    ];
+    expect(counts(shelfRows(shelf, NOW, true))).toEqual([1, 1]);
+  });
+
+  /* Same rule as the stock count: a filter that hides has to say where. */
+  it("leaves an expired bottle on its own row", () => {
+    const shelf = [
+      bottle({ id: "good-1" }),
+      bottle({ id: "good-2" }),
+      bottle({ id: "expired", expiresAt: NOW - DAY }),
+    ];
+    const rows = shelfRows(shelf, NOW, true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].count).toBe(2);
+    expect(rows[1].bottle.id).toBe("expired");
+  });
+
+  /* Turning the setting on shortens the list without rearranging it. */
+  it("leaves a group where its first bottle stood", () => {
+    const shelf = [
+      bottle({ id: "open", state: "open", budAt: NOW + 5 * DAY }),
+      bottle({ id: "sealed-1" }),
+      bottle({ id: "sealed-2" }),
+    ];
+    const rows = shelfRows(shelf, NOW, true);
+    expect(rows[0].bottle.id).toBe("open");
+    expect(rows[1].count).toBe(2);
+  });
+
+  it("acts on the bottle the shelf would reach for next", () => {
+    const shelf = [
+      bottle({ id: "later", expiresAt: NOW + 40 * DAY }),
+      bottle({ id: "sooner", expiresAt: NOW + 4 * DAY }),
+    ];
+    const rows = shelfRows(shelf, NOW, true);
+    expect(rows[0].count).toBe(2);
+    expect(rows[0].bottle.id).toBe(pickBottle(shelf, "bacteriostatic", 1, NOW)!.id);
+  });
+
+  it("handles an empty shelf", () => {
+    expect(shelfRows([], NOW, true)).toEqual([]);
   });
 });
