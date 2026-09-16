@@ -319,31 +319,47 @@ the fold. That happened in testing. See [06-traps.md](06-traps.md).
 to no file. This is why `ButtonLink` exists: `window.location.href = "/plan"`
 silently does nothing inside the APK.
 
-## The public page stays in English
+## The public page is routed, the app is not
 
-Every screen inside the app is translated. `/landing` is not, and that is a
-decision rather than an omission.
+`/landing` is English and `/landing/de`, `/landing/sl` and `/landing/pl` are the
+rest. All four are prerendered, name each other in `hreflang`, and carry a
+canonical pointing at themselves; `x-default` points at English.
 
-The language is chosen in the app and kept in a store in the browser. Every
-translated screen is a client component that reads it. `/landing` is a server
-component: it exports `metadata`, fetches its own statistics on the server, and
-ships no state, which is what lets it render instantly on a phone that has
-never opened the app before. A server render happens before any browser has
-said which language it wants, so there is nothing for `useLang` to read.
+English keeps the bare path rather than moving to `/landing/en`. Every link to
+this page that exists in the world points at `/landing`, and a second URL
+holding the same page is a duplicate a search engine has to be told to ignore.
 
-Making it a client component would translate it and cost the thing it is for.
-The alternative that actually works is routed locales, `/landing/de` and the
-rest, each rendered on the server for a language known from the URL, with
-`hreflang` so a search engine indexes all four. That is a piece of work with a
-routing decision, a metadata decision and a canonical-URL decision in it. It
-belongs on its own, not appended to the end of a run of wiring PRs.
+The page reads its strings with `translate(lang, key)` rather than `useLang`,
+because it renders on the server before any browser has said which language it
+wants. That is the same fact that made this a piece of work rather than a
+translation pass, and the reasoning it replaces is below.
 
-Until then the public page is English, and the language picker in the app is
-what a person who wants Slovenian will find on their first screen after it.
+`lang` sits on `<main>` rather than on `<html>`. The root layout owns `<html>`
+and is shared by the whole app, so varying it would mean two root layouts and a
+route group around every other page. A screen reader switches voice at the
+element that carries `lang`, which is what the attribute is for.
 
-The same applies to the `metadata` export in `src/app/layout.tsx`, the page
-title and description a search engine and a browser tab show. It is computed on
-the server for the same reason and belongs to the same piece of work.
+**The app's own `metadata` in `src/app/layout.tsx` is still English**, and that
+is not an oversight. It is the title a browser tab and a search engine show for
+`/`, `/plan`, `/stock` and the rest, which are client screens whose language
+lives in a store in the browser. Routing those would mean `/sl/plan` and a
+locale segment through the entire app, for a title nobody links to. The public
+page was worth routing because it is the one page a stranger arrives at.
+
+### What this replaced, and why the wait was right
+
+For four cycles the answer was that `/landing` stays English. The reasoning
+then: it is a server component, a server render happens before any browser has
+said which language it wants, and making it a client component would translate
+it and cost the thing it is for, which is arriving instantly on a phone that has
+never opened the app.
+
+That was correct and the conclusion drawn from it was wrong only in timing. The
+answer was never "client component"; it was routed locales, and that is a piece
+of work with a routing decision, a metadata decision and a canonical-URL
+decision in it. It did not belong appended to the end of a run of wiring PRs,
+and it is better done as one thing that builds, exports and is checked in the
+emitted HTML than as a rushed sixth item.
 
 ## A name stays, a description translates
 

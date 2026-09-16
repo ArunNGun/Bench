@@ -71,7 +71,10 @@ Each of these was considered and rejected. Do not add them without asking.
 ## Surfaces
 
 - `/` is the app itself
-- `/landing` is the public marketing page, rendered outside the app shell
+- `/landing` is the public marketing page, rendered outside the app shell, with
+  `/landing/de`, `/landing/sl` and `/landing/pl` beside it. Routed rather than
+  translated in the browser, because it renders on the server. See
+  [05-decisions.md](05-decisions.md).
 - `/about` is an in-app tab with the version and changelog
 - Android ships the same code inside a Capacitor WebView
 - iOS is served by the PWA; there is no native iOS app
