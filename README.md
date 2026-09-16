@@ -96,7 +96,8 @@ Port 3210 rather than 3000, so it never fights another dev server for the port.
 A standard Next.js app, Vercel, Netlify and Cloudflare Pages all work with no configuration.
 
 - `/` is the app
-- `/landing` is the public page describing it
+- `/landing` is the public page describing it, in English, with `/landing/de`,
+  `/landing/sl` and `/landing/pl` alongside it
 - `/about` is the in-app about page
 
 | Branch | URL | Purpose |
