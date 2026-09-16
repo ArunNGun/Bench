@@ -1469,7 +1469,7 @@ function DiluentShelf() {
                 setAdding(false);
               }}
             >
-              Add {count > 1 ? `${count} bottles` : "bottle"}
+              {t("stock_add_bottles", { n: Math.max(1, count) })}
             </Button>
           </div>
         </Card>
