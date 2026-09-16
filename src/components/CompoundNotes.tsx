@@ -45,6 +45,11 @@ export function CompoundNotes({ peptideId, name }: { peptideId: string; name: st
   useEffect(() => {
     setText(mine?.text ?? "");
     setOpen(false);
+    // The exhaustive rule wants `mine?.text` here and it is wrong to give it:
+    // depending on the text would reseed the box from the store on every
+    // keystroke's round trip and undo what is being typed. The identity is the
+    // dependency; the text is the payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine?.id]);
 
   if (!open) {

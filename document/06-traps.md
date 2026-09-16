@@ -521,6 +521,28 @@ The rule this leaves: a module under `src/lib/calc` may return an id, a number
 or a date. If it is about to return a sentence, the sentence belongs to
 whoever renders it.
 
+## Git from a Linux shell, on a working tree checked out by Windows
+
+`git status` in the mounted repo reported thirty modified files, including
+`package.json` and a workflow nobody had opened. `git diff --stat` said 26,814
+insertions and 26,809 deletions. `git diff --stat -w` said five insertions in one
+file, which was the actual change.
+
+Windows git checks out CRLF and stores LF. A git running on Linux against that
+same working tree has `core.autocrlf` unset, sees CRLF where the index says LF,
+and calls every file modified. Nothing is wrong with the repository and nothing
+needs repairing.
+
+What it costs is a commit made from the wrong side: `git add -A` from Linux would
+rewrite every line ending in the repository and bury the change in a diff nobody
+can read. So the rule is that **git stays on the side that checked the tree out**,
+and a Linux shell sharing the mount is for reading, typechecking, linting and
+running tests, not for committing.
+
+`git diff -w` is the way to see what really changed from the Linux side, and a
+dash scan or any other grep over a diff has to use it too, or it reads the whole
+file as added and reports whatever the file already contained.
+
 ## A comment as the first thing inside `{cond && (`
 
 ```tsx
