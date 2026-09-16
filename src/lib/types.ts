@@ -764,6 +764,17 @@ export interface Settings {
   groupIdenticalVials?: boolean;
 
   /**
+   * Put the shelf of water below the vials rather than above them.
+   *
+   * Off by default, which keeps the page as it is. Raised as "water is the
+   * least important thing here and it is at the top", which is true for
+   * somebody with forty bottles and false for somebody reconstituting today,
+   * for whom the bottle is the next thing they touch. Neither of them is
+   * wrong about their own fridge, so it is a setting rather than an argument.
+   */
+  waterAtBottom?: boolean;
+
+  /**
    * Automatic backups to the device's Documents folder. Android only, a web
    * page cannot write to a folder unattended, so the manual export is the answer
    * there.

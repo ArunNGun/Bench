@@ -108,6 +108,75 @@ export function shelfOrder(bottles: DiluentBottle[], nowMs: number): DiluentBott
 }
 
 /**
+ * One row of the shelf, which is one bottle or several of the same thing.
+ *
+ * `bottle` is what the buttons act on and `bottles` is what the figures are
+ * about, which is the arrangement `groupSealedVials` already uses on the other
+ * shelf. Reaching for one bottle out of four identical ones is a real action;
+ * opening all four is not, so a button on a grouped row still opens one.
+ */
+export interface ShelfRow {
+  /** Stable across renders and unique within the list. */
+  key: string;
+  /** The one the buttons act on: whichever this shelf would reach for next. */
+  bottle: DiluentBottle;
+  /** Every bottle this row stands for, in the order the shelf would reach. */
+  bottles: DiluentBottle[];
+  count: number;
+}
+
+/**
+ * The shelf as rows, collapsing interchangeable bottles when asked to.
+ *
+ * Only a sealed bottle that is still usable can be collapsed, and both halves
+ * of that matter. An open bottle has its own beyond-use date running from the
+ * day it was punctured, so a group would have to either hide that date or
+ * invent one for bottles that do not share it. A bottle past its date has to
+ * keep its own row for the same reason a vial past its date is counted
+ * separately: a filter that can hide something has to say so where it hides it.
+ *
+ * The key is kind and size, because that is what makes two bottles the same
+ * thing to reach for. 30 mL bacteriostatic and 10 mL saline stay two rows.
+ *
+ * Order is `shelfOrder`'s, untouched: a group sits where its first bottle sat,
+ * so turning grouping on shortens the list without rearranging it.
+ */
+export function shelfRows(
+  bottles: DiluentBottle[],
+  nowMs: number,
+  grouped: boolean): ShelfRow[] {
+  const ordered = shelfOrder(bottles, nowMs);
+  if (!grouped) {
+    return ordered.map((b) => ({ key: b.id, bottle: b, bottles: [b], count: 1 }));
+  }
+
+  const rows: ShelfRow[] = [];
+  const byKey = new Map<string, ShelfRow>();
+
+  for (const b of ordered) {
+    const groupable = b.state === "sealed" && bottleUsable(b, nowMs);
+    if (!groupable) {
+      rows.push({ key: b.id, bottle: b, bottles: [b], count: 1 });
+      continue;
+    }
+
+    const key = `${b.kind}:${b.volumeMl}`;
+    const seen = byKey.get(key);
+    if (seen) {
+      seen.bottles.push(b);
+      seen.count++;
+      continue;
+    }
+
+    const row: ShelfRow = { key, bottle: b, bottles: [b], count: 1 };
+    byKey.set(key, row);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+/**
  * Open a bottle without taking anything out of it yet.
  *
  * Opening used to be a side effect of drawing, which is true only for water

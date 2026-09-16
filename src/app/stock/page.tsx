@@ -35,7 +35,14 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { dosesPerDoseDay, phaseSpanAt, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle, shelfOrder } from "@/lib/calc/diluent";
+import {
+  bottleRemainingMl,
+  bottleUsable,
+  diluentStock,
+  pickBottle,
+  shelfOrder,
+  shelfRows,
+} from "@/lib/calc/diluent";
 import {
   DEFAULT_ML_PER_SPRAY,
   MEASURE_A_PRESS,
@@ -230,7 +237,7 @@ export default function StockPage() {
         />
       )}
 
-      <DiluentShelf />
+      {!settings.waterAtBottom && <DiluentShelf />}
 
       {!vials.length && !adding && (
         <EmptyState
@@ -384,6 +391,14 @@ export default function StockPage() {
           </div>
         </section>
       )}
+
+      {/*
+        Water sits at whichever end the owner of the fridge put it. Rendered
+        twice in the tree and once on the page: the condition is exclusive, and
+        two call sites are easier to read than one shelf lifted into a variable
+        and dropped into a slot.
+      */}
+      {settings.waterAtBottom && <DiluentShelf />}
 
       <Callout tone="info" title={t("stock_28_day_note")}>
         {t("stock_bud_explainer")}
@@ -971,6 +986,14 @@ const DILUENT_KEY: Record<DiluentKind, TranslationKey> = {
 };
 
 /** The kinds a vial or a bottle can actually be made up with. Oil is not one. */
+/** What a bottle's state is called, which the badge used to print raw. */
+const BOTTLE_STATE_KEY: Record<DiluentBottle["state"], TranslationKey> = {
+  sealed: "stock_bottle_sealed",
+  open: "stock_bottle_open",
+  finished: "stock_bottle_finished",
+  discarded: "stock_bottle_discarded",
+};
+
 const DILUENT_CHOICES: DiluentKind[] = ["bacteriostatic", "sterile", "saline"];
 
 function ReconstituteForm({
@@ -1363,6 +1386,7 @@ function TopUpForm({
 function DiluentShelf() {
   const { t } = useLang();
   const { diluents } = useProfileData();
+  const settings = useStore((s) => s.settings);
   const addDiluent = useStore((s) => s.addDiluent);
   const updateDiluent = useStore((s) => s.updateDiluent);
   const removeDiluent = useStore((s) => s.removeDiluent);
@@ -1378,11 +1402,14 @@ function DiluentShelf() {
   const [usedMl, setUsedMl] = useState(1);
 
   const now = Date.now();
-  // Ordered the way the app itself would reach for them, so the bottle at the
-  // top of the shelf is the one reconstituting will suggest.
-  const live = shelfOrder(
-    diluents.filter((b) => b.state !== "finished" && b.state !== "discarded"),
-    now);
+  const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
+  /*
+    Ordered the way the app itself would reach for them, so the bottle at the
+    top of the shelf is the one reconstituting will suggest, and collapsed on
+    the same setting the vials use. One switch for one idea: somebody who wants
+    forty vials on one row wants forty bottles on one row too.
+  */
+  const rows = shelfRows(live, now, settings.groupIdenticalVials === true);
   const stock = diluentStock(diluents, "bacteriostatic", now);
 
   if (!live.length && !adding) {
@@ -1476,16 +1503,27 @@ function DiluentShelf() {
       )}
 
       <div className="space-y-1.5">
-        {live.map((b) => {
+        {/* `n` rather than `count`, which is the add form's own state above. */}
+        {rows.map(({ key, bottle: b, count: n }) => {
           const left = bottleRemainingMl(b);
           return (
-            <Card key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
+            <Card key={key} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
               <span className="text-[13.5px] text-[var(--ink)]">{t(DILUENT_KEY[b.kind])}</span>
-              <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>{b.state}</Badge>
+              <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>
+                {t(BOTTLE_STATE_KEY[b.state])}
+              </Badge>
+              {/*
+                A group is whole sealed bottles, so it counts rather than
+                measures: four times thirty is the fridge, and "120 mL" would be
+                a number you cannot pour. A single bottle says what is left in
+                it, which is the figure that matters once it is open.
+              */}
               <span className="tnum font-mono text-[13px] text-[var(--muted)]">
-                {trim(left, 1)} of {trim(b.volumeMl, 1)} mL
+                {n > 1
+                  ? t("stock_bottles_each", { n, ml: trim(b.volumeMl, 1) })
+                  : t("stock_bottle_left", { left: trim(left, 1), total: trim(b.volumeMl, 1) })}
               </span>
-              {bottleUsable(b, now) ? null : <Badge tone="rose">unusable</Badge>}
+              {bottleUsable(b, now) ? null : <Badge tone="rose">{t("stock_bottle_unusable")}</Badge>}
 
               <div className="ml-auto flex items-center gap-1">
                 {b.state === "sealed" && (
