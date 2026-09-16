@@ -598,6 +598,14 @@ done
 
 Run that before claiming a translation pass is finished.
 
+It is necessary and not sufficient, and two later finds show where it stops. A
+button reading `Add {count > 1 ? \`${count} bottles\` : "bottle"}` and a rescue
+notice built from labels in `calc/rescue.ts` both sat in files that import
+`useLang` and use it everywhere else, so a check about the file cannot see
+either. What found them was somebody using the app in their own language and
+reading a word that was not it. Budget for that: the last English in a screen is
+found by a reader, not by a grep.
+
 ## A shelf with something on it that reports nothing
 
 The Now card said **0 doses** for KPV while the Stock page, one tap away, said

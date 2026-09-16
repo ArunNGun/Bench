@@ -169,24 +169,16 @@ export function recoverable(current: AppData, rescue: Rescue): Loss[] {
   }));
 }
 
-/** What a collection is called when the app has to say it out loud. */
-export const RECORD_LABEL: Record<RecordKey, { one: string; many: string }> = {
-  profiles: { one: "profile", many: "profiles" },
-  protocols: { one: "protocol", many: "protocols" },
-  logs: { one: "logged dose", many: "logged doses" },
-  vials: { one: "vial", many: "vials" },
-  measurements: { one: "measurement", many: "measurements" },
-  labs: { one: "lab result", many: "lab results" },
-  checkIns: { one: "daily rating", many: "daily ratings" },
-  customPeptides: { one: "compound you added", many: "compounds you added" },
-  orders: { one: "order", many: "orders" },
-  diluents: { one: "bottle of water", many: "bottles of water" },
-  compoundNotes: { one: "compound note", many: "compound notes" },
-};
-
-/** "3 bottles of water", for a sentence rather than for a table. */
-export function describeLoss(loss: Loss): string {
-  const gone = loss.from - loss.to;
-  const label = RECORD_LABEL[loss.key];
-  return `${gone} ${gone === 1 ? label.one : label.many}`;
+/**
+ * How many rows a loss took.
+ *
+ * There used to be a `RECORD_LABEL` here and a `describeLoss` that returned
+ * "3 bottles of water". Both are gone, and for the reason written into
+ * 06-traps.md: this module is pure logic, and a finished English sentence
+ * coming out of it is a sentence that cannot be translated, on the one screen
+ * that only ever appears at a bad moment. The count is the fact; the noun and
+ * its plural form belong to whoever draws the row.
+ */
+export function lostCount(loss: Loss): number {
+  return loss.from - loss.to;
 }

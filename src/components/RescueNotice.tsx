@@ -4,9 +4,37 @@ import { useCallback, useEffect, useState } from "react";
 import { LifeBuoy, Undo2, X } from "lucide-react";
 import { Button, Callout, Card, SectionLabel } from "./ui";
 import { clearRescue, readRescue, useStore } from "@/lib/store";
-import { describeLoss, recoverable, type Rescue } from "@/lib/calc/rescue";
+import { lostCount, recoverable, type Loss, type RecordKey, type Rescue } from "@/lib/calc/rescue";
 import { formatDateTime } from "@/lib/format";
-import { useLang } from "@/lib/i18n";
+import { useLang, type PluralBase } from "@/lib/i18n";
+
+/**
+ * What each collection is called, in the reader's language.
+ *
+ * `Record<RecordKey, ...>` rather than a lookup with a fallback, so adding a
+ * collection to `RECORD_KEYS` fails to compile until it has a name here. The
+ * alternative is a screen that says "3" and leaves off the noun, on the one
+ * occasion when being exact matters most.
+ *
+ * Five of these are families the app already had; the rest were added with
+ * this. Each is a plural family rather than a noun with a number glued in
+ * front, because Slovenian counts one steklenička, two steklenički, three
+ * stekleničke and five stekleničk, and an app that says "5 steklenička" is an
+ * app that was written in English.
+ */
+const LOSS_KEY: Record<RecordKey, PluralBase> = {
+  profiles: "count_profiles",
+  protocols: "count_protocols",
+  logs: "count_doses",
+  vials: "count_vials",
+  measurements: "count_measurements",
+  labs: "count_results",
+  checkIns: "count_ratings",
+  customPeptides: "count_compounds",
+  orders: "count_orders",
+  diluents: "count_bottles",
+  compoundNotes: "count_notes",
+};
 
 /**
  * Says that records disappeared, and offers them back.
@@ -30,6 +58,8 @@ export function RescueNotice() {
   const [rescue, setRescue] = useState<Rescue | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const describe = (l: Loss) => t(LOSS_KEY[l.key], { n: lostCount(l) });
+
   const look = useCallback(() => {
     readRescue().then(setRescue).catch(() => setRescue(null));
   }, []);
@@ -51,7 +81,9 @@ export function RescueNotice() {
     setDone(
       missing.length
         ? t("rescue_done", {
-            what: missing.map((l) => describeLoss({ ...l, from: l.to, to: l.from })).join(", "),
+            // The pair is swapped because these are rows going back in rather
+            // than rows that went, and the count is the difference either way.
+            what: missing.map((l) => describe({ ...l, from: l.to, to: l.from })).join(", "),
           })
         : t("rescue_done_nothing"));
     setRescue(null);
@@ -73,7 +105,7 @@ export function RescueNotice() {
 
       <Callout tone="warn">
         {t("rescue_lost", {
-          what: rescue.losses.map((l) => describeLoss(l)).join(", "),
+          what: rescue.losses.map(describe).join(", "),
           when: formatDateTime(rescue.at),
         })}
       </Callout>
