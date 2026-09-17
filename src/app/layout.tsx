@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { RECOVERY_SCRIPT } from "@/lib/recover";
 import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AppFrame } from "@/components/AppFrame";
@@ -106,6 +107,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         */}
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/*
+          Before the app's own code, because the thing it is listening for is
+          the app's own code failing to arrive. See src/lib/recover.ts.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: RECOVERY_SCRIPT }} />
       </head>
       <body
         className={`${jakarta.variable} ${plexMono.variable} antialiased`}
