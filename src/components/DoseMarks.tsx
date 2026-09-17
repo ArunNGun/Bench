@@ -16,6 +16,7 @@
 
 import { marksForDose, pickVialForDose } from "@/lib/calc/inventory";
 import { mcgPerSpray, mlForSprays, spraysForDose } from "@/lib/calc/spray";
+import { mcgPerTablet, tabletsForDose } from "@/lib/calc/tablet";
 import { SYRINGES, syringeById, unitsToMl } from "@/lib/calc/reconstitution";
 import { useStore, useProfileData } from "@/lib/store";
 import { formatDose, trim } from "@/lib/format";
@@ -70,6 +71,24 @@ export function DoseMarks({
         })}
       >
         {t("count_presses", { n: presses })}
+      </span>
+    );
+  }
+
+  /*
+   * A tablet reads in tablets, for the same reason and by the same route: the
+   * schedule should say what to count out, not a mass to convert in your head.
+   * Decided on the pack rather than on the route, because "oral" also covers a
+   * solution somebody swallows, and that one does read on a barrel.
+   */
+  const pack = pickVialForDose(vials, peptideId, doseMcg, nowMs, "pack");
+  if (pack && mcgPerTablet(pack) > 0) {
+    return (
+      <span
+        className={`tnum font-mono ${className}`}
+        title={t("dose_tablets_title", { dose: formatDose(mcgPerTablet(pack)) })}
+      >
+        {t("count_tablets", { n: trim(tabletsForDose(pack, doseMcg), 2) })}
       </span>
     );
   }

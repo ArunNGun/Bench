@@ -51,6 +51,7 @@ import {
   spraysRemaining,
   transferToSpray,
 } from "@/lib/calc/spray";
+import { isPack, mgPerTablet, packStrengthMg, tabletsRemaining } from "@/lib/calc/tablet";
 import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
@@ -350,7 +351,12 @@ export default function StockPage() {
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
-                  onReconstitute={() => setReconstituting(v.id)}
+                  /*
+                    A pack of tablets is not made up with anything, so it is
+                    not offered the one action that would turn it into a
+                    solution it can never be.
+                  */
+                  onReconstitute={isPack(v) ? undefined : () => setReconstituting(v.id)}
                 />
                 {reconstituting === v.id && (
                   <ReconstituteForm
@@ -461,8 +467,9 @@ function VialRow({
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
   const scale = useSyringeScale();
   const spray = isSpray(vial);
+  const pack = isPack(vial);
   // Marks are a reading off a barrel, and a nasal dose never meets one.
-  const marks = !spray && doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
+  const marks = !spray && !pack && doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
   const perPress = spray ? mcgPerSpray(vial) : 0;
 
   const many = (group?.count ?? 1) > 1;
@@ -550,7 +557,27 @@ function VialRow({
           </div>
         ) : (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
-            <span>{t("stock_lyophilised")}</span>
+            {/*
+              A pack is not a lyophilised vial waiting to be made up. It is
+              ready, so it says what is in it and how many are left rather than
+              inviting a reconstitution it must never have.
+            */}
+            {pack ? (
+              <>
+                <span className="tnum font-mono">
+                  {t("stock_tablets_left", { n: tabletsRemaining(vial) })}
+                </span>
+                {mgPerTablet(vial) > 0 ? (
+                  <span className="tnum font-mono">
+                    {t("stock_per_tablet", { mg: trim(mgPerTablet(vial), 3) })}
+                  </span>
+                ) : (
+                  <span className="text-[var(--rose)]">{t("stock_no_tablet_size")}</span>
+                )}
+              </>
+            ) : (
+              <span>{t("stock_lyophilised")}</span>
+            )}
             {many && (
               <span className="tnum font-mono">
                 {t("stock_mg_in_total", { mg: trim(strengthMgTotal, 2) })}
@@ -715,6 +742,16 @@ function AddVialForm({
   const [strengthMg, setStrengthMg] = useState(10);
   const [count, setCount] = useState(1);
   /**
+   * Tablets in one pack, asked for only when the compound comes as tablets.
+   *
+   * The strength field above then means milligrams in one tablet, and the two
+   * multiply into the mass of the pack. Storing the product rather than the
+   * pair is what lets every figure downstream, doses left, cost per dose, the
+   * day the shelf runs dry, go on being arithmetic about a mass in a
+   * container without learning that tablets exist.
+   */
+  const [tabletsPerPack, setTabletsPerPack] = useState(30);
+  /**
    * Postage for the whole order, not for each vial.
    *
    * Sixty dollars of shipping on a single kit changes what that kit actually
@@ -751,6 +788,8 @@ function AddVialForm({
   const [arrived, setArrived] = useState(true);
 
   const peptide = peptides.find((p) => p.id === peptideId);
+  const tablets = peptide?.preparation === "tablet";
+  const packMg = packStrengthMg(strengthMg, tabletsPerPack);
 
   // Storage is always per vial, whichever way it was entered, so nothing
   // downstream has to know a kit was involved.
@@ -790,8 +829,14 @@ function AddVialForm({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field
-          label={t("stock_strength")}
-          hint={peptide?.vialSizesMg.length ? `Common: ${peptide.vialSizesMg.join(", ")} mg` : undefined}
+          label={tablets ? t("stock_mg_per_tablet") : t("stock_strength")}
+          hint={
+            tablets
+              ? t("stock_pack_holds", { mg: trim(packMg, 2) })
+              : peptide?.vialSizesMg.length
+                ? t("stock_common_sizes", { sizes: peptide.vialSizesMg.join(", ") })
+                : undefined
+          }
         >
           <NumberInput
             value={strengthMg}
@@ -801,7 +846,18 @@ function AddVialForm({
             onChange={(e) => setStrengthMg(Number(e.target.value))}
           />
         </Field>
-        <Field label={t("stock_how_many")}>
+        {/* Only for tablets, so nobody counting vials is asked about packs. */}
+        {tablets && (
+          <Field label={t("stock_tablets_per_pack")}>
+            <NumberInput
+              value={tabletsPerPack}
+              min={1}
+              step={1}
+              onChange={(e) => setTabletsPerPack(Number(e.target.value))}
+            />
+          </Field>
+        )}
+        <Field label={tablets ? t("stock_how_many_packs") : t("stock_how_many")}>
           <NumberInput
             value={count}
             min={1}
@@ -940,7 +996,14 @@ function AddVialForm({
           onClick={() => {
             const base: Omit<Vial, "id" | "profileId"> = {
               peptideId,
-              strengthMg,
+              /*
+               * A pack is stored as the mass it holds, which is the tablet
+               * size times how many are in it. Everything downstream then
+               * treats it as any other container, and the tablet size is kept
+               * beside it as the unit to count in.
+               */
+              strengthMg: tablets ? packMg : strengthMg,
+              ...(tablets ? { container: "pack" as const, mgPerTablet: strengthMg } : {}),
               state: arrived ? "sealed" : "on-order",
               supplier: supplier.trim() || undefined,
               cost: perVial,
@@ -959,11 +1022,16 @@ function AddVialForm({
                 ? null
                 : { cost: Number(shipping), currency: payCurrency });
           }}
-          disabled={!peptideId || !(strengthMg > 0)}
+          disabled={!peptideId || !(tablets ? packMg > 0 : strengthMg > 0)}
         >
-          {arrived
-            ? t("stock_add_vials", { vials: t("count_vials", { n: count }) })
-            : t("stock_add_vials_on_order", { vials: t("count_vials", { n: count }) })}
+          {(() => {
+            const what = tablets
+              ? t("count_packs", { n: count })
+              : t("count_vials", { n: count });
+            return arrived
+              ? t("stock_add_vials", { vials: what })
+              : t("stock_add_vials_on_order", { vials: what });
+          })()}
         </Button>
       </div>
     </Card>

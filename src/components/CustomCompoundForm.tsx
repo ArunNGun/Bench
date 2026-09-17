@@ -188,15 +188,22 @@ export function CustomCompoundForm({
         <Field
           label={t("ccf_comes_as")}
           hint={
-            draft.preparation === "powder" ? t("ccf_powder_hint") : t("ccf_solution_hint")
+            draft.preparation === "powder"
+              ? t("ccf_powder_hint")
+              : draft.preparation === "tablet"
+                ? t("ccf_tablet_hint")
+                : t("ccf_solution_hint")
           }
         >
           <Select
             value={draft.preparation}
-            onChange={(e) => set("preparation", e.target.value as "powder" | "solution")}
+            onChange={(e) =>
+              set("preparation", e.target.value as CustomDraft["preparation"])
+            }
           >
             <option value="powder">{t("ccf_powder")}</option>
             <option value="solution">{t("ccf_solution")}</option>
+            <option value="tablet">{t("ccf_tablet")}</option>
           </Select>
         </Field>
         <Field

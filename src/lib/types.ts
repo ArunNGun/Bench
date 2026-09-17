@@ -168,7 +168,7 @@ export interface Peptide {
    * concentration from the moment you open it and never needs the reconstitution
    * step. Defaults to powder.
    */
-  preparation?: "powder" | "solution";
+  preparation?: "powder" | "solution" | "tablet";
 
   /**
    * International units per milligram, for compounds conventionally dosed in IU
@@ -418,6 +418,16 @@ export interface DoseLog {
    * from today's bottle would be inventing a number for a past event.
    */
   presses?: number;
+  /**
+   * How many tablets this dose was, for a pack.
+   *
+   * Recorded for the same reason `presses` is: the pack a dose came out of can
+   * be replaced by one with a different tablet size, and a count worked out
+   * later from today's pack would answer a question about last Tuesday with
+   * today's arithmetic. Fractions are kept, because a scored tablet really is
+   * half a dose, which is where a tablet differs from a press.
+   */
+  tablets?: number;
   /**
    * The exact barrel, by id from `SYRINGES`.
    *
@@ -693,7 +703,17 @@ export interface Vial {
    *
    * What it does not reuse is the syringe. See `calc/spray.ts`.
    */
-  container?: "vial" | "spray";
+  container?: "vial" | "spray" | "pack";
+  /**
+   * Milligrams in one tablet, for a pack of them.
+   *
+   * The unit a pack is counted in, the way `mlPerSpray` is the unit a bottle is
+   * counted in. No default and no guess: a pump has a conventional 0.1 mL and a
+   * tablet has no conventional size at all, so zero here means nobody said, and
+   * the screen shows a count of nothing rather than a count of something
+   * invented.
+   */
+  mgPerTablet?: number;
   /**
    * Millilitres one press of the pump delivers, for a spray.
    *

@@ -34,6 +34,7 @@ export const DOSE_CSV_HEADER = [
    * things, and the CSV is what somebody takes to a spreadsheet to add up.
    */
   "presses",
+  "tablets",
 ] as const;
 
 /** Quote only when the value would otherwise break the row. */
@@ -73,6 +74,7 @@ export function doseCsv(logs: DoseLog[], nameFor: (peptideId: string) => string)
         (l.sideEffects ?? []).join("; "),
         l.notes ?? "",
         l.presses ?? "",
+        l.tablets ?? "",
       ]
         .map(escapeCsv)
         .join(",");
