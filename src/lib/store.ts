@@ -41,6 +41,7 @@ import {
   reconcileVials,
   returnToVial,
   stockFor as computeStock,
+  type ContainerKind,
   vialConcentration,
   vialExpired,
   vialFractionRemaining,
@@ -966,9 +967,20 @@ export function vialStatus(vial: Vial, nowMs = Date.now()): VialStatus {
   };
 }
 
-/** Doses of a peptide still available across every usable vial. */
-export function stockFor(vials: Vial[], peptideId: string, doseMcg: number, nowMs = Date.now()) {
-  return computeStock(vials, peptideId, doseMcg, nowMs);
+/**
+ * Doses of a peptide still available across every usable container.
+ *
+ * The container has to be passed, not defaulted, wherever the answer is shown
+ * to somebody: the default is a vial, and a caller that leaves it out counts
+ * nothing for a compound that comes as tablets or lives in a spray bottle.
+ */
+export function stockFor(
+  vials: Vial[],
+  peptideId: string,
+  doseMcg: number,
+  nowMs = Date.now(),
+  container: ContainerKind = "vial") {
+  return computeStock(vials, peptideId, doseMcg, nowMs, container);
 }
 
 export { vialCapacityMcg, pickVialForDose } from "./calc/inventory";
