@@ -34,7 +34,7 @@ export function SiteMap({
   multi,
   legend: showLegend = true,
 }: {
-  logs: Pick<DoseLog, "at" | "site" | "skipped">[];
+  logs: Pick<DoseLog, "at" | "site" | "skipped" | "route">[];
   selected?: InjectionSite | "" | InjectionSite[];
   onSelect?: (site: InjectionSite) => void;
   restDays?: number;

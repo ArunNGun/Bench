@@ -22,8 +22,15 @@ import {
   vialUsable,
 } from "@/lib/calc/inventory";
 import { mcgForTablets, mcgPerTablet, tabletsForDose } from "@/lib/calc/tablet";
-import { mcgForSprays, mcgPerSpray, mlForSprays, routeChoices, spraysForDose } from "@/lib/calc/spray";
-import { suggestSite } from "@/lib/calc/sites";
+import {
+  defaultRoute,
+  mcgForSprays,
+  mcgPerSpray,
+  mlForSprays,
+  routeChoices,
+  spraysForDose,
+} from "@/lib/calc/spray";
+import { routeHasSite, suggestSite } from "@/lib/calc/sites";
 import {
   calculateDraw,
   concentration,
@@ -115,7 +122,8 @@ export function LogDoseSheet({
       !proto &&
       !pickVialForDose(vials, forPeptideId, dose, atMs, "vial") &&
       !!pickVialForDose(vials, forPeptideId, dose, atMs, "spray");
-    const nextRoute = proto?.route ?? (onlySpray ? "intranasal" : "subcutaneous");
+    const nextRoute =
+      proto?.route ?? defaultRoute(findPeptide(custom, forPeptideId)?.preparation, onlySpray);
     setDoseMcg(dose);
     setRoute(nextRoute);
     // A nasal protocol draws from a bottle and never from a vial, and a
@@ -223,8 +231,15 @@ export function LogDoseSheet({
    * therefore chosen by the preparation rather than by the route.
    */
   const tablets = peptide?.preparation === "tablet";
-  /** No barrel, no marks, no injection site. */
+  /** No barrel, no marks. */
   const noBarrel = nasal || tablets;
+  /**
+   * Whether this dose goes into tissue, which is what a site is about.
+   *
+   * Not the same test as `noBarrel`, close as the two look: an oral solution
+   * is drawn up with a syringe and swallowed, so it has a barrel and no site.
+   */
+  const hasSite = routeHasSite(route);
   const container = containerForDose(peptide?.preparation, route);
 
   /*
@@ -234,8 +249,8 @@ export function LogDoseSheet({
    * never on offer.
    */
   const routes = useMemo(
-    () => routeChoices(peptide?.routes ?? [], vials, peptideId),
-    [peptide?.routes, vials, peptideId]);
+    () => routeChoices(peptide?.routes ?? [], vials, peptideId, peptide?.preparation),
+    [peptide?.routes, peptide?.preparation, vials, peptideId]);
 
   // Sites pinned to this protocol, if any were chosen when it was set up.
   // Memoised so the identity is stable across renders, it feeds hook deps.
@@ -411,7 +426,9 @@ export function LogDoseSheet({
         at,
         doseMcg,
         route,
-        site: site || undefined,
+        // A dose that went nowhere near tissue carries no site, whatever the
+        // form had suggested before the route was settled.
+        site: (hasSite && site) || undefined,
         vialId: vialId || undefined,
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
@@ -436,7 +453,7 @@ export function LogDoseSheet({
       at,
       doseMcg,
       route,
-      site: site || undefined,
+      site: (hasSite && site) || undefined,
       vialId: vialId || undefined,
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
@@ -702,7 +719,7 @@ export function LogDoseSheet({
               </Select>
             </Field>
 
-            {!noBarrel && (
+            {hasSite && (
             <Field
               label={t("log_site_short")}
               hint={
@@ -724,12 +741,13 @@ export function LogDoseSheet({
           </div>
 
           {/*
-            Nothing about rotation applies to a nose. Repeatedly injecting one
-            spot builds tissue that absorbs erratically, which is the whole
-            reason this map exists; a nose has no such problem, and asking which
-            nostril would invite a record nobody can act on.
+            Nothing about rotation applies to a nose, a mouth or a skin cream.
+            Repeatedly injecting one spot builds tissue that absorbs
+            erratically, which is the whole reason this map exists; none of the
+            other routes does that, and asking which nostril, or which side a
+            tablet went down, would invite a record nobody can act on.
           */}
-          {!noBarrel && (
+          {hasSite && (
           <div>
             <SiteMap
               logs={peptideLogs}

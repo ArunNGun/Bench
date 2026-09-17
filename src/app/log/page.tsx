@@ -21,7 +21,7 @@ import { findPeptide, useStore, useProfileData } from "@/lib/store";
 import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { diaryDays, ratableDay } from "@/lib/calc/checkins";
-import { overusedSites } from "@/lib/calc/sites";
+import { overusedSites, routeHasSite } from "@/lib/calc/sites";
 import { formatDate, formatDose, formatDateTime, formatTime, percent, siteLabel, toDateInput, fromDateInput, trim } from "@/lib/format";
 import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
 import {
@@ -149,7 +149,7 @@ export default function LogPage() {
         </Card>
       )}
 
-      {logs.some((l) => l.site) && (
+      {logs.some((l) => l.site && routeHasSite(l.route)) && (
         <Card className="p-4">
           <SectionLabel>{t("log_site_rotation")}</SectionLabel>
           <SiteMap logs={shown} nowMs={now} />
@@ -251,7 +251,13 @@ export default function LogPage() {
                 {entries.map((l) => {
                   const p = findPeptide(custom, l.peptideId);
                   const color = doseColor(palette, l);
-                  const site = l.site ? siteLabel(l.site) : undefined;
+                  /*
+                    Only for a dose that went into tissue. Records written
+                    before the form was corrected carry a site whatever the
+                    route was, and a box of tablets reading "left abdomen" is
+                    the complaint this answers.
+                  */
+                  const site = l.site && routeHasSite(l.route) ? siteLabel(l.site) : undefined;
                   return (
                     <Card
                       key={l.id}

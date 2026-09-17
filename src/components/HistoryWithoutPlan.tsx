@@ -6,6 +6,7 @@ import { Badge, Button, ButtonLink, Card, EmptyState, SectionLabel, TONE_BG } fr
 import { findPeptide, useProfileData, useStore } from "@/lib/store";
 import { inferAllProtocols, type InferredProtocol } from "@/lib/calc/infer";
 import { formatDate, formatDose, siteLabel } from "@/lib/format";
+import { routeHasSite } from "@/lib/calc/sites";
 import { useLang } from "@/lib/i18n";
 
 /**
@@ -143,7 +144,7 @@ export function HistoryWithoutPlan({ nowMs }: { nowMs: number }) {
                 <span className="font-bold text-[var(--ink)]">{formatDose(l.doseMcg)}</span>
                 <span className="text-[var(--ink)]">{peptide?.name ?? l.peptideId}</span>
                 <span className="text-[var(--muted)]">{formatDate(l.at)}</span>
-                {l.site && (
+                {l.site && routeHasSite(l.route) && (
                   <span className="text-[var(--faint)]">
                     {siteLabel(l.site)}
                   </span>

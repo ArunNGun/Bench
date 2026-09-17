@@ -510,8 +510,8 @@ function ProtocolForm({
    * compound exists. Evidence rather than permission.
    */
   const routes = useMemo(
-    () => routeChoices(peptide?.routes ?? [], vials, peptideId),
-    [peptide?.routes, vials, peptideId]);
+    () => routeChoices(peptide?.routes ?? [], vials, peptideId, peptide?.preparation),
+    [peptide?.routes, peptide?.preparation, vials, peptideId]);
 
   const [route, setRoute] = useState<Route>(initial?.route ?? "subcutaneous");
 
