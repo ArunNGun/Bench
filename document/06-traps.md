@@ -695,3 +695,26 @@ sentence has both an `n` and an amount, the amount is `formatDose`.
 Worth checking the neighbours when this shape appears. The log sheet's "n more
 doses of {dose} in this vial after this one" was already using `formatDose` and
 was correct.
+
+## A rule stated in three places, extended in one
+
+Tablets shipped and the form for logging a dose said **No pack of this in
+stock** with the pack sitting on the shelf. The pack was there, the compound
+was marked as tablets, the dropdown even listed it.
+
+Which container a dose comes out of was written three times in
+`LogDoseSheet.tsx`: once for the list of containers to choose from, once when a
+protocol is applied, once when the route is changed by hand. Adding tablets
+taught the first one and left the other two saying `route === "intranasal" ?
+"spray" : "vial"`. So the list offered the pack and nothing ever selected it,
+`vialId` stayed empty, and every sentence downstream of `vial` reported an
+empty shelf. The same shape had been survivable for sprays only because a
+nasal dose is picked by route, which both copies already knew about.
+
+The rule is now `containerForDose(preparation, route)` in `calc/inventory.ts`,
+with a test, and the three call sites ask it.
+
+The general shape: **a rule with three call sites and no name has no place to
+add a case to.** When a third value joins a two-value decision, the first thing
+to look for is the other spellings of that decision. `grep` for the ternary,
+not for the function, because there is no function yet, which is the problem.

@@ -8,6 +8,7 @@ import {
   drawFromVial,
   groupSealedVials,
   supplyOutlook,
+  containerForDose,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -822,5 +823,41 @@ describe("stock held back by a date", () => {
   it("ignores vials that are gone rather than merely out of date", () => {
     const finished = { ...past, state: "finished" as const };
     expect(stockFor([finished], "kpv", 250, NOW).dosesExpired).toBe(0);
+  });
+});
+
+/*
+ * The rule that decides where a dose comes from. It lived in the form, written
+ * out three times, and one of those copies was the only one that had heard of
+ * tablets: a compound sold as tablets therefore had nothing selected and the
+ * screen said no pack was in stock while the pack sat on the shelf.
+ */
+describe("containerForDose", () => {
+  it("sends an injection to a vial", () => {
+    expect(containerForDose(undefined, "subcutaneous")).toBe("vial");
+    expect(containerForDose("powder", "intramuscular")).toBe("vial");
+    expect(containerForDose("solution", "subcutaneous")).toBe("vial");
+  });
+
+  it("sends a tablet to a pack", () => {
+    expect(containerForDose("tablet", "oral")).toBe("pack");
+    expect(containerForDose("tablet", "subcutaneous")).toBe("pack");
+  });
+
+  /*
+   * Oral does not mean tablet. A solution somebody swallows out of a syringe
+   * is oral and still comes out of a vial, which is why the preparation and
+   * not the route is what decides here.
+   */
+  it("leaves an oral solution in its vial", () => {
+    expect(containerForDose("solution", "oral")).toBe("vial");
+    expect(containerForDose(undefined, "oral")).toBe("vial");
+  });
+
+  /* The route wins over the preparation, not the other way round. */
+  it("sends a nasal dose to a bottle whatever the library says", () => {
+    expect(containerForDose(undefined, "intranasal")).toBe("spray");
+    expect(containerForDose("powder", "intranasal")).toBe("spray");
+    expect(containerForDose("tablet", "intranasal")).toBe("spray");
   });
 });

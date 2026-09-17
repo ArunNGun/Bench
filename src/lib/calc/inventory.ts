@@ -7,7 +7,7 @@
  * derived from it for display.
  */
 
-import type { Protocol, Vial, VialState } from "../types";
+import type { Peptide, Protocol, Route, Vial, VialState } from "../types";
 import { DAY_MS, protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
 import { unitsFromDose, type SyringeScale } from "./reconstitution";
 
@@ -81,6 +81,27 @@ export type ContainerKind = NonNullable<Vial["container"]>;
 
 export function matchesContainer(v: Pick<Vial, "container">, want: ContainerKind = "vial") {
   return (v.container ?? "vial") === want;
+}
+
+/**
+ * Which container a dose of this compound comes out of.
+ *
+ * Here rather than in the form because the form asked it in three places and
+ * only one of them was taught about tablets. The two that were not went on
+ * asking for a vial, so a compound sold as tablets had nothing selected and
+ * the screen said there was no pack in stock while the pack sat on the shelf.
+ * One rule, one place, one test.
+ *
+ * The route decides first and the preparation second, which is the order the
+ * two facts deserve: a nasal dose comes out of a bottle whatever the library
+ * says the compound is, while "oral" covers a solution somebody swallows out
+ * of a syringe as well as a tablet, so it cannot decide anything on its own.
+ */
+export function containerForDose(
+  preparation: Peptide["preparation"],
+  route: Route): ContainerKind {
+  if (route === "intranasal") return "spray";
+  return preparation === "tablet" ? "pack" : "vial";
 }
 
 /**

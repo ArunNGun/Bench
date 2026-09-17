@@ -14,12 +14,12 @@ import { isBlend } from "@/lib/calc/blend";
 import { allPeptides, findPeptide, useProfileData, useStore, vialStatus } from "@/lib/store";
 import { AddCompoundInline } from "./AddCompoundInline";
 import {
+  containerForDose,
   matchesContainer,
   pickVialForDose,
   stockFor,
   vialRemainingMcg,
   vialUsable,
-  type ContainerKind,
 } from "@/lib/calc/inventory";
 import { mcgForTablets, mcgPerTablet, tabletsForDose } from "@/lib/calc/tablet";
 import { mcgForSprays, mcgPerSpray, mlForSprays, routeChoices, spraysForDose } from "@/lib/calc/spray";
@@ -93,6 +93,15 @@ export function LogDoseSheet({
    * Shared by both directions of the pair of dropdowns, so picking a protocol
    * and picking a peptide that happens to have one cannot drift apart.
    */
+  /**
+   * The rule above, asked with a peptide id rather than with a peptide.
+   *
+   * These handlers run before the render that computes `container`, so they
+   * have to ask for themselves. They ask the same function.
+   */
+  const containerFor = (forPeptideId: string, forRoute: Route) =>
+    containerForDose(findPeptide(custom, forPeptideId)?.preparation, forRoute);
+
   function applyProtocol(proto: Protocol | undefined, forPeptideId: string, atMs: number) {
     const dose = proto ? scheduledDoseMcg(proto, atMs) : 0;
     /*
@@ -109,10 +118,11 @@ export function LogDoseSheet({
     const nextRoute = proto?.route ?? (onlySpray ? "intranasal" : "subcutaneous");
     setDoseMcg(dose);
     setRoute(nextRoute);
-    // A nasal protocol draws from a bottle and never from a vial, so the
-    // container is decided by the route rather than by whatever is nearest.
+    // A nasal protocol draws from a bottle and never from a vial, and a
+    // compound sold as tablets comes out of a pack whatever the route says, so
+    // the container is decided by the rule rather than by whatever is nearest.
     setVialId(
-      pickVialForDose(vials, forPeptideId, dose, atMs, nextRoute === "intranasal" ? "spray" : "vial")
+      pickVialForDose(vials, forPeptideId, dose, atMs, containerFor(forPeptideId, nextRoute))
         ?.id ?? "");
     setSiteOverride(false);
     setSite(suggestSite(logs.filter((l) => l.peptideId === forPeptideId), atMs, 14, proto?.sites));
@@ -139,8 +149,8 @@ export function LogDoseSheet({
    */
   function chooseRoute(next: Route) {
     setRoute(next);
-    const want = next === "intranasal" ? "spray" : "vial";
-    setVialId(pickVialForDose(vials, peptideId, doseMcg, at, want)?.id ?? "");
+    setVialId(
+      pickVialForDose(vials, peptideId, doseMcg, at, containerFor(peptideId, next))?.id ?? "");
   }
 
   /**
@@ -215,7 +225,7 @@ export function LogDoseSheet({
   const tablets = peptide?.preparation === "tablet";
   /** No barrel, no marks, no injection site. */
   const noBarrel = nasal || tablets;
-  const container: ContainerKind = nasal ? "spray" : tablets ? "pack" : "vial";
+  const container = containerForDose(peptide?.preparation, route);
 
   /*
    * What the library says, plus intranasal once a spray bottle of this compound
@@ -574,7 +584,7 @@ export function LogDoseSheet({
                     carry it out.
                   */
                   !vial
-                    ? t("log_no_pack_in_stock")
+                    ? t("log_tablets_no_pack")
                     : mcgPerTablet(vial) > 0
                       ? t("log_per_tablet_hint", { dose: formatDose(mcgPerTablet(vial)) })
                       : t("log_no_tablet_size")
@@ -750,9 +760,19 @@ export function LogDoseSheet({
 
           {usableVials.length > 0 ? (
             <Field
-              label={nasal ? t("log_sprayed_from") : t("log_drawn_from")}
+              /*
+                Three containers, three sets of words. Nothing is drawn out of
+                a box of tablets, and the version that said so was one of the
+                places where the pack had been added to the model without being
+                added to the sentences around it.
+              */
+              label={nasal ? t("log_sprayed_from") : tablets ? t("log_taken_from") : t("log_drawn_from")}
               hint={t("log_vial_hint", {
-                container: nasal ? t("log_container_bottle") : t("log_container_vial"),
+                container: nasal
+                  ? t("log_container_bottle")
+                  : tablets
+                    ? t("log_container_pack")
+                    : t("log_container_vial"),
               })}
             >
               <Select value={vialId} onChange={(e) => setVialId(e.target.value)}>
@@ -774,7 +794,11 @@ export function LogDoseSheet({
             </Field>
           ) : (
             <Callout tone="warn">
-              {nasal ? t("log_no_spray_filled") : t("log_no_vial_in_stock")}
+              {nasal
+                ? t("log_no_spray_filled")
+                : tablets
+                  ? t("log_no_pack_in_stock")
+                  : t("log_no_vial_in_stock")}
             </Callout>
           )}
 
