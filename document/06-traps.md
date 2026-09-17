@@ -718,3 +718,28 @@ The general shape: **a rule with three call sites and no name has no place to
 add a case to.** When a third value joins a two-value decision, the first thing
 to look for is the other spellings of that decision. `grep` for the ternary,
 not for the function, because there is no function yet, which is the problem.
+
+## A parameter with a default that every caller leaves out
+
+Today read **Stock: 0 doses** for a compound with a full pack of sixty tablets
+on the shelf.
+
+`stockFor` takes a container and defaults it to `"vial"`, which was right when
+a vial was the only thing there was. Spray bottles added the parameter; tablets
+added a third value for it. All three call sites went on omitting it, so every
+figure on every screen counted vials and nothing else. Nothing failed, nothing
+warned, and the zero looked like an empty shelf rather than like a question
+that was never asked.
+
+Same shape as the container the log form picks a dose from, one file over. A
+default is a decision made once and inherited silently by everybody who does
+not know a decision is being made.
+
+The rule: **when a parameter gains a value, grep the call sites that omit it,
+not the ones that pass it.** The callers that already pass something have been
+thought about. The ones relying on the default have not, and they are invisible
+in a search for the parameter's name.
+
+`needsReconstitution` was the same sentence one line further down: with the
+container finally arriving, it had to stop being true for a pack, which has
+nothing to make up.

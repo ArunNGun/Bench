@@ -40,7 +40,7 @@ import {
   startOfLocalDay,
   unloggedDoseTimes,
 } from "@/lib/calc/schedule";
-import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
+import { containerForDose, daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
 import { routeHasSite, siteChoices, suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
@@ -236,7 +236,17 @@ export default function NowPage() {
 
       const targetMcg = scheduledDoseMcg(protocol, now);
       const due = dueStatus(protocol, now, { lastLoggedAt });
-      const stock = stockFor(vials, protocol.peptideId, targetMcg, now);
+      /*
+       * From the container this compound is actually taken out of. Left to its
+       * default this counted vials only, so a protocol on tablets read
+       * "0 doses" with a full pack on the shelf.
+       */
+      const stock = stockFor(
+        vials,
+        protocol.peptideId,
+        targetMcg,
+        now,
+        containerForDose(peptide?.preparation, protocol.route));
 
       /**
        * What "100% of a single-dose peak" is measured against.
@@ -957,7 +967,7 @@ export default function NowPage() {
                   <span className="text-[var(--ink)]">
                     {track.lastLoggedAt ? relativeTime(track.lastLoggedAt, now) : t("now_never")}
                   </span>
-                  {track.lastLog?.site && (
+                  {track.lastLog?.site && routeHasSite(track.lastLog.route) && (
                     <span className="text-[var(--ink)]">
                       {" · "}
                       {siteLabel(track.lastLog.site)}

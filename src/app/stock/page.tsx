@@ -25,6 +25,7 @@ import { useSyringeScale } from "@/components/DoseMarks";
 import {
   diluentAfterTopUp,
   groupSealedVials,
+  containerForDose,
   marksFromVial,
   openPack,
   stockFor,
@@ -170,14 +171,18 @@ export default function StockPage() {
       if (hit) return hit;
 
       const p = protocols.find((x) => x.active && x.peptideId === peptideId);
+      const container = containerForDose(findPeptide(custom, peptideId)?.preparation, p?.route ?? "subcutaneous");
       const out: SupplyOutlook = p
-        ? supplyOutlook(stockFor(vials, peptideId, scheduledDoseMcg(p, now), now), p, now)
+        ? supplyOutlook(
+            stockFor(vials, peptideId, scheduledDoseMcg(p, now), now, container),
+            p,
+            now)
         : { kind: "unknown" };
 
       cache.set(peptideId, out);
       return out;
     };
-  }, [protocols, vials, now]);
+  }, [protocols, vials, custom, now]);
 
   if (!hydrated) {
     return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;

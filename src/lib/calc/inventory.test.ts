@@ -938,3 +938,35 @@ describe("opening a pack", () => {
     expect(pickVialForDose(vials, "klow", 10_000, NOW, "pack")?.id).toBe("started");
   });
 });
+
+/*
+ * The container has to be asked for. It defaults to a vial, and a screen that
+ * leaves it out counts nothing for a compound sold as tablets: Today read
+ * "0 doses" with a full pack on the shelf.
+ */
+describe("stockFor and the container", () => {
+  const pack = (over: Partial<Vial> = {}) =>
+    vial({ id: "p", container: "pack", mgPerTablet: 10, strengthMg: 600, state: "sealed", ...over });
+
+  it("counts nothing for a pack when asked about vials", () => {
+    expect(stockFor([pack()], "klow", 10_000, NOW).dosesRemaining).toBe(0);
+  });
+
+  it("counts the pack when asked about packs", () => {
+    const s = stockFor([pack()], "klow", 10_000, NOW, "pack");
+    expect(s.dosesRemaining).toBe(60);
+    expect(s.availableMcg).toBe(600_000);
+  });
+
+  /* Nothing to make up, so nobody is told to reach for the water. */
+  it("never asks for a pack to be reconstituted", () => {
+    expect(stockFor([pack()], "klow", 10_000, NOW, "pack").needsReconstitution).toBe(false);
+    expect(stockFor([vial({ id: "v" })], "klow", 10_000, NOW).needsReconstitution).toBe(true);
+  });
+
+  it("leaves a vial and a pack of the same compound out of each other's count", () => {
+    const both = [pack(), vial({ id: "v", strengthMg: 10 })];
+    expect(stockFor(both, "klow", 10_000, NOW, "pack").dosesRemaining).toBe(60);
+    expect(stockFor(both, "klow", 10_000, NOW).dosesRemaining).toBe(1);
+  });
+});

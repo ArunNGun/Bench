@@ -326,7 +326,7 @@ export function LogDoseSheet({
 
   // What the stock looks like once this dose is taken. This is the number the
   // user actually wants: how many more of these are left.
-  const stock = stockFor(vials, peptideId, doseMcg, at);
+  const stock = stockFor(vials, peptideId, doseMcg, at, container);
   const willDeplete = !skipped && !!vialId && doseMcg > 0;
   const dosesAfter = Math.max(0, stock.dosesRemaining - (willDeplete ? 1 : 0));
   const vialLeftAfter = vial

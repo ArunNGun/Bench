@@ -405,7 +405,12 @@ export function stockFor(
     openCount,
     dosesRemaining: per(availableMcg),
     dosesInOpenVials: per(openMcg),
-    needsReconstitution: openCount === 0 && sealedCount > 0,
+    /*
+     * Only ever true of a vial. A pack and a spray bottle have nothing to make
+     * up, so telling their owner to reach for the water would be advice about
+     * a container they are not holding.
+     */
+    needsReconstitution: container === "vial" && openCount === 0 && sealedCount > 0,
     dosesExpired: per(expiredMcg),
   };
 }
