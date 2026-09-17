@@ -86,3 +86,26 @@ export function tabletsRemaining(
 export function packStrengthMg(mgEach: number, tablets: number): number {
   return Math.max(0, mgEach) * Math.max(0, Math.floor(tablets));
 }
+
+/**
+ * How many of a blister's drawn slots are still full.
+ *
+ * The glyph on the Stock row has a fixed ten slots whatever the pack holds, so
+ * one slot stands for one tablet in a pack of ten and for six in a pack of
+ * sixty. It is a picture, not a count: the number beside it says how many are
+ * left, and a strip of sixty drawn to scale would be sixty dots the size of a
+ * full stop.
+ *
+ * Two roundings that matter more than the arithmetic. A pack with one tablet
+ * left of sixty rounds to zero slots and would draw as an empty strip while
+ * something is still in it, so anything above empty keeps at least one. And a
+ * pack with one tablet gone of sixty rounds back up to full, which would make
+ * a started pack look untouched, so anything below full loses at least one.
+ * The picture is allowed to be imprecise in the middle and never at the ends.
+ */
+export function blisterDots(fraction: number, slots: number): number {
+  const f = Number.isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 0;
+  if (f <= 0) return 0;
+  if (f >= 1) return slots;
+  return Math.min(slots - 1, Math.max(1, Math.round(f * slots)));
+}

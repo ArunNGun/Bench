@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blisterDots,
   isPack,
   mcgForTablets,
   mcgPerTablet,
@@ -112,5 +113,43 @@ describe("tabletsRemaining", () => {
 
   it("bottoms out at nothing rather than going negative", () => {
     expect(tabletsRemaining(pack({ drawnMcg: 700_000 }))).toBe(0);
+  });
+});
+
+/*
+ * The picture on the Stock row. Ten slots whatever the pack holds, so the
+ * middle is allowed to be imprecise and the two ends are not.
+ */
+describe("blisterDots", () => {
+  it("draws a full strip for a full pack", () => {
+    expect(blisterDots(1, 10)).toBe(10);
+  });
+
+  it("draws nothing for an empty one", () => {
+    expect(blisterDots(0, 10)).toBe(0);
+  });
+
+  it("scales in between", () => {
+    expect(blisterDots(0.5, 10)).toBe(5);
+    expect(blisterDots(0.25, 10)).toBe(3);
+    expect(blisterDots(0.7, 10)).toBe(7);
+  });
+
+  /* One tablet left of sixty is not an empty strip. */
+  it("keeps a slot for anything at all", () => {
+    expect(blisterDots(1 / 60, 10)).toBe(1);
+    expect(blisterDots(0.0001, 10)).toBe(1);
+  });
+
+  /* One tablet gone of sixty is not an untouched pack. */
+  it("takes a slot away for anything missing", () => {
+    expect(blisterDots(59 / 60, 10)).toBe(9);
+    expect(blisterDots(0.9999, 10)).toBe(9);
+  });
+
+  it("survives a fraction that is not a number", () => {
+    expect(blisterDots(NaN, 10)).toBe(0);
+    expect(blisterDots(-1, 10)).toBe(0);
+    expect(blisterDots(2, 10)).toBe(10);
   });
 });

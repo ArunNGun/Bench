@@ -2,6 +2,8 @@
 
 import { barrelTicks } from "@/lib/calc/barrel";
 import { capacityUnits, type SyringeSpec } from "@/lib/calc/reconstitution";
+import { blisterDots } from "@/lib/calc/tablet";
+import type { ContainerKind } from "@/lib/calc/inventory";
 import type { VialState } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 
@@ -199,6 +201,26 @@ export function Syringe({ spec, units, overCapacity, ghostUnits, className }: Sy
 }
 
 /**
+ * The same viewBox for all three containers, so a column of them lines up and
+ * one can be swapped for another without the row moving.
+ */
+const GLYPH_VB = "0 0 32 68";
+
+/** Both states where the row is drawn hollow or grey rather than full. */
+function glyphTone(state: VialState) {
+  return {
+    // Finished or thrown away. The cap greys out with the contents.
+    empty: state === "finished" || state === "discarded",
+    // Not here yet, so it is drawn as an outline with nothing in it. Contents
+    // would claim there is something to take.
+    onOrder: state === "on-order",
+  };
+}
+
+/** Slots in the drawn blister. Fixed; see `blisterDots`. */
+const BLISTER_SLOTS = 10;
+
+/**
  * A vial whose liquid level tracks how much is left.
  * Used in inventory lists, where a row of these reads at a glance.
  */
@@ -215,13 +237,10 @@ export function VialGlyph({
   const bodyTop = 22;
   const bodyBottom = 60;
   const fluidH = (bodyBottom - bodyTop) * f;
-  const empty = state === "finished" || state === "discarded";
-  // Not here yet, so it is drawn as an outline with nothing in it. A sealed
-  // vial's cake would claim there is something to draw from.
-  const onOrder = state === "on-order";
+  const { empty, onOrder } = glyphTone(state);
 
   return (
-    <svg viewBox="0 0 32 68" className={className} role="img" aria-hidden="true" style={{ height: "100%" }}>
+    <svg viewBox={GLYPH_VB} className={className} role="img" aria-hidden="true" style={{ height: "100%" }}>
       {/* Crimp cap */}
       <rect
         x={8}
@@ -255,4 +274,132 @@ export function VialGlyph({
       )}
     </svg>
   );
+}
+
+
+/**
+ * A pack of tablets, counted rather than poured.
+ *
+ * Drawn as a blister because that is the thing in the drawer, and because the
+ * quantity it has to show is a count: ten slots, emptying from the top as they
+ * are pressed out. A liquid level would be the wrong picture for something
+ * nobody pours.
+ *
+ * Sealed is unbroken foil rather than a full strip of ten. The two are the
+ * same quantity and not the same state, and the row above the glyph offers
+ * different things for each, so the picture has to tell them apart. It is the
+ * pack's answer to the lyophilised cake in a sealed vial.
+ */
+export function PackGlyph({
+  fraction,
+  state,
+  className,
+}: {
+  fraction: number;
+  state: VialState;
+  className?: string;
+}) {
+  const { empty, onOrder } = glyphTone(state);
+  const left = empty || onOrder ? 0 : blisterDots(fraction, BLISTER_SLOTS);
+  const capFill = empty || onOrder ? "var(--faint)" : "var(--tangerine)";
+  const capOpacity = empty || onOrder ? 0.5 : 1;
+
+  return (
+    <svg viewBox={GLYPH_VB} className={className} role="img" aria-hidden="true" style={{ height: "100%" }}>
+      {/* The card the foil is sealed onto */}
+      <rect x={3} y={5} width={26} height={60} rx={3}
+        fill={onOrder ? "none" : "var(--glass)"} stroke="var(--line)" strokeWidth={1.2} />
+      <rect x={3} y={5} width={26} height={6} rx={3} fill={capFill} opacity={capOpacity} />
+      <rect x={3} y={9} width={26} height={3} fill={onOrder ? "none" : "var(--glass)"} />
+
+      {state === "sealed" ? (
+        <>
+          <rect x={6} y={15} width={20} height={46} rx={2} fill="var(--tangerine)" opacity={0.85} />
+          <line x1={6} y1={30} x2={26} y2={30} stroke="var(--glass)" strokeWidth={1} />
+          <line x1={6} y1={46} x2={26} y2={46} stroke="var(--glass)" strokeWidth={1} />
+        </>
+      ) : (
+        Array.from({ length: BLISTER_SLOTS }, (_, i) => {
+          const col = i % 2;
+          const full = i >= BLISTER_SLOTS - left;
+          return (
+            <circle
+              key={i}
+              cx={11 + col * 10}
+              cy={13 + ((i - col) / 2) * 11.5}
+              r={3.9}
+              fill={full ? "var(--tangerine)" : "none"}
+              opacity={full ? 0.85 : 1}
+              stroke={full ? "none" : "var(--line)"}
+              strokeWidth={1.2}
+            />
+          );
+        })
+      )}
+    </svg>
+  );
+}
+
+/**
+ * A nasal spray bottle, with the level of what is in it.
+ *
+ * A liquid in a container, like the vial, so it keeps the vial's level. What
+ * it does not keep is the crimp cap: the pump stem and the finger flange are
+ * the only parts of a spray bottle that read at this size, so they are what
+ * the drawing spends its pixels on.
+ */
+export function SprayGlyph({
+  fraction,
+  state,
+  className,
+}: {
+  fraction: number;
+  state: VialState;
+  className?: string;
+}) {
+  const f = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0));
+  const { empty, onOrder } = glyphTone(state);
+  const bodyTop = 22;
+  const bodyBottom = 62;
+  const fluidH = (bodyBottom - bodyTop) * f;
+  const pumpFill = empty || onOrder ? "var(--faint)" : "var(--tangerine)";
+  const pumpOpacity = empty || onOrder ? 0.5 : 1;
+
+  return (
+    <svg viewBox={GLYPH_VB} className={className} role="img" aria-hidden="true" style={{ height: "100%" }}>
+      {/* Pump stem and the flange two fingers press on */}
+      <rect x={14.5} y={1} width={3} height={7} fill={pumpFill} opacity={pumpOpacity} />
+      <rect x={6} y={8} width={20} height={3.6} rx={1.6} fill={pumpFill} opacity={pumpOpacity} />
+      <rect x={12} y={11.6} width={8} height={4} fill="var(--line)" />
+      <path d="M 9 15.5 L 23 15.5 Q 26 15.5 26 19 L 26 62 Q 26 65 23 65 L 9 65 Q 6 65 6 62 L 6 19 Q 6 15.5 9 15.5 Z"
+        fill="var(--glass)" stroke="var(--line)" strokeWidth={1.2} />
+      {onOrder || f <= 0.01 ? null : (
+        <rect x={7.4} y={bodyBottom - fluidH + 1} width={17.2} height={fluidH}
+          fill="var(--tangerine)" opacity={0.75} rx={1} />
+      )}
+    </svg>
+  );
+}
+
+/**
+ * Whichever of the three the row is holding.
+ *
+ * One call site, one decision, made from the container the row already knows
+ * about. A vial glyph above a count of tablets was the kind of small lie that
+ * makes a reader distrust the rest of the screen.
+ */
+export function ContainerGlyph({
+  container,
+  fraction,
+  state,
+  className,
+}: {
+  container: ContainerKind;
+  fraction: number;
+  state: VialState;
+  className?: string;
+}) {
+  if (container === "pack") return <PackGlyph fraction={fraction} state={state} className={className} />;
+  if (container === "spray") return <SprayGlyph fraction={fraction} state={state} className={className} />;
+  return <VialGlyph fraction={fraction} state={state} className={className} />;
 }

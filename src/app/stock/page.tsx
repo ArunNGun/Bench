@@ -17,7 +17,7 @@ import {
   Stat,
   TextInput,
 } from "@/components/ui";
-import { VialGlyph } from "@/components/Syringe";
+import { ContainerGlyph } from "@/components/Syringe";
 import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "@/lib/store";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 import { MULTI_DOSE_VIAL_BUD_DAYS, unitsToMl } from "@/lib/calc/reconstitution";
@@ -566,7 +566,11 @@ function VialRow({
   return (
     <Card className={`flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
       <div className="h-14 w-8 shrink-0">
-        <VialGlyph fraction={st.fractionRemaining} state={vial.state} />
+        <ContainerGlyph
+          container={vial.container ?? "vial"}
+          fraction={st.fractionRemaining}
+          state={vial.state}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
