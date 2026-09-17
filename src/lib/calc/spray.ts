@@ -22,7 +22,7 @@
  * dose, and no arithmetic can know when a pump has stopped lifting liquid.
  */
 
-import type { DiluentKind, Route, Vial } from "../types";
+import type { DiluentKind, Peptide, Route, Vial } from "../types";
 import { MCG_PER_MG, vialConcentration, vialRemainingMcg, vialRemainingMl } from "./inventory";
 
 /** What a pump delivers when nobody has measured it. */
@@ -196,9 +196,33 @@ export const salineForTransfer = (addedMl: number) => Math.max(0, addedMl);
 export function routeChoices(
   declared: Route[],
   vials: Pick<Vial, "peptideId" | "container">[],
-  peptideId: string): Route[] {
+  peptideId: string,
+  preparation?: Peptide["preparation"]): Route[] {
   const hasSpray = vials.some((v) => v.peptideId === peptideId && isSpray(v));
   const out = declared.length ? [...declared] : (["subcutaneous"] as Route[]);
   if (hasSpray && !out.includes("intranasal")) out.push("intranasal");
+  /*
+   * And a compound that comes as tablets adds oral, on the same reasoning one
+   * step earlier. The evidence here is the preparation rather than a bottle on
+   * the shelf, because a tablet is swallowed whatever the library remembered
+   * to list, and without this the only route on offer for a pack could be one
+   * that involves a needle.
+   */
+  if (preparation === "tablet" && !out.includes("oral")) out.push("oral");
   return out;
+}
+
+/**
+ * The route a dose starts on when no protocol says.
+ *
+ * A protocol answers this whenever there is one. Without one the app has to
+ * guess, and the guess used to be subcutaneous for everything that was not a
+ * spray. That put a pack of tablets in front of somebody as an injection,
+ * which then wrote an injection site onto a dose that was swallowed.
+ */
+export function defaultRoute(
+  preparation: Peptide["preparation"],
+  onlySpray: boolean): Route {
+  if (onlySpray) return "intranasal";
+  return preparation === "tablet" ? "oral" : "subcutaneous";
 }

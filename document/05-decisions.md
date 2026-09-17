@@ -426,3 +426,39 @@ so the only date a pack carries is the manufacturer's.
 The rule: **when an existing value already means the general thing, widen the
 comment, not the union.** A new state earns its place when something filters on
 it differently, and nothing here does.
+
+## A site is a fact about an injection, not about a dose
+
+Reported as a box of tablets showing an injection site in the Log. It was, and
+so was every nasal spray, and every oral or topical dose before them.
+
+The form suggested a site the moment a compound was chosen, to make rotation
+happen by default, and the suggestion was then written into the record whatever
+route the dose turned out to take. The site field was hidden for a pack and for
+a spray, which made the screen look right and left the data wrong. Worse, those
+records counted: a swallowed tablet consumed a site's rest and pushed the next
+real injection somewhere else.
+
+`routeHasSite` now names the rule, in `calc/sites.ts` where the rotation lives.
+Subcutaneous and intramuscular have a site. Oral, intranasal, topical and
+intravenous do not, because lipohypertrophy is what this whole module is about
+and none of them cause it.
+
+It is applied in four places, which is three more than it looks:
+
+- the form hides the field and the map, and writes no site
+- the quick log on Today writes none either, and offers no sites to rotate to
+- `siteUsage` ignores a record whose route has no site, so the rotation is
+  corrected for history already written, without editing anyone's records
+- the Log and the history list do not print one
+
+That third bullet is the reason this is not simply a validation fix. Thousands
+of records carry a site they should never have had. Filtering at the point of
+reading leaves the record as it was written, which is the honest thing to keep,
+and stops it being counted, which is the honest thing to do with it.
+
+Two smaller things fall out. A compound that comes as tablets now offers oral
+among its routes, on the same reasoning that a filled spray bottle offers
+intranasal: evidence rather than permission. And a dose with no protocol
+defaults to oral for a tablet rather than to subcutaneous, since the default
+route was the thing feeding the wrong site in the first place.

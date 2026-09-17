@@ -8,9 +8,28 @@
  * memory.
  */
 
-import { INJECTION_SITES, type DoseLog, type InjectionSite } from "../types";
+import { INJECTION_SITES, type DoseLog, type InjectionSite, type Route } from "../types";
 
 export const DAY = 86_400_000;
+
+/**
+ * Routes that put a needle into tissue, and so have a site to rotate.
+ *
+ * The whole of this module exists because of lipohypertrophy, which is what
+ * repeated injections into one spot do to that spot. Nothing else in the list
+ * of routes does that: a tablet is swallowed, a spray goes up a nose, a cream
+ * is rubbed in, and an intravenous dose goes into a vein rather than into the
+ * areas this module knows about.
+ *
+ * So the site is a fact about an injection, not about a dose. It was written
+ * onto every dose regardless, which showed a box of tablets as having been
+ * given in the left abdomen, on a rotation it was also quietly consuming.
+ */
+const INJECTED_ROUTES: Route[] = ["subcutaneous", "intramuscular"];
+
+export function routeHasSite(route: Route): boolean {
+  return INJECTED_ROUTES.includes(route);
+}
 
 /**
  * The body figure the map is drawn on, in its own viewBox units.
@@ -102,11 +121,19 @@ export interface SiteUsage {
  * counts as fully recovered.
  */
 export function siteUsage(
-  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  logs: Pick<DoseLog, "at" | "site" | "skipped" | "route">[],
   nowMs: number,
   restDays = 14): SiteUsage[] {
   const windowStart = nowMs - restDays * DAY;
-  const relevant = logs.filter((l) => !l.skipped && l.site);
+  /*
+   * A record can carry a site it had no business carrying: until the form was
+   * corrected it wrote whichever site it had suggested onto every dose, so a
+   * swallowed tablet and a nasal spray both landed on a thigh. Filtering here
+   * rather than only at the point of writing means the old records stop
+   * counting against a rotation they never touched, without editing anyone's
+   * history to make it so.
+   */
+  const relevant = logs.filter((l) => !l.skipped && l.site && routeHasSite(l.route));
 
   return INJECTION_SITES.map(({ id }) => {
     const uses = relevant.filter((l) => l.site === id).map((l) => l.at);
@@ -131,7 +158,7 @@ export function siteUsage(
  * hit three times last week loses to one hit once, even at equal rest.
  */
 export function suggestSite(
-  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  logs: Pick<DoseLog, "at" | "site" | "skipped" | "route">[],
   nowMs: number,
   restDays = 14,
   allowed?: InjectionSite[] | null): InjectionSite {
@@ -157,7 +184,7 @@ export function suggestSite(
  * screen offers a way through to all of them for the rest.
  */
 export function siteChoices(
-  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  logs: Pick<DoseLog, "at" | "site" | "skipped" | "route">[],
   nowMs: number,
   restDays = 14,
   allowed?: InjectionSite[] | null,
@@ -173,7 +200,7 @@ export function siteChoices(
 
 /** Sites hit hard enough recently that they are worth resting. */
 export function overusedSites(
-  logs: Pick<DoseLog, "at" | "site" | "skipped">[],
+  logs: Pick<DoseLog, "at" | "site" | "skipped" | "route">[],
   nowMs: number,
   restDays = 14,
   threshold = 3): SiteUsage[] {
