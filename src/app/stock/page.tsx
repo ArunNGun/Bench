@@ -91,6 +91,16 @@ export default function StockPage() {
   const [toppingUp, setToppingUp] = useState<string | null>(null);
   /** Which vial is being emptied into a nasal spray bottle. */
   const [transferring, setTransferring] = useState<string | null>(null);
+  /**
+   * Which row is having its tablet size set.
+   *
+   * Needed because a pack can exist before anyone said how big one tablet is:
+   * added before the compound was marked as tablets, or imported, or added
+   * while the compound was still described as a powder. Without a way to say it
+   * afterwards the pack is stuck, countable by nothing, and the form for
+   * logging a dose can only say that the size is missing.
+   */
+  const [sizing, setSizing] = useState<string | null>(null);
 
   const now = Date.now();
   /*
@@ -357,7 +367,33 @@ export default function StockPage() {
                     solution it can never be.
                   */
                   onReconstitute={isPack(v) ? undefined : () => setReconstituting(v.id)}
+                  tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
+                  onSetTabletSize={() => setSizing(v.id)}
                 />
+                {sizing === v.id && (
+                  <TabletSizeForm
+                    vial={v}
+                    onCancel={() => setSizing(null)}
+                    onSave={(mgEach, tabletsInPack) => {
+                      /*
+                        Every vial in the group, unlike the buttons beside it,
+                        which act on the oldest one alone. Those change one
+                        vial's state and the group is meant to split. This
+                        changes what the row has always been, so writing it to
+                        one member would break the group into a pack with a
+                        size and a shelf of identical packs without one.
+                      */
+                      for (const target of group ? group.vials : [v]) {
+                        updateVial(target.id, {
+                          container: "pack",
+                          mgPerTablet: mgEach,
+                          strengthMg: packStrengthMg(mgEach, tabletsInPack),
+                        });
+                      }
+                      setSizing(null);
+                    }}
+                  />
+                )}
                 {reconstituting === v.id && (
                   <ReconstituteForm
                     vial={v}
@@ -430,6 +466,8 @@ function VialRow({
   onTopUp,
   onTransfer,
   onFinish,
+  tabletCompound,
+  onSetTabletSize,
 }: {
   vial: Vial;
   /**
@@ -461,6 +499,9 @@ function VialRow({
   /** Only for a made-up vial, and never for a bottle that is already a spray. */
   onTransfer?: () => void;
   onFinish?: () => void;
+  /** Whether the library says this compound comes as tablets. */
+  tabletCompound?: boolean;
+  onSetTabletSize?: () => void;
 }) {
   const { t } = useLang();
   const st = vialStatus(vial, now);
@@ -701,6 +742,18 @@ function VialRow({
           {onTransfer && (
             <Button onClick={onTransfer} className="px-3 py-1.5 text-[13px]">
               <SprayCan size={13} /> {t("stock_to_spray")}
+            </Button>
+          )}
+          {/*
+            Offered for a pack, and also for an ordinary row of a compound the
+            library calls tablets, which is how a row added before anyone said
+            so becomes a pack at all. Without the second case the size could
+            only ever be set at the moment of adding, and a pack added the day
+            before the compound was marked as tablets was stuck for good.
+          */}
+          {onSetTabletSize && (pack || tabletCompound) && (
+            <Button onClick={onSetTabletSize} className="px-3 py-1.5 text-[13px]">
+              {t("stock_set_tablet_size")}
             </Button>
           )}
           {onFinish && (
@@ -1336,6 +1389,91 @@ function TransferToSprayForm({
           disabled={!plan}
         >
           {t("stock_fill_bottle")}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Saying how big one tablet is, on a row that already exists.
+ *
+ * The add form asks for this, but only when the compound was already marked as
+ * tablets. Everything else arrives without it: a pack added before the
+ * compound was described that way, an import, a row somebody entered as an
+ * ordinary vial. All of those could be seen and none of them could be counted,
+ * and the form for logging a dose could only say the size was missing.
+ *
+ * Both numbers, not just the size, because `strengthMg` on a pack is the mass
+ * of the whole pack and is the product of the two. Asking for the size alone
+ * would leave the mass saying whatever it said before.
+ */
+function TabletSizeForm({
+  vial,
+  onCancel,
+  onSave,
+}: {
+  vial: Vial;
+  onSave: (mgEach: number, tabletsInPack: number) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useLang();
+  const known = mgPerTablet(vial);
+  const [mgEach, setMgEach] = useState(known);
+  /*
+   * The pack as bought, not what is left in it. A count of what is left would
+   * quietly write off every tablet already taken, since the mass taken is
+   * recorded separately and would then be subtracted a second time.
+   */
+  const [tablets, setTablets] = useState(
+    known > 0 ? Math.round(vial.strengthMg / known) : 0);
+
+  const packMg = packStrengthMg(mgEach, tablets);
+  const ok = mgEach > 0 && tablets > 0;
+  // What the row will say once this is saved, including any dose already taken.
+  const left = ok
+    ? tabletsRemaining({ ...vial, strengthMg: packMg, mgPerTablet: mgEach })
+    : 0;
+
+  return (
+    <Card className="mt-1.5 space-y-4 border-[var(--tangerine)]/35 p-4">
+      <SectionLabel>{t("stock_set_tablet_size")}</SectionLabel>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={t("stock_mg_per_tablet")}>
+          <NumberInput
+            value={mgEach}
+            min={0}
+            step={0.5}
+            suffix="mg"
+            onChange={(e) => setMgEach(Number(e.target.value))}
+          />
+        </Field>
+        <Field label={t("stock_tablets_per_pack")}>
+          <NumberInput
+            value={tablets}
+            min={0}
+            step={1}
+            onChange={(e) => setTablets(Number(e.target.value))}
+          />
+        </Field>
+      </div>
+
+      {ok && (
+        <p className="text-[12.5px] leading-relaxed text-[var(--faint)]">
+          {t("stock_pack_after", {
+            mg: trim(packMg, 3),
+            left: t("count_tablets", { n: left }),
+          })}
+        </p>
+      )}
+
+      <div className="flex gap-2.5">
+        <Button variant="ghost" onClick={onCancel}>
+          {t("cancel")}
+        </Button>
+        <Button variant="primary" onClick={() => onSave(mgEach, tablets)} disabled={!ok}>
+          {t("save")}
         </Button>
       </div>
     </Card>
