@@ -521,6 +521,46 @@ The rule this leaves: a module under `src/lib/calc` may return an id, a number
 or a date. If it is about to return a sentence, the sentence belongs to
 whoever renders it.
 
+## A deploy takes the old build's chunks away from the old shell
+
+Reported as a white screen and `Application error: a client-side exception`,
+with `ChunkLoadError: Loading chunk 135 failed` in the console, on a deployment
+that had just gone out and worked for everybody who had never visited before.
+
+The hashes said what happened. The browser was running
+`webpack-55676dfde347fa72.js` where the new build had
+`webpack-9100694e6ef91c55.js`, so the runtime was the old one, out of the
+service worker's cache. It asked for `135-d5de4c531d4e06a7.js`, and the new
+build's copy of that chunk is `135-b4d0965ad68280be.js`, so the request 404ed.
+The neighbouring `255-3d881dfa8c72bc56.js` loaded perfectly, because that chunk
+had not changed between the two builds and therefore kept its name. A page half
+old and half new, which is the exact thing the per-build cache was written to
+prevent.
+
+It prevents it for the files it holds. What it cannot prevent is a chunk it
+never held: the cache is populated by visiting, chunks are lazy, and a deploy
+removes the old ones from the server. From the moment of a deploy, any chunk
+the old shell had not already cached is gone for good.
+
+The design is still right. Updates are explicit on purpose, and cache-first is
+what makes the app work on a phone with no signal. The flaw was that the way
+out, the update prompt, lives inside the app that cannot boot.
+
+`src/lib/recover.ts` is the way out that does not: an inline script in the head,
+before the app's own code, listening for exactly this failure and, when it
+comes, dropping the caches, unregistering the worker and reloading once. Twice
+in ten minutes and it stops, because if clearing the cache did not help then the
+fault is on the server and a page that reloads forever is one broken page turned
+into a machine hammering it.
+
+Two things about the shape of it are deliberate. It is an inline script rather
+than a component, because by the time React could mount a component the chunk it
+needs may be the missing one. And it is the real functions serialised with
+`toString()` rather than the same rules written out a second time as a string,
+because two copies of a rule is how one of them gets fixed. There are tests that
+run the serialised source in a sandbox, since source that has never been run has
+never been checked.
+
 ## Git from a Linux shell, on a working tree checked out by Windows
 
 `git status` in the mounted repo reported thirty modified files, including
