@@ -26,6 +26,7 @@ import {
   diluentAfterTopUp,
   groupSealedVials,
   marksFromVial,
+  openPack,
   stockFor,
   supplyOutlook,
   vialConcentration,
@@ -308,10 +309,32 @@ export default function StockPage() {
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
-                  onTopUp={() => setToppingUp(v.id)}
-                  onTransfer={isSpray(v) ? undefined : () => setTransferring(v.id)}
+                  /*
+                    Neither offer means anything to an opened pack. There is no
+                    solution in it to dilute and nothing to pour into a spray
+                    bottle, so the two actions that assume a liquid stand down
+                    here exactly as reconstitution does in the section above.
+                  */
+                  onTopUp={isPack(v) ? undefined : () => setToppingUp(v.id)}
+                  onTransfer={isSpray(v) || isPack(v) ? undefined : () => setTransferring(v.id)}
                   onFinish={() => updateVial(v.id, { state: "finished" })}
+                  tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
+                  onSetTabletSize={() => setSizing(v.id)}
                 />
+                {sizing === v.id && (
+                  <TabletSizeForm
+                    vial={v}
+                    onCancel={() => setSizing(null)}
+                    onSave={(mgEach, tabletsInPack) => {
+                      updateVial(v.id, {
+                        container: "pack",
+                        mgPerTablet: mgEach,
+                        strengthMg: packStrengthMg(mgEach, tabletsInPack),
+                      });
+                      setSizing(null);
+                    }}
+                  />
+                )}
                 {transferring === v.id && (
                   <TransferToSprayForm
                     vial={v}
@@ -369,6 +392,14 @@ export default function StockPage() {
                   onReconstitute={isPack(v) ? undefined : () => setReconstituting(v.id)}
                   tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
                   onSetTabletSize={() => setSizing(v.id)}
+                  /*
+                    What Reconstitute is to a vial. A pack needs no water and
+                    records nothing when the foil is broken, so this exists to
+                    say the box is started: the row moves up to Open, where a
+                    box being taken from belongs. The first logged dose does
+                    the same thing on its own, for anyone who never presses it.
+                  */
+                  onOpenPack={() => updateVial(v.id, openPack(v, Date.now()))}
                 />
                 {sizing === v.id && (
                   <TabletSizeForm
@@ -468,6 +499,7 @@ function VialRow({
   onFinish,
   tabletCompound,
   onSetTabletSize,
+  onOpenPack,
 }: {
   vial: Vial;
   /**
@@ -502,6 +534,8 @@ function VialRow({
   /** Whether the library says this compound comes as tablets. */
   tabletCompound?: boolean;
   onSetTabletSize?: () => void;
+  /** Only for a pack still sealed. Moves it up to Open. */
+  onOpenPack?: () => void;
 }) {
   const { t } = useLang();
   const st = vialStatus(vial, now);
@@ -742,6 +776,11 @@ function VialRow({
           {onTransfer && (
             <Button onClick={onTransfer} className="px-3 py-1.5 text-[13px]">
               <SprayCan size={13} /> {t("stock_to_spray")}
+            </Button>
+          )}
+          {onOpenPack && pack && vial.state === "sealed" && (
+            <Button variant="primary" onClick={onOpenPack} className="px-3 py-1.5 text-[13px]">
+              {t("stock_open_pack")}
             </Button>
           )}
           {/*
@@ -1738,7 +1777,13 @@ function DiluentShelf() {
                     className="px-2.5 py-1 text-[12px]"
                     onClick={() => openDiluent(b.id)}
                   >
-                    {t("stock_open")}
+                    {/*
+                      Its own key, not the section heading's. In English one
+                      word does both jobs, the button and the label above a
+                      list of opened things. In German it cannot: the heading
+                      is Geöffnet and the button is Öffnen.
+                    */}
+                    {t("stock_open_bottle")}
                   </Button>
                 )}
                 {b.state !== "discarded" && bottleRemainingMl(b) > 0 && (
