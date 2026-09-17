@@ -480,7 +480,9 @@ export const useStore = create<StoreState>()(
 
           return {
             logs: logs.map((x) => (x.id === id ? { ...x, vialId, ...measured } : x)),
-            vials: drawFromVial(s.vials, vialId, l.doseMcg),
+            // The dose's own time, not the clock: a pack opened by a dose
+            // logged for yesterday was opened yesterday.
+            vials: drawFromVial(s.vials, vialId, l.doseMcg, l.at),
           };
         });
         return id;

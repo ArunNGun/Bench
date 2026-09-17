@@ -9,6 +9,7 @@ import {
   groupSealedVials,
   supplyOutlook,
   containerForDose,
+  openPack,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -859,5 +860,81 @@ describe("containerForDose", () => {
     expect(containerForDose(undefined, "intranasal")).toBe("spray");
     expect(containerForDose("powder", "intranasal")).toBe("spray");
     expect(containerForDose("tablet", "intranasal")).toBe("spray");
+  });
+});
+
+/*
+ * A box of tablets that has been dosed from all week sat at the bottom of the
+ * Stock page under Sealed, which it plainly was not.
+ */
+describe("opening a pack", () => {
+  const pack = (over: Partial<Vial> = {}) =>
+    vial({ id: "p", container: "pack", mgPerTablet: 10, strengthMg: 600, ...over });
+
+  it("puts it in the state every container in use has", () => {
+    const out = openPack(pack(), NOW);
+    expect(out.state).toBe("reconstituted");
+    expect(out.reconstitutedAt).toBe(NOW);
+  });
+
+  /* A BUD runs from first puncture. Nothing about foil changes on that day. */
+  it("gives it no beyond-use date", () => {
+    expect(openPack(pack(), NOW).budAt).toBeUndefined();
+  });
+
+  it("keeps the day it was first opened", () => {
+    const out = openPack(pack({ reconstitutedAt: NOW - DAY }), NOW);
+    expect(out.reconstitutedAt).toBe(NOW - DAY);
+  });
+
+  it("opens on the first dose, for anyone who never pressed the button", () => {
+    const [out] = drawFromVial([pack()], "p", 10_000, NOW);
+    expect(out.state).toBe("reconstituted");
+    expect(out.reconstitutedAt).toBe(NOW);
+    expect(out.drawnMcg).toBe(10_000);
+  });
+
+  /* The dose's own time, so a dose logged for yesterday opens it yesterday. */
+  it("opens it when the dose says, not when the clock does", () => {
+    const [out] = drawFromVial([pack()], "p", 10_000, NOW - 3 * DAY);
+    expect(out.reconstitutedAt).toBe(NOW - 3 * DAY);
+  });
+
+  /*
+   * The other half. A vial becomes open by being made up, which is a step with
+   * its own data, and a dose drawn from one that never had that step is an
+   * oddity worth leaving visible.
+   */
+  it("leaves a sealed vial sealed", () => {
+    const [out] = drawFromVial([vial({ id: "v" })], "v", 10_000, NOW);
+    expect(out.state).toBe("sealed");
+    expect(out.reconstitutedAt).toBeUndefined();
+  });
+
+  it("still finishes a pack the last dose empties", () => {
+    const [out] = drawFromVial([pack({ strengthMg: 10 })], "p", 10_000, NOW);
+    expect(out.state).toBe("finished");
+  });
+
+  /* Undoing that dose does not put the tablets back in the foil. */
+  it("reopens a finished pack rather than resealing it", () => {
+    const emptied = drawFromVial([pack({ strengthMg: 10 })], "p", 10_000, NOW);
+    const [out] = returnToVial(emptied, "p", 10_000);
+    expect(out.state).toBe("reconstituted");
+  });
+
+  it("still reseals a finished vial that was never made up", () => {
+    const emptied = drawFromVial([vial({ id: "v", strengthMg: 10 })], "v", 10_000, NOW);
+    const [out] = returnToVial(emptied, "v", 10_000);
+    expect(out.state).toBe("sealed");
+  });
+
+  /* An opened pack is reached for before a sealed one, like every open container. */
+  it("is preferred over a sealed pack once open", () => {
+    const vials = [
+      pack({ id: "sealed" }),
+      { ...openPack(pack({ id: "started" }), NOW), drawnMcg: 100_000 },
+    ];
+    expect(pickVialForDose(vials, "klow", 10_000, NOW, "pack")?.id).toBe("started");
   });
 });

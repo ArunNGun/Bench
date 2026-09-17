@@ -396,3 +396,33 @@ from a rotation history that no longer describes the body. Nothing would fail
 loudly. The rule generalises: wherever a default is offered alongside the
 alternatives to it, the alternatives are the default's own ranking, held to it
 by a test.
+
+## "reconstituted" is the state a container in use has, whatever its name
+
+A pack of tablets that had been dosed from all week sat under Sealed on the
+Stock page, because a pack has nothing to reconstitute and reconstitution is
+what moves a row out of that section.
+
+The obvious fix is a fourth state, `"open"`. It was not taken. Every filter in
+the app that means "in use" is written as `state === "reconstituted"`, and the
+name has already stopped being literal once: a spray bottle is filled, not made
+up, and takes that state. What the state records is a position in a sequence,
+sealed then in use then finished, and all three containers pass through it.
+Adding a value would mean teaching eleven call sites, a migration, and a period
+where data written by one build reads wrong in another, all to make one
+identifier honest.
+
+So a pack takes it too, and there are two ways in, because either alone fails a
+real person. **Open the pack** is the button, for a box opened before its first
+dose is due. The first logged dose opens it anyway, for the box opened three
+days ago by somebody who never pressed anything. `openPack` is one function and
+both paths call it.
+
+What a pack does not get is a beyond-use date. A BUD runs from first puncture
+because what starts then is a sterile solution sitting at room temperature.
+Nothing about a foil strip changes on the day you press the first tablet out,
+so the only date a pack carries is the manufacturer's.
+
+The rule: **when an existing value already means the general thing, widen the
+comment, not the union.** A new state earns its place when something filters on
+it differently, and nothing here does.
