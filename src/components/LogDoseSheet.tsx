@@ -19,7 +19,9 @@ import {
   stockFor,
   vialRemainingMcg,
   vialUsable,
+  type ContainerKind,
 } from "@/lib/calc/inventory";
+import { mcgForTablets, mcgPerTablet, tabletsForDose } from "@/lib/calc/tablet";
 import { mcgForSprays, mcgPerSpray, mlForSprays, routeChoices, spraysForDose } from "@/lib/calc/spray";
 import { suggestSite } from "@/lib/calc/sites";
 import {
@@ -204,6 +206,18 @@ export function LogDoseSheet({
   const nasal = route === "intranasal";
 
   /*
+   * Tablets stand the same half of the form down, for the same reason and on a
+   * different test. A nasal dose is known by its route; a tablet is known by
+   * how the compound is sold, because "oral" also covers a solution somebody
+   * swallows out of a syringe, and that one does want a barrel. The pack is
+   * therefore chosen by the preparation rather than by the route.
+   */
+  const tablets = peptide?.preparation === "tablet";
+  /** No barrel, no marks, no injection site. */
+  const noBarrel = nasal || tablets;
+  const container: ContainerKind = nasal ? "spray" : tablets ? "pack" : "vial";
+
+  /*
    * What the library says, plus intranasal once a spray bottle of this compound
    * exists. Three compounds name that route, so without this a bottle made from
    * any of the others could not be logged from at all: the route it needs was
@@ -234,9 +248,9 @@ export function LogDoseSheet({
       vials.filter(
         (v) =>
           v.peptideId === peptideId &&
-          matchesContainer(v, nasal ? "spray" : "vial") &&
+          matchesContainer(v, container) &&
           vialUsable(v, Date.now())),
-    [vials, peptideId, nasal]);
+    [vials, peptideId, container]);
 
   // Reset the form each time it opens, prefilled from the protocol.
   useEffect(() => {
@@ -336,7 +350,7 @@ export function LogDoseSheet({
    * nobody could act on and nobody asked for.
    */
   const draw =
-    !nasal && vial && vial.diluentMl
+    !noBarrel && vial && vial.diluentMl
       ? calculateDraw({
           vialMcg: mgToMcg(vial.strengthMg),
           diluentMl: vial.diluentMl,
@@ -353,6 +367,17 @@ export function LogDoseSheet({
    * Working it out afterwards from the bottle would be answering with today's
    * concentration a question about last Tuesday's.
    */
+  /*
+   * The count of tablets this dose was, recorded rather than worked out later.
+   * Same reasoning as the presses below it: the pack can be replaced by one
+   * with a different tablet size, and a count derived afterwards would answer
+   * with today's pack a question about last Tuesday's.
+   */
+  const tabletCount =
+    tablets && vial && tabletsForDose(vial, doseMcg) > 0
+      ? Number(tabletsForDose(vial, doseMcg).toFixed(3))
+      : undefined;
+
   const nasalPresses =
     nasal && vial && spraysForDose(vial, doseMcg) > 0
       ? spraysForDose(vial, doseMcg)
@@ -381,6 +406,7 @@ export function LogDoseSheet({
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
         presses: nasalPresses,
+        tablets: tabletCount,
         // Both, and the id is the one that carries the capacity and the marks.
         // Scale stays because it is what the Log reads and what the CSV exports.
         syringeId: draw ? syringe.id : undefined,
@@ -405,6 +431,7 @@ export function LogDoseSheet({
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
       presses: nasalPresses,
+      tablets: tabletCount,
       syringeId: draw ? syringe.id : undefined,
       syringeScale: draw ? syringe.scale : undefined,
       skipped: skipped || undefined,
@@ -531,7 +558,34 @@ export function LogDoseSheet({
               />
             </Field>
 
-            {nasal ? (
+            {tablets ? (
+              /*
+                Tablets, which is what a person counts out of a pack. Fractions
+                are kept, because a scored tablet really is half a dose, and
+                that is where a tablet parts company with a press.
+              */
+              <Field
+                label={t("log_tablets")}
+                hint={
+                  vial && mcgPerTablet(vial) > 0
+                    ? t("log_per_tablet_hint", { dose: formatDose(mcgPerTablet(vial)) })
+                    : t("log_no_tablet_size")
+                }
+              >
+                <NumberInput
+                  value={vial ? trim(tabletsForDose(vial, doseMcg), 2) : ""}
+                  min={0}
+                  step={0.5}
+                  suffix={t("log_tablets_suffix")}
+                  placeholder={vial ? undefined : t("log_na")}
+                  disabled={skipped || !vial}
+                  onChange={(e) => {
+                    if (!vial) return;
+                    setDoseMcg(Number(mcgForTablets(vial, Number(e.target.value)).toFixed(2)));
+                  }}
+                />
+              </Field>
+            ) : nasal ? (
               /*
                 Presses, because that is what a person does and counts. Whole
                 ones only: a pump delivers its volume or it fails, so half a
@@ -541,9 +595,10 @@ export function LogDoseSheet({
                 label={t("log_presses")}
                 hint={
                   vial && mcgPerSpray(vial) > 0
-                    ? `${formatDose(mcgPerSpray(vial))} a press, ${trim(
-                        mlForSprays(vial, spraysForDose(vial, doseMcg)),
-                        2)} mL in total.`
+                    ? t("log_per_press_hint", {
+                        dose: formatDose(mcgPerSpray(vial)),
+                        ml: trim(mlForSprays(vial, spraysForDose(vial, doseMcg)), 2),
+                      })
                     : t("log_fill_spray_first")
                 }
               >
@@ -552,7 +607,7 @@ export function LogDoseSheet({
                   min={0}
                   step={1}
                   suffix={t("log_presses_suffix")}
-                  placeholder={vial ? undefined : "n/a"}
+                  placeholder={vial ? undefined : t("log_na")}
                   disabled={skipped || !vial}
                   onChange={(e) => {
                     if (!vial) return;
@@ -586,7 +641,7 @@ export function LogDoseSheet({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {!nasal && (
+            {!noBarrel && (
             <Field
               label={t("log_barrel")}
               hint={
@@ -629,7 +684,7 @@ export function LogDoseSheet({
               </Select>
             </Field>
 
-            {!nasal && (
+            {!noBarrel && (
             <Field
               label={t("log_site_short")}
               hint={
@@ -656,7 +711,7 @@ export function LogDoseSheet({
             reason this map exists; a nose has no such problem, and asking which
             nostril would invite a record nobody can act on.
           */}
-          {!nasal && (
+          {!noBarrel && (
           <div>
             <SiteMap
               logs={peptideLogs}
@@ -733,7 +788,7 @@ export function LogDoseSheet({
             </div>
           )}
 
-          {draw && !nasal && (
+          {draw && !noBarrel && (
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone="tangerine">

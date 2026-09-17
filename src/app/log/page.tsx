@@ -320,7 +320,13 @@ export default function LogPage() {
                             older data.
                           */}
                           {!l.skipped &&
-                            (l.route === "intranasal"
+                            (l.tablets != null
+                              ? (
+                                  <span className="tnum font-mono">
+                                    {t("count_tablets", { n: trim(l.tablets, 2) })}
+                                  </span>
+                                )
+                              : l.route === "intranasal"
                               ? l.presses != null && (
                                   <span className="tnum font-mono">
                                     {t("count_presses", { n: l.presses })}

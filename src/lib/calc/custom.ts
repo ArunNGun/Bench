@@ -23,7 +23,7 @@ export interface CustomDraft {
   /** Blank when unknown, which is the honest default for most research peptides. */
   halfLifeHours?: number | null;
   routes: Route[];
-  preparation: "powder" | "solution";
+  preparation: "powder" | "solution" | "tablet";
   /** Typical dose per administration, in micrograms. */
   doseLowMcg?: number;
   doseHighMcg?: number;
