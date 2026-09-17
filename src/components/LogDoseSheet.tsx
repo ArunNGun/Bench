@@ -567,9 +567,17 @@ export function LogDoseSheet({
               <Field
                 label={t("log_tablets")}
                 hint={
-                  vial && mcgPerTablet(vial) > 0
-                    ? t("log_per_tablet_hint", { dose: formatDose(mcgPerTablet(vial)) })
-                    : t("log_no_tablet_size")
+                  /*
+                    Three states, three sentences. The first version said "add
+                    the tablet size to the pack" whether or not there was a pack
+                    to add it to, which reads as an instruction with nowhere to
+                    carry it out.
+                  */
+                  !vial
+                    ? t("log_no_pack_in_stock")
+                    : mcgPerTablet(vial) > 0
+                      ? t("log_per_tablet_hint", { dose: formatDose(mcgPerTablet(vial)) })
+                      : t("log_no_tablet_size")
                 }
               >
                 <NumberInput
