@@ -296,6 +296,36 @@ describe("sync engine", () => {
     expect(h.state.remote).toBeNull();
   });
 
+  /*
+   * The incident behind POLL_MS. A dose logged on a phone at 20:22 was still
+   * showing as due on a desktop at 20:47: both devices online, the desktop's
+   * own last change already sent, and nothing in the app asking the server
+   * anything in that state.
+   *
+   * The engine's half of it is this: asked, a device with nothing to send
+   * takes what the other device left. What was missing was anybody asking,
+   * which is why POLL_MS exists and why the tab does the asking.
+   */
+  it("takes what another device sent, when it has nothing of its own to send", async () => {
+    const h = harness();
+    h.state.dirty = true;
+    h.engine.start();
+    await tick(0);
+    const sent = h.state.remoteSeenAt;
+    expect(sent).not.toBeNull();
+
+    // The other device pushes. Nothing happens here: no edit, no tab switch.
+    h.state.remote = h.blob(h.state.clock + 50);
+    await tick(QUIET_MS * 4);
+    expect(h.state.pulls).toHaveLength(0);
+
+    // One ask is all it takes, and it is a clean pull rather than a question.
+    h.engine.request("now");
+    await tick(0);
+    expect(h.state.pulls).toEqual([sent! + 50]);
+    expect(h.engine.getStatus().phase).toBe("idle");
+  });
+
   it("flushes immediately when the tab is going away", async () => {
     const h = harness();
     h.engine.start();

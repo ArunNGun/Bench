@@ -743,3 +743,25 @@ in a search for the parameter's name.
 `needsReconstitution` was the same sentence one line further down: with the
 container finally arriving, it had to stop being true for a pack, which has
 nothing to make up.
+
+## Every trigger was about this device
+
+A dose logged on a phone at 20:22 was still showing as due on a desktop at
+20:47. Both devices online, both signed in, and the desktop had received the
+phone's earlier changes perfectly well: the protocol edited on the desktop at
+19:01 was already on the phone.
+
+`SyncRunner` starts a run on four things: this device's own data changing, this
+tab becoming visible, this browser coming back online, and startup. Every one
+of them is about this device. A tab that is open, in the foreground and
+untouched matches none of them, and `visibilitychange` does not fire for a tab
+you never looked away from. So the one state in which somebody is staring at
+the screen was the one state that never asked the server anything.
+
+Fixed with a one minute poll while the tab is visible. The shape to remember:
+**a list of triggers assembled from local events has no entry for "somebody
+else did something", and that gap is invisible in testing** because a developer
+reloads constantly and a reload is a trigger.
+
+Worth checking against any future trigger list: at least one entry has to come
+from outside this device, whether that is a poll, a push channel, or a button.
