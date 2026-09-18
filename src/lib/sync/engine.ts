@@ -73,6 +73,21 @@ export interface SyncPorts {
 
 /** How long to wait after the last change before sending. */
 export const QUIET_MS = 2500;
+/**
+ * How often an open tab asks the server whether anything happened elsewhere.
+ *
+ * Every other trigger is about this device: its own edits, its own return to
+ * the foreground, its own network coming back. None of them fires when the
+ * change was made somewhere else and this tab has simply been sitting open,
+ * which is the one moment somebody is looking straight at a screen that is
+ * quietly out of date.
+ *
+ * A minute is chosen against the cost: the request is a fetch of one small
+ * record, and when nothing has moved `decideSync` answers "in-step" and no
+ * data is transferred either way. The caller skips it while the tab is hidden,
+ * so a phone in a pocket costs nothing and coming back has its own trigger.
+ */
+export const POLL_MS = 60_000;
 /** First wait after an unreachable server, doubling to the ceiling. */
 export const RETRY_MIN_MS = 5_000;
 export const RETRY_MAX_MS = 5 * 60_000;

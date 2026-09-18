@@ -15,7 +15,7 @@
 
 import { useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { createSyncEngine, type SyncPorts } from "@/lib/sync/engine";
+import { POLL_MS, createSyncEngine, type SyncPorts } from "@/lib/sync/engine";
 import { fetchBlob, isNative, pushData, session, cryptoAvailable } from "@/lib/sync/client";
 import { open } from "@/lib/sync/crypto";
 import { accountRequired, HOSTED } from "@/lib/sync/hosted";
@@ -209,12 +209,30 @@ export function SyncRunner() {
     };
     const onOnline = () => engine.request("now");
 
+    /*
+     * And a heartbeat while somebody is looking.
+     *
+     * Reported as a dose logged on a phone at 20:22 and a desktop still
+     * showing it as due at 20:47, with both devices online and syncing
+     * correctly in the other direction the whole time. The desktop had pushed
+     * its own last change at 19:01 and then sat open and untouched, and
+     * nothing above asks the server anything in that state: `visibilitychange`
+     * does not fire for a tab you never looked away from.
+     *
+     * Skipped while hidden. A hidden tab has nothing to show, becoming visible
+     * is already a trigger, and browsers throttle timers there anyway.
+     */
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") engine.request("now");
+    }, POLL_MS);
+
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
     window.addEventListener("pagehide", () => void engine.flush());
 
     return () => {
       unsubscribe();
+      clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
       engine.stop();
