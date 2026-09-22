@@ -21,7 +21,7 @@ import {
   vialRemainingMcg,
   vialUsable,
 } from "@/lib/calc/inventory";
-import { mcgForTablets, mcgPerTablet, tabletsForDose } from "@/lib/calc/tablet";
+import { isPack, mcgForTablets, mcgPerTablet, tabletsForDose, tabletsRemaining } from "@/lib/calc/tablet";
 import {
   defaultRoute,
   mcgForSprays,
@@ -797,8 +797,19 @@ export function LogDoseSheet({
                 <option value="">{t("log_not_recorded_stock")}</option>
                 {usableVials.map((v) => {
                   const st = vialStatus(v);
-                  const left =
-                    v.state === "reconstituted" && v.diluentMl
+                  /*
+                   * What is left, in the unit this container is counted in.
+                   *
+                   * The test used to be "has it any diluent", with everything
+                   * else called sealed. A pack has no diluent and never will,
+                   * so an opened box of tablets read "Sealed" every time it was
+                   * offered, however many had been pressed out of it. Reported
+                   * as exactly that, by somebody who had just corrected five
+                   * doses against the same pack.
+                   */
+                  const left = isPack(v)
+                    ? t("count_tablets", { n: tabletsRemaining(v) })
+                    : v.state === "reconstituted" && v.diluentMl
                       ? t("log_ml_left", { ml: trim(st.remainingMl, 2) })
                       : t("stock_sealed");
                   return (
