@@ -40,6 +40,7 @@ import {
   pickVialForDose,
   reconcileVials,
   returnToVial,
+  containerForDose,
   stockFor as computeStock,
   type ContainerKind,
   vialConcentration,
@@ -445,13 +446,25 @@ export const useStore = create<StoreState>()(
           const logs = [...s.logs, entry].sort((a, b) => b.at - a.at);
           if (l.skipped || !(l.doseMcg > 0)) return { logs };
 
-          // Attribute the dose to a vial so stock actually moves. The caller
-          // may name one; otherwise pick the sensible vial automatically,
-          // because requiring manual attribution just means stock never
-          // changes.
-          // Only ever draw from this profile's own stock.
+          /*
+           * Attribute the dose to a container so stock actually moves. The
+           * caller may name one; otherwise pick it, because requiring manual
+           * attribution just means stock never changes.
+           *
+           * From the container this compound actually comes in, which is the
+           * part this got wrong. Left to the default it looked for a vial, so
+           * a dose of something sold as tablets found nothing, was attributed
+           * to nothing, and drew nothing. Days of doses logged in one tap, and
+           * a pack on the shelf still reading full.
+           *
+           * Only ever draw from this profile's own stock.
+           */
           const mine = s.vials.filter((v) => v.profileId === s.activeProfileId);
-          const vialId = l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at)?.id;
+          const container = containerForDose(
+            findPeptide(s.customPeptides, l.peptideId)?.preparation,
+            l.route);
+          const vialId =
+            l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at, container)?.id;
           if (!vialId) return { logs };
 
           /*
