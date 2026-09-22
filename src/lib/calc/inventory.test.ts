@@ -970,3 +970,48 @@ describe("stockFor and the container", () => {
     expect(stockFor(both, "klow", 10_000, NOW).dosesRemaining).toBe(1);
   });
 });
+
+/*
+ * The pair, used together, because apart they are both right and the bug was
+ * in the joint. Several days of SLU-PP-332 were logged in one tap each and the
+ * pack on the shelf still read full: the attribution in the store asked for a
+ * vial, found none, attributed the dose to nothing and drew nothing.
+ *
+ * Every screen that decides where a dose comes from has to compose these two.
+ * A call to pickVialForDose with no container is a call that has not been
+ * asked which compound it is talking about.
+ */
+describe("choosing what a dose comes out of", () => {
+  const pack = vial({
+    id: "pack",
+    peptideId: "slu-pp-332",
+    container: "pack",
+    mgPerTablet: 10,
+    strengthMg: 600,
+    state: "sealed",
+  });
+
+  it("finds the pack for a compound that comes as tablets", () => {
+    const want = containerForDose("tablet", "oral");
+    expect(pickVialForDose([pack], "slu-pp-332", 10_000, NOW, want)?.id).toBe("pack");
+  });
+
+  /* The bug, preserved: ask for a vial and a pack is invisible. */
+  it("finds nothing when asked for a vial, which is what went wrong", () => {
+    expect(pickVialForDose([pack], "slu-pp-332", 10_000, NOW)).toBeNull();
+  });
+
+  it("still finds a vial for everything that is one", () => {
+    const v = vial({ id: "v", state: "reconstituted", diluentMl: 2 });
+    const want = containerForDose("powder", "subcutaneous");
+    expect(pickVialForDose([v], "klow", 10_000, NOW, want)?.id).toBe("v");
+  });
+
+  it("finds the bottle for a nasal dose of the same compound", () => {
+    const bottle = vial({ id: "b", container: "spray", state: "reconstituted", diluentMl: 5 });
+    const v = vial({ id: "v", state: "reconstituted", diluentMl: 2 });
+    expect(
+      pickVialForDose([v, bottle], "klow", 1000, NOW, containerForDose("powder", "intranasal"))?.id,
+    ).toBe("b");
+  });
+});

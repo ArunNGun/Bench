@@ -744,6 +744,20 @@ in a search for the parameter's name.
 container finally arriving, it had to stop being true for a pack, which has
 nothing to make up.
 
+**It happened again four days later**, in `addLog`. Several days of tablets had
+been logged in one tap each and the pack still read full: the store attributes
+a dose to a container so that stock moves, asked `pickVialForDose` without a
+container, found no vial, and attributed the dose to nothing. Nothing drew,
+nothing complained, and the only visible symptom was a number that never went
+down.
+
+That is five call sites across two functions, all of them omitting the same
+parameter, none of them wrong on the day they were written. The defaults stay
+for now because removing them means passing `"vial"` at forty-eight places in
+the tests, which would bury the next real change in noise. What stands in their
+place is a test named for each incident and this paragraph. If a sixth turns
+up, delete the defaults and take the churn.
+
 ## Every trigger was about this device
 
 A dose logged on a phone at 20:22 was still showing as due on a desktop at
