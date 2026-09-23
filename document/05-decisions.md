@@ -462,3 +462,36 @@ among its routes, on the same reasoning that a filled spray bottle offers
 intranasal: evidence rather than permission. And a dose with no protocol
 defaults to oral for a tablet rather than to subcutaneous, since the default
 route was the thing feeding the wrong site in the first place.
+
+## An order is a delivery, and the postage is one thing known about it
+
+`Order` was created to share postage, and postage was the reason it existed: no
+shipping cost, no order. Ten vials bought together with free delivery were
+therefore ten unrelated rows, and marking them arrived took ten taps. Reported
+as forty, by somebody who buys in forty.
+
+So the record is now the delivery. Anything added in one go shares one, and
+`shippingCost` is optional. Every reader already asked whether it was greater
+than zero, because a shipping line of nothing is a line about nothing, so
+nothing downstream needed teaching.
+
+Three decisions inside that are worth keeping.
+
+**A single vial takes no order.** One vial is already one row and one tap, and
+an order of one would be a record that says nothing the vial does not say
+itself.
+
+**The on-order list is grouped whatever the grouping setting says.** That
+setting is about how densely somebody wants to read stock they own, where a
+vial has a date, a lot and a price of its own worth seeing. A row waiting in
+the post has none of that yet: the only fact about it is how many. Showing one
+arrival as forty is not a display density, it is a claim about what happened.
+
+**Arrived acts on the whole group, and every other button on that row does
+not.** The others are about one vial because they are about one vial: making
+one up, emptying one, throwing one away. Arriving is one event that happened
+once.
+
+The migration changed with it. It used to drop an order whose postage was
+unusable, which was right when postage was the point; it now drops the figure
+and keeps the order, because the order still says which vials arrived together.

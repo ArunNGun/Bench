@@ -390,7 +390,13 @@ describe("v6 to v7: orders, for shipping", () => {
     expect(out.orders[0].profileId).toBe(out.activeProfileId);
   });
 
-  it("drops an order that could not carry a share", () => {
+  /*
+   * This used to drop the whole order when its postage was unusable, back when
+   * postage was the only reason an order existed. An order is now a delivery:
+   * it says which vials arrived together, which is what "Arrived" acts on, and
+   * that is worth keeping whether or not anybody paid to have them carried.
+   */
+  it("keeps an order that carries no share, and drops only the figure", () => {
     const out = migrateAppData({
       version: 7,
       orders: [
@@ -400,7 +406,17 @@ describe("v6 to v7: orders, for shipping", () => {
         { id: "text", profileId: "me", shippingCost: "sixty", placedAt: 1 },
       ],
     });
-    expect(out.orders.map((o) => o.id)).toEqual(["good"]);
+    expect(out.orders.map((o) => o.id)).toEqual(["good", "zero", "text"]);
+    expect(out.orders.map((o) => o.shippingCost)).toEqual([60, undefined, undefined]);
+  });
+
+  it("still refuses a row with no id, which nothing could point at", () => {
+    const out = migrateAppData({
+      version: 7,
+      // @ts-expect-error deliberately missing id, as an edited export would be
+      orders: [{ profileId: "me", shippingCost: 60, placedAt: 1 }],
+    });
+    expect(out.orders).toEqual([]);
   });
 
   it("stays the same when run twice", () => {

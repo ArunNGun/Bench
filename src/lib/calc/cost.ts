@@ -25,10 +25,10 @@ import { vialCapacityMcg } from "./inventory";
 export function shippingShare(vial: Vial, vials: Vial[], orders: Order[]): number {
   if (!vial.orderId) return 0;
   const order = orders.find((o) => o.id === vial.orderId);
-  if (!order || !(order.shippingCost > 0)) return 0;
+  if (!order || !((order.shippingCost ?? 0) > 0)) return 0;
 
   const siblings = vials.filter((v) => v.orderId === vial.orderId).length;
-  return siblings > 0 ? order.shippingCost / siblings : 0;
+  return siblings > 0 ? order.shippingCost! / siblings : 0;
 }
 
 /** What a vial cost in total: its price, plus its share of getting it here. */
@@ -197,10 +197,10 @@ export function totalSpend(
   const live = new Set(vials.map((v) => v.orderId).filter(Boolean));
   const shipping = new Map<string, CurrencyTotal>();
   for (const order of orders) {
-    if (!live.has(order.id) || !(order.shippingCost > 0)) continue;
+    if (!live.has(order.id) || !((order.shippingCost ?? 0) > 0)) continue;
     const currency = order.currency ?? fallbackCurrency;
     const row = shipping.get(currency) ?? { currency, total: 0, vials: 0 };
-    row.total += order.shippingCost;
+    row.total += order.shippingCost!;
     row.vials += 1;
     shipping.set(currency, row);
   }

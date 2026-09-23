@@ -286,12 +286,41 @@ export interface VialGroup {
  * setting on rearranges the list as little as possible.
  */
 export function groupSealedVials(vials: Vial[]): VialGroup[] {
+  return groupVials(
+    vials.filter((v) => v.state === "sealed"),
+    (v) => `${v.peptideId}:${v.strengthMg}`);
+}
+
+/**
+ * Stock in the post, grouped by the delivery it is coming in.
+ *
+ * Reported as forty taps: forty vials ordered together were forty rows, each
+ * with its own "It arrived", and arriving is one event that happened once.
+ *
+ * Keyed by the order and then by compound, so an order holding two different
+ * things still reads as two lines rather than pretending they are one. In
+ * practice a delivery is added one compound at a time, which is why the rule
+ * this was asked for comes out as one row per thing added.
+ *
+ * Not behind the grouping setting, unlike the shelf. That setting is about how
+ * densely somebody wants to read stock they already own, where a vial has a
+ * date, a lot and a price of its own worth seeing. A row waiting in the post
+ * has none of that yet: the only fact about it is how many, and showing one
+ * arrival as forty is a claim about what happened rather than a way of
+ * displaying it.
+ */
+export function groupOnOrder(vials: Vial[]): VialGroup[] {
+  return groupVials(
+    vials.filter((v) => v.state === "on-order"),
+    (v) => `${v.orderId ?? v.id}:${v.peptideId}:${v.strengthMg}`);
+}
+
+function groupVials(vials: Vial[], keyOf: (v: Vial) => string): VialGroup[] {
   const order: string[] = [];
   const bucket = new Map<string, Vial[]>();
 
   for (const v of vials) {
-    if (v.state !== "sealed") continue;
-    const key = `${v.peptideId}:${v.strengthMg}`;
+    const key = keyOf(v);
     if (!bucket.has(key)) {
       bucket.set(key, []);
       order.push(key);
