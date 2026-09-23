@@ -6,6 +6,7 @@ import {
   marksForDose,
   matchesContainer,
   drawFromVial,
+  groupOnOrder,
   groupSealedVials,
   supplyOutlook,
   containerForDose,
@@ -1013,5 +1014,69 @@ describe("choosing what a dose comes out of", () => {
     expect(
       pickVialForDose([v, bottle], "klow", 1000, NOW, containerForDose("powder", "intranasal"))?.id,
     ).toBe("b");
+  });
+});
+
+/*
+ * Reported as forty taps. Forty vials ordered together were forty rows, each
+ * with its own "It arrived", and arriving is one event that happened once.
+ */
+describe("groupOnOrder", () => {
+  const coming = (id: string, over: Partial<Vial> = {}) =>
+    vial({ id, state: "on-order", ...over });
+
+  it("puts one delivery on one row", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1" }),
+      coming("b", { orderId: "o1" }),
+      coming("c", { orderId: "o1" }),
+    ]);
+    expect(g).toHaveLength(1);
+    expect(g[0].count).toBe(3);
+    expect(g[0].vials.map((v) => v.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps two deliveries apart", () => {
+    const g = groupOnOrder([coming("a", { orderId: "o1" }), coming("b", { orderId: "o2" })]);
+    expect(g.map((x) => x.count)).toEqual([1, 1]);
+  });
+
+  /* An order holding two different things is two lines, not one. */
+  it("splits a delivery by what is in it", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1" }),
+      coming("b", { orderId: "o1", peptideId: "bpc-157" }),
+    ]);
+    expect(g).toHaveLength(2);
+    expect(g.map((x) => x.peptideId)).toEqual(["klow", "bpc-157"]);
+  });
+
+  /* And so is the same compound at two strengths, since they are not the same thing. */
+  it("splits a delivery by strength", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1", strengthMg: 10 }),
+      coming("b", { orderId: "o1", strengthMg: 5 }),
+    ]);
+    expect(g.map((x) => x.strengthMg)).toEqual([10, 5]);
+  });
+
+  /* A vial bought on its own carries no order and is still its own row. */
+  it("gives a vial with no delivery a row of its own", () => {
+    const g = groupOnOrder([coming("a"), coming("b")]);
+    expect(g.map((x) => x.count)).toEqual([1, 1]);
+  });
+
+  it("ignores everything that is not still in the post", () => {
+    expect(groupOnOrder([vial({ id: "s" }), vial({ id: "o", state: "reconstituted" })])).toEqual([]);
+  });
+
+  it("adds up what the delivery holds and what it cost", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1", strengthMg: 10, cost: 30, currency: "EUR" }),
+      coming("b", { orderId: "o1", strengthMg: 10, cost: 30, currency: "EUR" }),
+    ]);
+    expect(g[0].remainingMcg).toBe(20_000);
+    expect(g[0].cost).toBe(60);
+    expect(g[0].currency).toBe("EUR");
   });
 });

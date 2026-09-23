@@ -1042,11 +1042,29 @@ export interface DiluentBottle {
   orderId?: string;
 }
 
+/**
+ * One delivery, and the vials that came in it.
+ *
+ * It began as a way to share postage, and the postage was the reason it
+ * existed: no shipping, no order. That left ten vials bought together as ten
+ * unrelated rows, and marking them arrived took ten taps, which is what it was
+ * reported as.
+ *
+ * So it is now the delivery itself, and the postage is one thing that may be
+ * known about it. Everything added in one go shares one, whether or not any
+ * money was recorded for carrying it.
+ */
 export interface Order {
   id: string;
   profileId: string;
-  /** Postage and handling for the whole order, in whole currency units. */
-  shippingCost: number;
+  /**
+   * Postage and handling for the whole order, in whole currency units.
+   *
+   * Optional, and absent rather than zero when nothing was paid or nobody said.
+   * Every reader already asked whether it was greater than zero, because a
+   * shipping line of nothing is a line about nothing.
+   */
+  shippingCost?: number;
   /** Matches the vials it covers. Falls back to the app setting. */
   currency?: string;
   placedAt: number;

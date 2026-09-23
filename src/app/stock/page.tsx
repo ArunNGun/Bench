@@ -24,6 +24,7 @@ import { MULTI_DOSE_VIAL_BUD_DAYS, unitsToMl } from "@/lib/calc/reconstitution";
 import { useSyringeScale } from "@/components/DoseMarks";
 import {
   diluentAfterTopUp,
+  groupOnOrder,
   groupSealedVials,
   containerForDose,
   marksFromVial,
@@ -115,6 +116,8 @@ export default function StockPage() {
   // Off unless asked for, so nobody's Stock page rearranges itself after an update.
   const grouping = settings.groupIdenticalVials === true;
   const sealedGroups = useMemo(() => groupSealedVials(sealed), [sealed]);
+  // Always grouped, unlike the shelf. See `groupOnOrder`.
+  const onOrderGroups = useMemo(() => groupOnOrder(vials), [vials]);
   const open = vials.filter((v) => v.state === "reconstituted");
   const done = vials.filter((v) => v.state === "finished" || v.state === "discarded");
 
@@ -273,10 +276,13 @@ export default function StockPage() {
         <section>
           <SectionLabel>{t("stock_on_order")}</SectionLabel>
           <div className="space-y-2.5">
-            {onOrder.map((v) => (
+            {onOrderGroups.map((g) => {
+              const v = g.vials[0];
+              return (
               <VialRow
-                key={v.id}
+                key={g.key}
                 vial={v}
+                group={g}
                 now={now}
                 budWarningDays={settings.budWarningDays}
                 doseMcg={doseFor(v.peptideId)}
@@ -286,13 +292,25 @@ export default function StockPage() {
                 currency={currency}
                 peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                 onRemove={() => removeVial(v.id)}
-                onArrived={() =>
-                  // Arriving makes it an ordinary sealed vial, and dates it from
-                  // the day it turned up rather than the day it was ordered.
-                  updateVial(v.id, { state: "sealed", acquiredAt: Date.now() })
-                }
+                onArrived={() => {
+                  /*
+                    The whole delivery, unlike every other button on a grouped
+                    row. Those act on one vial because they are about one vial:
+                    making one up, emptying one, throwing one away. Arriving is
+                    one event that happened once, and the ten taps it used to
+                    take are what this was reported as.
+
+                    Sealed and dated from the day it turned up rather than the
+                    day it was ordered.
+                  */
+                  const at = Date.now();
+                  for (const target of g.vials) {
+                    updateVial(target.id, { state: "sealed", acquiredAt: at });
+                  }
+                }}
               />
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

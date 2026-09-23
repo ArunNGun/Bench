@@ -617,7 +617,21 @@ export const useStore = create<StoreState>()(
         set((s) => ({ vials: s.vials.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
       addOrder: (vials, shipping) =>
         set((s) => {
-          const orderId = shipping && shipping.cost > 0 ? nanoid(10) : undefined;
+          /*
+           * A delivery, not a postage record.
+           *
+           * The order used to exist only when there was shipping to share, so
+           * ten vials bought together with free delivery were ten unrelated
+           * rows and arriving took ten taps. Anything added in one go now
+           * shares an order, and the postage is one thing that may be known
+           * about it.
+           *
+           * A single vial on its own still takes none. One vial is already one
+           * row and one tap, and an order of one would be a record that says
+           * nothing the vial does not say itself.
+           */
+          const shared = vials.length > 1 || (shipping != null && shipping.cost > 0);
+          const orderId = shared ? nanoid(10) : undefined;
           const added = vials.map((v) => ({
             ...v,
             id: nanoid(10),
@@ -627,19 +641,22 @@ export const useStore = create<StoreState>()(
 
           return {
             vials: [...s.vials, ...added],
-            orders:
-              orderId && shipping
-                ? [
-                    ...s.orders,
-                    {
-                      id: orderId,
-                      profileId: s.activeProfileId,
-                      shippingCost: shipping.cost,
-                      currency: shipping.currency,
-                      placedAt: Date.now(),
-                    },
-                  ]
-                : s.orders,
+            orders: orderId
+              ? [
+                  ...s.orders,
+                  {
+                    id: orderId,
+                    profileId: s.activeProfileId,
+                    // Absent rather than zero. Nothing paid and nothing said
+                    // are the same thing to every reader, and both are quieter
+                    // than a shipping line of 0.00.
+                    ...(shipping && shipping.cost > 0
+                      ? { shippingCost: shipping.cost, currency: shipping.currency }
+                      : {}),
+                    placedAt: Date.now(),
+                  },
+                ]
+              : s.orders,
           };
         }),
       /*
