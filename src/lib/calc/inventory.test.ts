@@ -6,8 +6,11 @@ import {
   marksForDose,
   matchesContainer,
   drawFromVial,
+  groupOnOrder,
   groupSealedVials,
   supplyOutlook,
+  containerForDose,
+  openPack,
   pickVialForDose,
   reconcileVials,
   returnToVial,
@@ -822,5 +825,258 @@ describe("stock held back by a date", () => {
   it("ignores vials that are gone rather than merely out of date", () => {
     const finished = { ...past, state: "finished" as const };
     expect(stockFor([finished], "kpv", 250, NOW).dosesExpired).toBe(0);
+  });
+});
+
+/*
+ * The rule that decides where a dose comes from. It lived in the form, written
+ * out three times, and one of those copies was the only one that had heard of
+ * tablets: a compound sold as tablets therefore had nothing selected and the
+ * screen said no pack was in stock while the pack sat on the shelf.
+ */
+describe("containerForDose", () => {
+  it("sends an injection to a vial", () => {
+    expect(containerForDose(undefined, "subcutaneous")).toBe("vial");
+    expect(containerForDose("powder", "intramuscular")).toBe("vial");
+    expect(containerForDose("solution", "subcutaneous")).toBe("vial");
+  });
+
+  it("sends a tablet to a pack", () => {
+    expect(containerForDose("tablet", "oral")).toBe("pack");
+    expect(containerForDose("tablet", "subcutaneous")).toBe("pack");
+  });
+
+  /*
+   * Oral does not mean tablet. A solution somebody swallows out of a syringe
+   * is oral and still comes out of a vial, which is why the preparation and
+   * not the route is what decides here.
+   */
+  it("leaves an oral solution in its vial", () => {
+    expect(containerForDose("solution", "oral")).toBe("vial");
+    expect(containerForDose(undefined, "oral")).toBe("vial");
+  });
+
+  /* The route wins over the preparation, not the other way round. */
+  it("sends a nasal dose to a bottle whatever the library says", () => {
+    expect(containerForDose(undefined, "intranasal")).toBe("spray");
+    expect(containerForDose("powder", "intranasal")).toBe("spray");
+    expect(containerForDose("tablet", "intranasal")).toBe("spray");
+  });
+});
+
+/*
+ * A box of tablets that has been dosed from all week sat at the bottom of the
+ * Stock page under Sealed, which it plainly was not.
+ */
+describe("opening a pack", () => {
+  const pack = (over: Partial<Vial> = {}) =>
+    vial({ id: "p", container: "pack", mgPerTablet: 10, strengthMg: 600, ...over });
+
+  it("puts it in the state every container in use has", () => {
+    const out = openPack(pack(), NOW);
+    expect(out.state).toBe("reconstituted");
+    expect(out.reconstitutedAt).toBe(NOW);
+  });
+
+  /* A BUD runs from first puncture. Nothing about foil changes on that day. */
+  it("gives it no beyond-use date", () => {
+    expect(openPack(pack(), NOW).budAt).toBeUndefined();
+  });
+
+  it("keeps the day it was first opened", () => {
+    const out = openPack(pack({ reconstitutedAt: NOW - DAY }), NOW);
+    expect(out.reconstitutedAt).toBe(NOW - DAY);
+  });
+
+  it("opens on the first dose, for anyone who never pressed the button", () => {
+    const [out] = drawFromVial([pack()], "p", 10_000, NOW);
+    expect(out.state).toBe("reconstituted");
+    expect(out.reconstitutedAt).toBe(NOW);
+    expect(out.drawnMcg).toBe(10_000);
+  });
+
+  /* The dose's own time, so a dose logged for yesterday opens it yesterday. */
+  it("opens it when the dose says, not when the clock does", () => {
+    const [out] = drawFromVial([pack()], "p", 10_000, NOW - 3 * DAY);
+    expect(out.reconstitutedAt).toBe(NOW - 3 * DAY);
+  });
+
+  /*
+   * The other half. A vial becomes open by being made up, which is a step with
+   * its own data, and a dose drawn from one that never had that step is an
+   * oddity worth leaving visible.
+   */
+  it("leaves a sealed vial sealed", () => {
+    const [out] = drawFromVial([vial({ id: "v" })], "v", 10_000, NOW);
+    expect(out.state).toBe("sealed");
+    expect(out.reconstitutedAt).toBeUndefined();
+  });
+
+  it("still finishes a pack the last dose empties", () => {
+    const [out] = drawFromVial([pack({ strengthMg: 10 })], "p", 10_000, NOW);
+    expect(out.state).toBe("finished");
+  });
+
+  /* Undoing that dose does not put the tablets back in the foil. */
+  it("reopens a finished pack rather than resealing it", () => {
+    const emptied = drawFromVial([pack({ strengthMg: 10 })], "p", 10_000, NOW);
+    const [out] = returnToVial(emptied, "p", 10_000);
+    expect(out.state).toBe("reconstituted");
+  });
+
+  it("still reseals a finished vial that was never made up", () => {
+    const emptied = drawFromVial([vial({ id: "v", strengthMg: 10 })], "v", 10_000, NOW);
+    const [out] = returnToVial(emptied, "v", 10_000);
+    expect(out.state).toBe("sealed");
+  });
+
+  /* An opened pack is reached for before a sealed one, like every open container. */
+  it("is preferred over a sealed pack once open", () => {
+    const vials = [
+      pack({ id: "sealed" }),
+      { ...openPack(pack({ id: "started" }), NOW), drawnMcg: 100_000 },
+    ];
+    expect(pickVialForDose(vials, "klow", 10_000, NOW, "pack")?.id).toBe("started");
+  });
+});
+
+/*
+ * The container has to be asked for. It defaults to a vial, and a screen that
+ * leaves it out counts nothing for a compound sold as tablets: Today read
+ * "0 doses" with a full pack on the shelf.
+ */
+describe("stockFor and the container", () => {
+  const pack = (over: Partial<Vial> = {}) =>
+    vial({ id: "p", container: "pack", mgPerTablet: 10, strengthMg: 600, state: "sealed", ...over });
+
+  it("counts nothing for a pack when asked about vials", () => {
+    expect(stockFor([pack()], "klow", 10_000, NOW).dosesRemaining).toBe(0);
+  });
+
+  it("counts the pack when asked about packs", () => {
+    const s = stockFor([pack()], "klow", 10_000, NOW, "pack");
+    expect(s.dosesRemaining).toBe(60);
+    expect(s.availableMcg).toBe(600_000);
+  });
+
+  /* Nothing to make up, so nobody is told to reach for the water. */
+  it("never asks for a pack to be reconstituted", () => {
+    expect(stockFor([pack()], "klow", 10_000, NOW, "pack").needsReconstitution).toBe(false);
+    expect(stockFor([vial({ id: "v" })], "klow", 10_000, NOW).needsReconstitution).toBe(true);
+  });
+
+  it("leaves a vial and a pack of the same compound out of each other's count", () => {
+    const both = [pack(), vial({ id: "v", strengthMg: 10 })];
+    expect(stockFor(both, "klow", 10_000, NOW, "pack").dosesRemaining).toBe(60);
+    expect(stockFor(both, "klow", 10_000, NOW).dosesRemaining).toBe(1);
+  });
+});
+
+/*
+ * The pair, used together, because apart they are both right and the bug was
+ * in the joint. Several days of SLU-PP-332 were logged in one tap each and the
+ * pack on the shelf still read full: the attribution in the store asked for a
+ * vial, found none, attributed the dose to nothing and drew nothing.
+ *
+ * Every screen that decides where a dose comes from has to compose these two.
+ * A call to pickVialForDose with no container is a call that has not been
+ * asked which compound it is talking about.
+ */
+describe("choosing what a dose comes out of", () => {
+  const pack = vial({
+    id: "pack",
+    peptideId: "slu-pp-332",
+    container: "pack",
+    mgPerTablet: 10,
+    strengthMg: 600,
+    state: "sealed",
+  });
+
+  it("finds the pack for a compound that comes as tablets", () => {
+    const want = containerForDose("tablet", "oral");
+    expect(pickVialForDose([pack], "slu-pp-332", 10_000, NOW, want)?.id).toBe("pack");
+  });
+
+  /* The bug, preserved: ask for a vial and a pack is invisible. */
+  it("finds nothing when asked for a vial, which is what went wrong", () => {
+    expect(pickVialForDose([pack], "slu-pp-332", 10_000, NOW)).toBeNull();
+  });
+
+  it("still finds a vial for everything that is one", () => {
+    const v = vial({ id: "v", state: "reconstituted", diluentMl: 2 });
+    const want = containerForDose("powder", "subcutaneous");
+    expect(pickVialForDose([v], "klow", 10_000, NOW, want)?.id).toBe("v");
+  });
+
+  it("finds the bottle for a nasal dose of the same compound", () => {
+    const bottle = vial({ id: "b", container: "spray", state: "reconstituted", diluentMl: 5 });
+    const v = vial({ id: "v", state: "reconstituted", diluentMl: 2 });
+    expect(
+      pickVialForDose([v, bottle], "klow", 1000, NOW, containerForDose("powder", "intranasal"))?.id,
+    ).toBe("b");
+  });
+});
+
+/*
+ * Reported as forty taps. Forty vials ordered together were forty rows, each
+ * with its own "It arrived", and arriving is one event that happened once.
+ */
+describe("groupOnOrder", () => {
+  const coming = (id: string, over: Partial<Vial> = {}) =>
+    vial({ id, state: "on-order", ...over });
+
+  it("puts one delivery on one row", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1" }),
+      coming("b", { orderId: "o1" }),
+      coming("c", { orderId: "o1" }),
+    ]);
+    expect(g).toHaveLength(1);
+    expect(g[0].count).toBe(3);
+    expect(g[0].vials.map((v) => v.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps two deliveries apart", () => {
+    const g = groupOnOrder([coming("a", { orderId: "o1" }), coming("b", { orderId: "o2" })]);
+    expect(g.map((x) => x.count)).toEqual([1, 1]);
+  });
+
+  /* An order holding two different things is two lines, not one. */
+  it("splits a delivery by what is in it", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1" }),
+      coming("b", { orderId: "o1", peptideId: "bpc-157" }),
+    ]);
+    expect(g).toHaveLength(2);
+    expect(g.map((x) => x.peptideId)).toEqual(["klow", "bpc-157"]);
+  });
+
+  /* And so is the same compound at two strengths, since they are not the same thing. */
+  it("splits a delivery by strength", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1", strengthMg: 10 }),
+      coming("b", { orderId: "o1", strengthMg: 5 }),
+    ]);
+    expect(g.map((x) => x.strengthMg)).toEqual([10, 5]);
+  });
+
+  /* A vial bought on its own carries no order and is still its own row. */
+  it("gives a vial with no delivery a row of its own", () => {
+    const g = groupOnOrder([coming("a"), coming("b")]);
+    expect(g.map((x) => x.count)).toEqual([1, 1]);
+  });
+
+  it("ignores everything that is not still in the post", () => {
+    expect(groupOnOrder([vial({ id: "s" }), vial({ id: "o", state: "reconstituted" })])).toEqual([]);
+  });
+
+  it("adds up what the delivery holds and what it cost", () => {
+    const g = groupOnOrder([
+      coming("a", { orderId: "o1", strengthMg: 10, cost: 30, currency: "EUR" }),
+      coming("b", { orderId: "o1", strengthMg: 10, cost: 30, currency: "EUR" }),
+    ]);
+    expect(g[0].remainingMcg).toBe(20_000);
+    expect(g[0].cost).toBe(60);
+    expect(g[0].currency).toBe("EUR");
   });
 });

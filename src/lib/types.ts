@@ -168,7 +168,7 @@ export interface Peptide {
    * concentration from the moment you open it and never needs the reconstitution
    * step. Defaults to powder.
    */
-  preparation?: "powder" | "solution";
+  preparation?: "powder" | "solution" | "tablet";
 
   /**
    * International units per milligram, for compounds conventionally dosed in IU
@@ -418,6 +418,16 @@ export interface DoseLog {
    * from today's bottle would be inventing a number for a past event.
    */
   presses?: number;
+  /**
+   * How many tablets this dose was, for a pack.
+   *
+   * Recorded for the same reason `presses` is: the pack a dose came out of can
+   * be replaced by one with a different tablet size, and a count worked out
+   * later from today's pack would answer a question about last Tuesday with
+   * today's arithmetic. Fractions are kept, because a scored tablet really is
+   * half a dose, which is where a tablet differs from a press.
+   */
+  tablets?: number;
   /**
    * The exact barrel, by id from `SYRINGES`.
    *
@@ -693,7 +703,17 @@ export interface Vial {
    *
    * What it does not reuse is the syringe. See `calc/spray.ts`.
    */
-  container?: "vial" | "spray";
+  container?: "vial" | "spray" | "pack";
+  /**
+   * Milligrams in one tablet, for a pack of them.
+   *
+   * The unit a pack is counted in, the way `mlPerSpray` is the unit a bottle is
+   * counted in. No default and no guess: a pump has a conventional 0.1 mL and a
+   * tablet has no conventional size at all, so zero here means nobody said, and
+   * the screen shows a count of nothing rather than a count of something
+   * invented.
+   */
+  mgPerTablet?: number;
   /**
    * Millilitres one press of the pump delivers, for a spray.
    *
@@ -762,6 +782,17 @@ export interface Settings {
    * be tedious, which is a judgement only the owner of the fridge can make.
    */
   groupIdenticalVials?: boolean;
+
+  /**
+   * Put the shelf of water below the vials rather than above them.
+   *
+   * Off by default, which keeps the page as it is. Raised as "water is the
+   * least important thing here and it is at the top", which is true for
+   * somebody with forty bottles and false for somebody reconstituting today,
+   * for whom the bottle is the next thing they touch. Neither of them is
+   * wrong about their own fridge, so it is a setting rather than an argument.
+   */
+  waterAtBottom?: boolean;
 
   /**
    * Automatic backups to the device's Documents folder. Android only, a web
@@ -1011,11 +1042,29 @@ export interface DiluentBottle {
   orderId?: string;
 }
 
+/**
+ * One delivery, and the vials that came in it.
+ *
+ * It began as a way to share postage, and the postage was the reason it
+ * existed: no shipping, no order. That left ten vials bought together as ten
+ * unrelated rows, and marking them arrived took ten taps, which is what it was
+ * reported as.
+ *
+ * So it is now the delivery itself, and the postage is one thing that may be
+ * known about it. Everything added in one go shares one, whether or not any
+ * money was recorded for carrying it.
+ */
 export interface Order {
   id: string;
   profileId: string;
-  /** Postage and handling for the whole order, in whole currency units. */
-  shippingCost: number;
+  /**
+   * Postage and handling for the whole order, in whole currency units.
+   *
+   * Optional, and absent rather than zero when nothing was paid or nobody said.
+   * Every reader already asked whether it was greater than zero, because a
+   * shipping line of nothing is a line about nothing.
+   */
+  shippingCost?: number;
   /** Matches the vials it covers. Falls back to the app setting. */
   currency?: string;
   placedAt: number;

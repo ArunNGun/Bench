@@ -319,31 +319,47 @@ the fold. That happened in testing. See [06-traps.md](06-traps.md).
 to no file. This is why `ButtonLink` exists: `window.location.href = "/plan"`
 silently does nothing inside the APK.
 
-## The public page stays in English
+## The public page is routed, the app is not
 
-Every screen inside the app is translated. `/landing` is not, and that is a
-decision rather than an omission.
+`/landing` is English and `/landing/de`, `/landing/sl` and `/landing/pl` are the
+rest. All four are prerendered, name each other in `hreflang`, and carry a
+canonical pointing at themselves; `x-default` points at English.
 
-The language is chosen in the app and kept in a store in the browser. Every
-translated screen is a client component that reads it. `/landing` is a server
-component: it exports `metadata`, fetches its own statistics on the server, and
-ships no state, which is what lets it render instantly on a phone that has
-never opened the app before. A server render happens before any browser has
-said which language it wants, so there is nothing for `useLang` to read.
+English keeps the bare path rather than moving to `/landing/en`. Every link to
+this page that exists in the world points at `/landing`, and a second URL
+holding the same page is a duplicate a search engine has to be told to ignore.
 
-Making it a client component would translate it and cost the thing it is for.
-The alternative that actually works is routed locales, `/landing/de` and the
-rest, each rendered on the server for a language known from the URL, with
-`hreflang` so a search engine indexes all four. That is a piece of work with a
-routing decision, a metadata decision and a canonical-URL decision in it. It
-belongs on its own, not appended to the end of a run of wiring PRs.
+The page reads its strings with `translate(lang, key)` rather than `useLang`,
+because it renders on the server before any browser has said which language it
+wants. That is the same fact that made this a piece of work rather than a
+translation pass, and the reasoning it replaces is below.
 
-Until then the public page is English, and the language picker in the app is
-what a person who wants Slovenian will find on their first screen after it.
+`lang` sits on `<main>` rather than on `<html>`. The root layout owns `<html>`
+and is shared by the whole app, so varying it would mean two root layouts and a
+route group around every other page. A screen reader switches voice at the
+element that carries `lang`, which is what the attribute is for.
 
-The same applies to the `metadata` export in `src/app/layout.tsx`, the page
-title and description a search engine and a browser tab show. It is computed on
-the server for the same reason and belongs to the same piece of work.
+**The app's own `metadata` in `src/app/layout.tsx` is still English**, and that
+is not an oversight. It is the title a browser tab and a search engine show for
+`/`, `/plan`, `/stock` and the rest, which are client screens whose language
+lives in a store in the browser. Routing those would mean `/sl/plan` and a
+locale segment through the entire app, for a title nobody links to. The public
+page was worth routing because it is the one page a stranger arrives at.
+
+### What this replaced, and why the wait was right
+
+For four cycles the answer was that `/landing` stays English. The reasoning
+then: it is a server component, a server render happens before any browser has
+said which language it wants, and making it a client component would translate
+it and cost the thing it is for, which is arriving instantly on a phone that has
+never opened the app.
+
+That was correct and the conclusion drawn from it was wrong only in timing. The
+answer was never "client component"; it was routed locales, and that is a piece
+of work with a routing decision, a metadata decision and a canonical-URL
+decision in it. It did not belong appended to the end of a run of wiring PRs,
+and it is better done as one thing that builds, exports and is checked in the
+emitted HTML than as a rushed sixth item.
 
 ## A name stays, a description translates
 
@@ -380,3 +396,102 @@ from a rotation history that no longer describes the body. Nothing would fail
 loudly. The rule generalises: wherever a default is offered alongside the
 alternatives to it, the alternatives are the default's own ranking, held to it
 by a test.
+
+## "reconstituted" is the state a container in use has, whatever its name
+
+A pack of tablets that had been dosed from all week sat under Sealed on the
+Stock page, because a pack has nothing to reconstitute and reconstitution is
+what moves a row out of that section.
+
+The obvious fix is a fourth state, `"open"`. It was not taken. Every filter in
+the app that means "in use" is written as `state === "reconstituted"`, and the
+name has already stopped being literal once: a spray bottle is filled, not made
+up, and takes that state. What the state records is a position in a sequence,
+sealed then in use then finished, and all three containers pass through it.
+Adding a value would mean teaching eleven call sites, a migration, and a period
+where data written by one build reads wrong in another, all to make one
+identifier honest.
+
+So a pack takes it too, and there are two ways in, because either alone fails a
+real person. **Open the pack** is the button, for a box opened before its first
+dose is due. The first logged dose opens it anyway, for the box opened three
+days ago by somebody who never pressed anything. `openPack` is one function and
+both paths call it.
+
+What a pack does not get is a beyond-use date. A BUD runs from first puncture
+because what starts then is a sterile solution sitting at room temperature.
+Nothing about a foil strip changes on the day you press the first tablet out,
+so the only date a pack carries is the manufacturer's.
+
+The rule: **when an existing value already means the general thing, widen the
+comment, not the union.** A new state earns its place when something filters on
+it differently, and nothing here does.
+
+## A site is a fact about an injection, not about a dose
+
+Reported as a box of tablets showing an injection site in the Log. It was, and
+so was every nasal spray, and every oral or topical dose before them.
+
+The form suggested a site the moment a compound was chosen, to make rotation
+happen by default, and the suggestion was then written into the record whatever
+route the dose turned out to take. The site field was hidden for a pack and for
+a spray, which made the screen look right and left the data wrong. Worse, those
+records counted: a swallowed tablet consumed a site's rest and pushed the next
+real injection somewhere else.
+
+`routeHasSite` now names the rule, in `calc/sites.ts` where the rotation lives.
+Subcutaneous and intramuscular have a site. Oral, intranasal, topical and
+intravenous do not, because lipohypertrophy is what this whole module is about
+and none of them cause it.
+
+It is applied in four places, which is three more than it looks:
+
+- the form hides the field and the map, and writes no site
+- the quick log on Today writes none either, and offers no sites to rotate to
+- `siteUsage` ignores a record whose route has no site, so the rotation is
+  corrected for history already written, without editing anyone's records
+- the Log and the history list do not print one
+
+That third bullet is the reason this is not simply a validation fix. Thousands
+of records carry a site they should never have had. Filtering at the point of
+reading leaves the record as it was written, which is the honest thing to keep,
+and stops it being counted, which is the honest thing to do with it.
+
+Two smaller things fall out. A compound that comes as tablets now offers oral
+among its routes, on the same reasoning that a filled spray bottle offers
+intranasal: evidence rather than permission. And a dose with no protocol
+defaults to oral for a tablet rather than to subcutaneous, since the default
+route was the thing feeding the wrong site in the first place.
+
+## An order is a delivery, and the postage is one thing known about it
+
+`Order` was created to share postage, and postage was the reason it existed: no
+shipping cost, no order. Ten vials bought together with free delivery were
+therefore ten unrelated rows, and marking them arrived took ten taps. Reported
+as forty, by somebody who buys in forty.
+
+So the record is now the delivery. Anything added in one go shares one, and
+`shippingCost` is optional. Every reader already asked whether it was greater
+than zero, because a shipping line of nothing is a line about nothing, so
+nothing downstream needed teaching.
+
+Three decisions inside that are worth keeping.
+
+**A single vial takes no order.** One vial is already one row and one tap, and
+an order of one would be a record that says nothing the vial does not say
+itself.
+
+**The on-order list is grouped whatever the grouping setting says.** That
+setting is about how densely somebody wants to read stock they own, where a
+vial has a date, a lot and a price of its own worth seeing. A row waiting in
+the post has none of that yet: the only fact about it is how many. Showing one
+arrival as forty is not a display density, it is a claim about what happened.
+
+**Arrived acts on the whole group, and every other button on that row does
+not.** The others are about one vial because they are about one vial: making
+one up, emptying one, throwing one away. Arriving is one event that happened
+once.
+
+The migration changed with it. It used to drop an order whose postage was
+unusable, which was right when postage was the point; it now drops the figure
+and keeps the order, because the order still says which vials arrived together.

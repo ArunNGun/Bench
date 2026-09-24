@@ -14,14 +14,23 @@ import { isBlend } from "@/lib/calc/blend";
 import { allPeptides, findPeptide, useProfileData, useStore, vialStatus } from "@/lib/store";
 import { AddCompoundInline } from "./AddCompoundInline";
 import {
+  containerForDose,
   matchesContainer,
   pickVialForDose,
   stockFor,
   vialRemainingMcg,
   vialUsable,
 } from "@/lib/calc/inventory";
-import { mcgForSprays, mcgPerSpray, mlForSprays, routeChoices, spraysForDose } from "@/lib/calc/spray";
-import { suggestSite } from "@/lib/calc/sites";
+import { isPack, mcgForTablets, mcgPerTablet, tabletsForDose, tabletsRemaining } from "@/lib/calc/tablet";
+import {
+  defaultRoute,
+  mcgForSprays,
+  mcgPerSpray,
+  mlForSprays,
+  routeChoices,
+  spraysForDose,
+} from "@/lib/calc/spray";
+import { routeHasSite, suggestSite } from "@/lib/calc/sites";
 import {
   calculateDraw,
   concentration,
@@ -91,6 +100,15 @@ export function LogDoseSheet({
    * Shared by both directions of the pair of dropdowns, so picking a protocol
    * and picking a peptide that happens to have one cannot drift apart.
    */
+  /**
+   * The rule above, asked with a peptide id rather than with a peptide.
+   *
+   * These handlers run before the render that computes `container`, so they
+   * have to ask for themselves. They ask the same function.
+   */
+  const containerFor = (forPeptideId: string, forRoute: Route) =>
+    containerForDose(findPeptide(custom, forPeptideId)?.preparation, forRoute);
+
   function applyProtocol(proto: Protocol | undefined, forPeptideId: string, atMs: number) {
     const dose = proto ? scheduledDoseMcg(proto, atMs) : 0;
     /*
@@ -104,13 +122,15 @@ export function LogDoseSheet({
       !proto &&
       !pickVialForDose(vials, forPeptideId, dose, atMs, "vial") &&
       !!pickVialForDose(vials, forPeptideId, dose, atMs, "spray");
-    const nextRoute = proto?.route ?? (onlySpray ? "intranasal" : "subcutaneous");
+    const nextRoute =
+      proto?.route ?? defaultRoute(findPeptide(custom, forPeptideId)?.preparation, onlySpray);
     setDoseMcg(dose);
     setRoute(nextRoute);
-    // A nasal protocol draws from a bottle and never from a vial, so the
-    // container is decided by the route rather than by whatever is nearest.
+    // A nasal protocol draws from a bottle and never from a vial, and a
+    // compound sold as tablets comes out of a pack whatever the route says, so
+    // the container is decided by the rule rather than by whatever is nearest.
     setVialId(
-      pickVialForDose(vials, forPeptideId, dose, atMs, nextRoute === "intranasal" ? "spray" : "vial")
+      pickVialForDose(vials, forPeptideId, dose, atMs, containerFor(forPeptideId, nextRoute))
         ?.id ?? "");
     setSiteOverride(false);
     setSite(suggestSite(logs.filter((l) => l.peptideId === forPeptideId), atMs, 14, proto?.sites));
@@ -137,8 +157,8 @@ export function LogDoseSheet({
    */
   function chooseRoute(next: Route) {
     setRoute(next);
-    const want = next === "intranasal" ? "spray" : "vial";
-    setVialId(pickVialForDose(vials, peptideId, doseMcg, at, want)?.id ?? "");
+    setVialId(
+      pickVialForDose(vials, peptideId, doseMcg, at, containerFor(peptideId, next))?.id ?? "");
   }
 
   /**
@@ -204,14 +224,33 @@ export function LogDoseSheet({
   const nasal = route === "intranasal";
 
   /*
+   * Tablets stand the same half of the form down, for the same reason and on a
+   * different test. A nasal dose is known by its route; a tablet is known by
+   * how the compound is sold, because "oral" also covers a solution somebody
+   * swallows out of a syringe, and that one does want a barrel. The pack is
+   * therefore chosen by the preparation rather than by the route.
+   */
+  const tablets = peptide?.preparation === "tablet";
+  /** No barrel, no marks. */
+  const noBarrel = nasal || tablets;
+  /**
+   * Whether this dose goes into tissue, which is what a site is about.
+   *
+   * Not the same test as `noBarrel`, close as the two look: an oral solution
+   * is drawn up with a syringe and swallowed, so it has a barrel and no site.
+   */
+  const hasSite = routeHasSite(route);
+  const container = containerForDose(peptide?.preparation, route);
+
+  /*
    * What the library says, plus intranasal once a spray bottle of this compound
    * exists. Three compounds name that route, so without this a bottle made from
    * any of the others could not be logged from at all: the route it needs was
    * never on offer.
    */
   const routes = useMemo(
-    () => routeChoices(peptide?.routes ?? [], vials, peptideId),
-    [peptide?.routes, vials, peptideId]);
+    () => routeChoices(peptide?.routes ?? [], vials, peptideId, peptide?.preparation),
+    [peptide?.routes, peptide?.preparation, vials, peptideId]);
 
   // Sites pinned to this protocol, if any were chosen when it was set up.
   // Memoised so the identity is stable across renders, it feeds hook deps.
@@ -234,9 +273,9 @@ export function LogDoseSheet({
       vials.filter(
         (v) =>
           v.peptideId === peptideId &&
-          matchesContainer(v, nasal ? "spray" : "vial") &&
+          matchesContainer(v, container) &&
           vialUsable(v, Date.now())),
-    [vials, peptideId, nasal]);
+    [vials, peptideId, container]);
 
   // Reset the form each time it opens, prefilled from the protocol.
   useEffect(() => {
@@ -287,7 +326,7 @@ export function LogDoseSheet({
 
   // What the stock looks like once this dose is taken. This is the number the
   // user actually wants: how many more of these are left.
-  const stock = stockFor(vials, peptideId, doseMcg, at);
+  const stock = stockFor(vials, peptideId, doseMcg, at, container);
   const willDeplete = !skipped && !!vialId && doseMcg > 0;
   const dosesAfter = Math.max(0, stock.dosesRemaining - (willDeplete ? 1 : 0));
   const vialLeftAfter = vial
@@ -336,7 +375,7 @@ export function LogDoseSheet({
    * nobody could act on and nobody asked for.
    */
   const draw =
-    !nasal && vial && vial.diluentMl
+    !noBarrel && vial && vial.diluentMl
       ? calculateDraw({
           vialMcg: mgToMcg(vial.strengthMg),
           diluentMl: vial.diluentMl,
@@ -353,6 +392,17 @@ export function LogDoseSheet({
    * Working it out afterwards from the bottle would be answering with today's
    * concentration a question about last Tuesday's.
    */
+  /*
+   * The count of tablets this dose was, recorded rather than worked out later.
+   * Same reasoning as the presses below it: the pack can be replaced by one
+   * with a different tablet size, and a count derived afterwards would answer
+   * with today's pack a question about last Tuesday's.
+   */
+  const tabletCount =
+    tablets && vial && tabletsForDose(vial, doseMcg) > 0
+      ? Number(tabletsForDose(vial, doseMcg).toFixed(3))
+      : undefined;
+
   const nasalPresses =
     nasal && vial && spraysForDose(vial, doseMcg) > 0
       ? spraysForDose(vial, doseMcg)
@@ -376,11 +426,14 @@ export function LogDoseSheet({
         at,
         doseMcg,
         route,
-        site: site || undefined,
+        // A dose that went nowhere near tissue carries no site, whatever the
+        // form had suggested before the route was settled.
+        site: (hasSite && site) || undefined,
         vialId: vialId || undefined,
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
         presses: nasalPresses,
+        tablets: tabletCount,
         // Both, and the id is the one that carries the capacity and the marks.
         // Scale stays because it is what the Log reads and what the CSV exports.
         syringeId: draw ? syringe.id : undefined,
@@ -400,11 +453,12 @@ export function LogDoseSheet({
       at,
       doseMcg,
       route,
-      site: site || undefined,
+      site: (hasSite && site) || undefined,
       vialId: vialId || undefined,
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
       presses: nasalPresses,
+      tablets: tabletCount,
       syringeId: draw ? syringe.id : undefined,
       syringeScale: draw ? syringe.scale : undefined,
       skipped: skipped || undefined,
@@ -531,7 +585,42 @@ export function LogDoseSheet({
               />
             </Field>
 
-            {nasal ? (
+            {tablets ? (
+              /*
+                Tablets, which is what a person counts out of a pack. Fractions
+                are kept, because a scored tablet really is half a dose, and
+                that is where a tablet parts company with a press.
+              */
+              <Field
+                label={t("log_tablets")}
+                hint={
+                  /*
+                    Three states, three sentences. The first version said "add
+                    the tablet size to the pack" whether or not there was a pack
+                    to add it to, which reads as an instruction with nowhere to
+                    carry it out.
+                  */
+                  !vial
+                    ? t("log_tablets_no_pack")
+                    : mcgPerTablet(vial) > 0
+                      ? t("log_per_tablet_hint", { dose: formatDose(mcgPerTablet(vial)) })
+                      : t("log_no_tablet_size")
+                }
+              >
+                <NumberInput
+                  value={vial ? trim(tabletsForDose(vial, doseMcg), 2) : ""}
+                  min={0}
+                  step={0.5}
+                  suffix={t("log_tablets_suffix")}
+                  placeholder={vial ? undefined : t("log_na")}
+                  disabled={skipped || !vial}
+                  onChange={(e) => {
+                    if (!vial) return;
+                    setDoseMcg(Number(mcgForTablets(vial, Number(e.target.value)).toFixed(2)));
+                  }}
+                />
+              </Field>
+            ) : nasal ? (
               /*
                 Presses, because that is what a person does and counts. Whole
                 ones only: a pump delivers its volume or it fails, so half a
@@ -541,9 +630,10 @@ export function LogDoseSheet({
                 label={t("log_presses")}
                 hint={
                   vial && mcgPerSpray(vial) > 0
-                    ? `${formatDose(mcgPerSpray(vial))} a press, ${trim(
-                        mlForSprays(vial, spraysForDose(vial, doseMcg)),
-                        2)} mL in total.`
+                    ? t("log_per_press_hint", {
+                        dose: formatDose(mcgPerSpray(vial)),
+                        ml: trim(mlForSprays(vial, spraysForDose(vial, doseMcg)), 2),
+                      })
                     : t("log_fill_spray_first")
                 }
               >
@@ -552,7 +642,7 @@ export function LogDoseSheet({
                   min={0}
                   step={1}
                   suffix={t("log_presses_suffix")}
-                  placeholder={vial ? undefined : "n/a"}
+                  placeholder={vial ? undefined : t("log_na")}
                   disabled={skipped || !vial}
                   onChange={(e) => {
                     if (!vial) return;
@@ -586,7 +676,7 @@ export function LogDoseSheet({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {!nasal && (
+            {!noBarrel && (
             <Field
               label={t("log_barrel")}
               hint={
@@ -629,7 +719,7 @@ export function LogDoseSheet({
               </Select>
             </Field>
 
-            {!nasal && (
+            {hasSite && (
             <Field
               label={t("log_site_short")}
               hint={
@@ -651,12 +741,13 @@ export function LogDoseSheet({
           </div>
 
           {/*
-            Nothing about rotation applies to a nose. Repeatedly injecting one
-            spot builds tissue that absorbs erratically, which is the whole
-            reason this map exists; a nose has no such problem, and asking which
-            nostril would invite a record nobody can act on.
+            Nothing about rotation applies to a nose, a mouth or a skin cream.
+            Repeatedly injecting one spot builds tissue that absorbs
+            erratically, which is the whole reason this map exists; none of the
+            other routes does that, and asking which nostril, or which side a
+            tablet went down, would invite a record nobody can act on.
           */}
-          {!nasal && (
+          {hasSite && (
           <div>
             <SiteMap
               logs={peptideLogs}
@@ -687,17 +778,38 @@ export function LogDoseSheet({
 
           {usableVials.length > 0 ? (
             <Field
-              label={nasal ? t("log_sprayed_from") : t("log_drawn_from")}
+              /*
+                Three containers, three sets of words. Nothing is drawn out of
+                a box of tablets, and the version that said so was one of the
+                places where the pack had been added to the model without being
+                added to the sentences around it.
+              */
+              label={nasal ? t("log_sprayed_from") : tablets ? t("log_taken_from") : t("log_drawn_from")}
               hint={t("log_vial_hint", {
-                container: nasal ? t("log_container_bottle") : t("log_container_vial"),
+                container: nasal
+                  ? t("log_container_bottle")
+                  : tablets
+                    ? t("log_container_pack")
+                    : t("log_container_vial"),
               })}
             >
               <Select value={vialId} onChange={(e) => setVialId(e.target.value)}>
                 <option value="">{t("log_not_recorded_stock")}</option>
                 {usableVials.map((v) => {
                   const st = vialStatus(v);
-                  const left =
-                    v.state === "reconstituted" && v.diluentMl
+                  /*
+                   * What is left, in the unit this container is counted in.
+                   *
+                   * The test used to be "has it any diluent", with everything
+                   * else called sealed. A pack has no diluent and never will,
+                   * so an opened box of tablets read "Sealed" every time it was
+                   * offered, however many had been pressed out of it. Reported
+                   * as exactly that, by somebody who had just corrected five
+                   * doses against the same pack.
+                   */
+                  const left = isPack(v)
+                    ? t("count_tablets", { n: tabletsRemaining(v) })
+                    : v.state === "reconstituted" && v.diluentMl
                       ? t("log_ml_left", { ml: trim(st.remainingMl, 2) })
                       : t("stock_sealed");
                   return (
@@ -711,7 +823,11 @@ export function LogDoseSheet({
             </Field>
           ) : (
             <Callout tone="warn">
-              {nasal ? t("log_no_spray_filled") : t("log_no_vial_in_stock")}
+              {nasal
+                ? t("log_no_spray_filled")
+                : tablets
+                  ? t("log_no_pack_in_stock")
+                  : t("log_no_vial_in_stock")}
             </Callout>
           )}
 
@@ -733,7 +849,7 @@ export function LogDoseSheet({
             </div>
           )}
 
-          {draw && !nasal && (
+          {draw && !noBarrel && (
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone="tangerine">

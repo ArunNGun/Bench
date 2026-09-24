@@ -193,15 +193,24 @@ function saneBottles(rows: DiluentBottle[]): DiluentBottle[] {
 }
 
 /**
- * Keep only orders that could carry a share.
+ * Keep the orders that are orders, and drop a shipping figure that is not one.
  *
- * An imported file is not under our control, and a zero or a missing cost would
- * put a shipping line on the Stock page that adds nothing, or divide by
- * something that is not a number. A dropped order leaves its vials priced at
- * what they cost, which is what they were before shipping was recorded at all.
+ * This used to drop the whole order when it had no usable postage, back when
+ * postage was the only reason an order existed. An order is now a delivery,
+ * and a delivery with no postage recorded is an ordinary thing: it still says
+ * which vials arrived together, which is what "Arrived" acts on.
+ *
+ * A cost that is not a number, or is zero or less, is dropped from the order
+ * rather than taking the order with it. Nothing downstream divides by it,
+ * because every reader asks whether it is greater than zero first.
  */
 function saneOrders(rows: Order[]): Order[] {
-  return rows.filter((o) => o && o.id && Number.isFinite(Number(o.shippingCost)) && o.shippingCost > 0);
+  return rows
+    .filter((o) => o && o.id)
+    .map((o) => {
+      const cost = Number(o.shippingCost);
+      return Number.isFinite(cost) && cost > 0 ? o : { ...o, shippingCost: undefined };
+    });
 }
 
 /** A valid empty store, for when there is nothing readable to migrate. */

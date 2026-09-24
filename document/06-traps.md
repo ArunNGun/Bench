@@ -521,6 +521,68 @@ The rule this leaves: a module under `src/lib/calc` may return an id, a number
 or a date. If it is about to return a sentence, the sentence belongs to
 whoever renders it.
 
+## A deploy takes the old build's chunks away from the old shell
+
+Reported as a white screen and `Application error: a client-side exception`,
+with `ChunkLoadError: Loading chunk 135 failed` in the console, on a deployment
+that had just gone out and worked for everybody who had never visited before.
+
+The hashes said what happened. The browser was running
+`webpack-55676dfde347fa72.js` where the new build had
+`webpack-9100694e6ef91c55.js`, so the runtime was the old one, out of the
+service worker's cache. It asked for `135-d5de4c531d4e06a7.js`, and the new
+build's copy of that chunk is `135-b4d0965ad68280be.js`, so the request 404ed.
+The neighbouring `255-3d881dfa8c72bc56.js` loaded perfectly, because that chunk
+had not changed between the two builds and therefore kept its name. A page half
+old and half new, which is the exact thing the per-build cache was written to
+prevent.
+
+It prevents it for the files it holds. What it cannot prevent is a chunk it
+never held: the cache is populated by visiting, chunks are lazy, and a deploy
+removes the old ones from the server. From the moment of a deploy, any chunk
+the old shell had not already cached is gone for good.
+
+The design is still right. Updates are explicit on purpose, and cache-first is
+what makes the app work on a phone with no signal. The flaw was that the way
+out, the update prompt, lives inside the app that cannot boot.
+
+`src/lib/recover.ts` is the way out that does not: an inline script in the head,
+before the app's own code, listening for exactly this failure and, when it
+comes, dropping the caches, unregistering the worker and reloading once. Twice
+in ten minutes and it stops, because if clearing the cache did not help then the
+fault is on the server and a page that reloads forever is one broken page turned
+into a machine hammering it.
+
+Two things about the shape of it are deliberate. It is an inline script rather
+than a component, because by the time React could mount a component the chunk it
+needs may be the missing one. And it is the real functions serialised with
+`toString()` rather than the same rules written out a second time as a string,
+because two copies of a rule is how one of them gets fixed. There are tests that
+run the serialised source in a sandbox, since source that has never been run has
+never been checked.
+
+## Git from a Linux shell, on a working tree checked out by Windows
+
+`git status` in the mounted repo reported thirty modified files, including
+`package.json` and a workflow nobody had opened. `git diff --stat` said 26,814
+insertions and 26,809 deletions. `git diff --stat -w` said five insertions in one
+file, which was the actual change.
+
+Windows git checks out CRLF and stores LF. A git running on Linux against that
+same working tree has `core.autocrlf` unset, sees CRLF where the index says LF,
+and calls every file modified. Nothing is wrong with the repository and nothing
+needs repairing.
+
+What it costs is a commit made from the wrong side: `git add -A` from Linux would
+rewrite every line ending in the repository and bury the change in a diff nobody
+can read. So the rule is that **git stays on the side that checked the tree out**,
+and a Linux shell sharing the mount is for reading, typechecking, linting and
+running tests, not for committing.
+
+`git diff -w` is the way to see what really changed from the Linux side, and a
+dash scan or any other grep over a diff has to use it too, or it reads the whole
+file as added and reports whatever the file already contained.
+
 ## A comment as the first thing inside `{cond && (`
 
 ```tsx
@@ -576,6 +638,14 @@ done
 
 Run that before claiming a translation pass is finished.
 
+It is necessary and not sufficient, and two later finds show where it stops. A
+button reading `Add {count > 1 ? \`${count} bottles\` : "bottle"}` and a rescue
+notice built from labels in `calc/rescue.ts` both sat in files that import
+`useLang` and use it everywhere else, so a check about the file cannot see
+either. What found them was somebody using the app in their own language and
+reading a word that was not it. Budget for that: the last English in a screen is
+found by a reader, not by a grep.
+
 ## A shelf with something on it that reports nothing
 
 The Now card said **0 doses** for KPV while the Stock page, one tap away, said
@@ -625,3 +695,87 @@ sentence has both an `n` and an amount, the amount is `formatDose`.
 Worth checking the neighbours when this shape appears. The log sheet's "n more
 doses of {dose} in this vial after this one" was already using `formatDose` and
 was correct.
+
+## A rule stated in three places, extended in one
+
+Tablets shipped and the form for logging a dose said **No pack of this in
+stock** with the pack sitting on the shelf. The pack was there, the compound
+was marked as tablets, the dropdown even listed it.
+
+Which container a dose comes out of was written three times in
+`LogDoseSheet.tsx`: once for the list of containers to choose from, once when a
+protocol is applied, once when the route is changed by hand. Adding tablets
+taught the first one and left the other two saying `route === "intranasal" ?
+"spray" : "vial"`. So the list offered the pack and nothing ever selected it,
+`vialId` stayed empty, and every sentence downstream of `vial` reported an
+empty shelf. The same shape had been survivable for sprays only because a
+nasal dose is picked by route, which both copies already knew about.
+
+The rule is now `containerForDose(preparation, route)` in `calc/inventory.ts`,
+with a test, and the three call sites ask it.
+
+The general shape: **a rule with three call sites and no name has no place to
+add a case to.** When a third value joins a two-value decision, the first thing
+to look for is the other spellings of that decision. `grep` for the ternary,
+not for the function, because there is no function yet, which is the problem.
+
+## A parameter with a default that every caller leaves out
+
+Today read **Stock: 0 doses** for a compound with a full pack of sixty tablets
+on the shelf.
+
+`stockFor` takes a container and defaults it to `"vial"`, which was right when
+a vial was the only thing there was. Spray bottles added the parameter; tablets
+added a third value for it. All three call sites went on omitting it, so every
+figure on every screen counted vials and nothing else. Nothing failed, nothing
+warned, and the zero looked like an empty shelf rather than like a question
+that was never asked.
+
+Same shape as the container the log form picks a dose from, one file over. A
+default is a decision made once and inherited silently by everybody who does
+not know a decision is being made.
+
+The rule: **when a parameter gains a value, grep the call sites that omit it,
+not the ones that pass it.** The callers that already pass something have been
+thought about. The ones relying on the default have not, and they are invisible
+in a search for the parameter's name.
+
+`needsReconstitution` was the same sentence one line further down: with the
+container finally arriving, it had to stop being true for a pack, which has
+nothing to make up.
+
+**It happened again four days later**, in `addLog`. Several days of tablets had
+been logged in one tap each and the pack still read full: the store attributes
+a dose to a container so that stock moves, asked `pickVialForDose` without a
+container, found no vial, and attributed the dose to nothing. Nothing drew,
+nothing complained, and the only visible symptom was a number that never went
+down.
+
+That is five call sites across two functions, all of them omitting the same
+parameter, none of them wrong on the day they were written. The defaults stay
+for now because removing them means passing `"vial"` at forty-eight places in
+the tests, which would bury the next real change in noise. What stands in their
+place is a test named for each incident and this paragraph. If a sixth turns
+up, delete the defaults and take the churn.
+
+## Every trigger was about this device
+
+A dose logged on a phone at 20:22 was still showing as due on a desktop at
+20:47. Both devices online, both signed in, and the desktop had received the
+phone's earlier changes perfectly well: the protocol edited on the desktop at
+19:01 was already on the phone.
+
+`SyncRunner` starts a run on four things: this device's own data changing, this
+tab becoming visible, this browser coming back online, and startup. Every one
+of them is about this device. A tab that is open, in the foreground and
+untouched matches none of them, and `visibilitychange` does not fire for a tab
+you never looked away from. So the one state in which somebody is staring at
+the screen was the one state that never asked the server anything.
+
+Fixed with a one minute poll while the tab is visible. The shape to remember:
+**a list of triggers assembled from local events has no entry for "somebody
+else did something", and that gap is invisible in testing** because a developer
+reloads constantly and a reload is a trigger.
+
+Worth checking against any future trigger list: at least one entry has to come
+from outside this device, whether that is a poll, a push channel, or a button.

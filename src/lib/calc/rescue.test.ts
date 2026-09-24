@@ -3,9 +3,9 @@ import {
   RECORD_KEYS,
   alarmingLosses,
   countRecords,
-  describeLoss,
   isAlarming,
   losses,
+  lostCount,
   recoverable,
   restoreLost,
   type Rescue,
@@ -88,10 +88,14 @@ describe("the incident this was written for", () => {
     expect(found).toEqual([{ key: "diluents", from: 3, to: 0 }]);
   });
 
-  it("is described in words a person can act on", () => {
-    expect(describeLoss({ key: "diluents", from: 3, to: 0 })).toBe("3 bottles of water");
-    expect(describeLoss({ key: "diluents", from: 1, to: 0 })).toBe("1 bottle of water");
-    expect(describeLoss({ key: "logs", from: 103, to: 40 })).toBe("63 logged doses");
+  /*
+   * The count only. The noun and its plural form live with the screen that
+   * draws them, because this module cannot know which language is on.
+   */
+  it("counts what went rather than naming it", () => {
+    expect(lostCount({ key: "diluents", from: 3, to: 0 })).toBe(3);
+    expect(lostCount({ key: "diluents", from: 1, to: 0 })).toBe(1);
+    expect(lostCount({ key: "logs", from: 103, to: 40 })).toBe(63);
   });
 
   it("puts the bottles back without undoing the twelve doses since", () => {

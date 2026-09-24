@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { BODY, DAY, SITE_DOTS, overusedSites, siteChoices, siteUsage, suggestSite } from "./sites";
+import {
+  BODY,
+  DAY,
+  SITE_DOTS,
+  overusedSites,
+  routeHasSite,
+  siteChoices,
+  siteUsage,
+  suggestSite,
+} from "./sites";
 import { INJECTION_SITES, type DoseLog, type InjectionSite } from "../types";
 
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
 
-const log = (site: InjectionSite, daysAgo: number, skipped = false) =>
-  ({ at: NOW - daysAgo * DAY, site, skipped }) as Pick<DoseLog, "at" | "site" | "skipped">;
+type SiteLog = Pick<DoseLog, "at" | "site" | "skipped" | "route">;
+
+/* Subcutaneous unless a test says otherwise, since that is what a site is for. */
+const log = (
+  site: InjectionSite,
+  daysAgo: number,
+  skipped = false,
+  route: DoseLog["route"] = "subcutaneous") =>
+  ({ at: NOW - daysAgo * DAY, site, skipped, route }) as SiteLog;
 
 describe("siteUsage", () => {
   it("covers every known site even with no history", () => {
@@ -43,7 +59,7 @@ describe("siteUsage", () => {
   });
 
   it("ignores logs with no site recorded", () => {
-    const u = siteUsage([{ at: NOW, skipped: false }], NOW);
+    const u = siteUsage([{ at: NOW, skipped: false, route: "subcutaneous" }], NOW);
     expect(u.every((s) => s.lastUsedAt === null)).toBe(true);
   });
 
@@ -91,12 +107,12 @@ describe("suggestSite", () => {
   });
 
   it("produces a full rotation before repeating", () => {
-    const logs: Pick<DoseLog, "at" | "site" | "skipped">[] = [];
+    const logs: SiteLog[] = [];
     const picked: InjectionSite[] = [];
     for (let i = 0; i < INJECTION_SITES.length; i++) {
       const site = suggestSite(logs, NOW + i * 1000);
       picked.push(site);
-      logs.push({ at: NOW + i * 1000, site, skipped: false });
+      logs.push({ at: NOW + i * 1000, site, skipped: false, route: "subcutaneous" });
     }
     expect(new Set(picked).size).toBe(INJECTION_SITES.length);
   });
@@ -112,11 +128,11 @@ describe("siteChoices", () => {
    * nobody notices until a rotation has gone wrong for a month.
    */
   it("offers the suggested site first, whatever the logs look like", () => {
-    const logs: Pick<DoseLog, "at" | "site" | "skipped">[] = [];
+    const logs: SiteLog[] = [];
     for (let i = 0; i < 12; i++) {
       const at = NOW + i * DAY;
       expect(siteChoices(logs, at, 14, pinned)[0].site).toBe(suggestSite(logs, at, 14, pinned));
-      logs.push({ at, site: suggestSite(logs, at, 14, pinned), skipped: false });
+      logs.push({ at, site: suggestSite(logs, at, 14, pinned), skipped: false, route: "subcutaneous" });
     }
   });
 
@@ -182,12 +198,12 @@ describe("suggestSite with a pinned set", () => {
   });
 
   it("rotates through the pinned sites in turn", () => {
-    const logs: Pick<DoseLog, "at" | "site" | "skipped">[] = [];
+    const logs: SiteLog[] = [];
     const picked: InjectionSite[] = [];
     for (let i = 0; i < pinned.length; i++) {
       const s = suggestSite(logs, NOW + i * 1000, 14, pinned);
       picked.push(s);
-      logs.push({ at: NOW + i * 1000, site: s, skipped: false });
+      logs.push({ at: NOW + i * 1000, site: s, skipped: false, route: "subcutaneous" });
     }
     expect(new Set(picked).size).toBe(pinned.length);
   });
@@ -332,5 +348,48 @@ describe("the site map", () => {
       expect(s.cy, s.id).toBeGreaterThan(0);
       expect(s.cy, s.id).toBeLessThan(240);
     }
+  });
+});
+
+/*
+ * A site is a fact about an injection. Until the form was corrected it wrote
+ * whichever site it had suggested onto every dose, so a swallowed tablet and a
+ * nasal spray both landed on a thigh, and both counted against a rotation they
+ * had never touched.
+ */
+describe("routeHasSite", () => {
+  it("is true for the two routes that put a needle in tissue", () => {
+    expect(routeHasSite("subcutaneous")).toBe(true);
+    expect(routeHasSite("intramuscular")).toBe(true);
+  });
+
+  it("is false for everything else", () => {
+    expect(routeHasSite("oral")).toBe(false);
+    expect(routeHasSite("intranasal")).toBe(false);
+    expect(routeHasSite("topical")).toBe(false);
+    expect(routeHasSite("intravenous")).toBe(false);
+  });
+});
+
+describe("siteUsage and a route that has no site", () => {
+  it("ignores a record that carries a site it should never have had", () => {
+    const logs = [log("thigh-l", 1, false, "oral"), log("thigh-l", 2, false, "intranasal")];
+    const thigh = siteUsage(logs, NOW).find((s) => s.site === "thigh-l")!;
+    expect(thigh.lastUsedAt).toBeNull();
+    expect(thigh.recentCount).toBe(0);
+  });
+
+  it("still counts the injections beside them", () => {
+    const logs = [log("thigh-l", 1, false, "oral"), log("thigh-l", 2)];
+    const thigh = siteUsage(logs, NOW).find((s) => s.site === "thigh-l")!;
+    expect(thigh.recentCount).toBe(1);
+    expect(thigh.daysSince).toBeCloseTo(2, 6);
+  });
+
+  /* So a swallowed tablet cannot push the rotation off a site that is rested. */
+  it("does not let a swallowed dose steer the suggestion", () => {
+    const every = INJECTION_SITES.map(({ id }) => log(id, 1));
+    const fresh = every.filter((l) => l.site !== "thigh-l");
+    expect(suggestSite([...fresh, log("thigh-l", 0, false, "oral")], NOW)).toBe("thigh-l");
   });
 });

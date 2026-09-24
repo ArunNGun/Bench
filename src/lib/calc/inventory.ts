@@ -7,7 +7,7 @@
  * derived from it for display.
  */
 
-import type { Protocol, Vial, VialState } from "../types";
+import type { Peptide, Protocol, Route, Vial, VialState } from "../types";
 import { DAY_MS, protocolDoseTimesBetween, scheduledDoseMcg } from "./schedule";
 import { unitsFromDose, type SyringeScale } from "./reconstitution";
 
@@ -84,6 +84,27 @@ export function matchesContainer(v: Pick<Vial, "container">, want: ContainerKind
 }
 
 /**
+ * Which container a dose of this compound comes out of.
+ *
+ * Here rather than in the form because the form asked it in three places and
+ * only one of them was taught about tablets. The two that were not went on
+ * asking for a vial, so a compound sold as tablets had nothing selected and
+ * the screen said there was no pack in stock while the pack sat on the shelf.
+ * One rule, one place, one test.
+ *
+ * The route decides first and the preparation second, which is the order the
+ * two facts deserve: a nasal dose comes out of a bottle whatever the library
+ * says the compound is, while "oral" covers a solution somebody swallows out
+ * of a syringe as well as a tablet, so it cannot decide anything on its own.
+ */
+export function containerForDose(
+  preparation: Peptide["preparation"],
+  route: Route): ContainerKind {
+  if (route === "intranasal") return "spray";
+  return preparation === "tablet" ? "pack" : "vial";
+}
+
+/**
  * Which vial a dose should come out of.
  *
  * Prefers an already-open vial over breaking into a sealed one, and among
@@ -116,22 +137,53 @@ export function pickVialForDose(
 }
 
 /**
+ * A pack that has been opened.
+ *
+ * "reconstituted" is the state every container in use has, and it has meant
+ * that rather than its literal self since spray bottles: a bottle is filled,
+ * not made up, and it takes the same state. A pack is opened. The name is
+ * historical and the position in the sequence is what it is for, which is why
+ * this returns that state rather than growing a fourth one that every filter
+ * in the app would have to learn.
+ *
+ * No beyond-use date, unlike a vial. A BUD runs from first puncture, because
+ * what starts then is a sterile solution sitting at room temperature. Nothing
+ * about a foil strip changes on the day you press the first tablet out, so the
+ * only date a pack has is the manufacturer's.
+ */
+export function openPack(v: Vial, atMs: number): Vial {
+  return { ...v, state: "reconstituted", reconstitutedAt: v.reconstitutedAt ?? atMs };
+}
+
+/**
  * Take mass out of a vial.
  *
  * Never goes below empty, and marks the vial finished once it is. Returns a
  * new array; the input is untouched.
+ *
+ * A sealed pack is opened on the way. Asked for after a box of tablets that
+ * had been dosed from all week sat at the bottom of the Stock page under
+ * Sealed, which it plainly was not. A vial is deliberately left alone: it
+ * becomes open by being made up, which is a step with its own data, and a
+ * dose drawn from a vial that never had that step is an oddity worth leaving
+ * visible rather than tidying away.
  */
-export function drawFromVial(vials: Vial[], vialId: string, mcg: number): Vial[] {
+export function drawFromVial(
+  vials: Vial[],
+  vialId: string,
+  mcg: number,
+  atMs = Date.now()): Vial[] {
   if (!(mcg > 0)) return vials;
   return vials.map((v) => {
     if (v.id !== vialId) return v;
     const capacity = vialCapacityMcg(v);
     const drawnMcg = Math.min(capacity, (v.drawnMcg ?? 0) + mcg);
     const emptied = drawnMcg >= capacity - 1e-6;
+    const opened = matchesContainer(v, "pack") && v.state === "sealed" ? openPack(v, atMs) : v;
     return {
-      ...v,
+      ...opened,
       drawnMcg,
-      state: emptied && v.state !== "discarded" ? ("finished" as VialState) : v.state,
+      state: emptied && v.state !== "discarded" ? ("finished" as VialState) : opened.state,
     };
   });
 }
@@ -145,9 +197,14 @@ export function returnToVial(vials: Vial[], vialId: string, mcg: number): Vial[]
   return vials.map((v) => {
     if (v.id !== vialId) return v;
     const drawnMcg = Math.max(0, (v.drawnMcg ?? 0) - mcg);
+    /*
+     * A pack goes back to open rather than to sealed. Undoing the dose that
+     * emptied it does not put the tablets back in the foil, and the row would
+     * otherwise reappear under Sealed with a box that is half gone.
+     */
     const state: VialState =
       v.state === "finished" && drawnMcg < vialCapacityMcg(v) - 1e-6
-        ? v.diluentMl
+        ? v.diluentMl || matchesContainer(v, "pack")
           ? "reconstituted"
           : "sealed"
         : v.state;
@@ -229,12 +286,41 @@ export interface VialGroup {
  * setting on rearranges the list as little as possible.
  */
 export function groupSealedVials(vials: Vial[]): VialGroup[] {
+  return groupVials(
+    vials.filter((v) => v.state === "sealed"),
+    (v) => `${v.peptideId}:${v.strengthMg}`);
+}
+
+/**
+ * Stock in the post, grouped by the delivery it is coming in.
+ *
+ * Reported as forty taps: forty vials ordered together were forty rows, each
+ * with its own "It arrived", and arriving is one event that happened once.
+ *
+ * Keyed by the order and then by compound, so an order holding two different
+ * things still reads as two lines rather than pretending they are one. In
+ * practice a delivery is added one compound at a time, which is why the rule
+ * this was asked for comes out as one row per thing added.
+ *
+ * Not behind the grouping setting, unlike the shelf. That setting is about how
+ * densely somebody wants to read stock they already own, where a vial has a
+ * date, a lot and a price of its own worth seeing. A row waiting in the post
+ * has none of that yet: the only fact about it is how many, and showing one
+ * arrival as forty is a claim about what happened rather than a way of
+ * displaying it.
+ */
+export function groupOnOrder(vials: Vial[]): VialGroup[] {
+  return groupVials(
+    vials.filter((v) => v.state === "on-order"),
+    (v) => `${v.orderId ?? v.id}:${v.peptideId}:${v.strengthMg}`);
+}
+
+function groupVials(vials: Vial[], keyOf: (v: Vial) => string): VialGroup[] {
   const order: string[] = [];
   const bucket = new Map<string, Vial[]>();
 
   for (const v of vials) {
-    if (v.state !== "sealed") continue;
-    const key = `${v.peptideId}:${v.strengthMg}`;
+    const key = keyOf(v);
     if (!bucket.has(key)) {
       bucket.set(key, []);
       order.push(key);
@@ -348,7 +434,12 @@ export function stockFor(
     openCount,
     dosesRemaining: per(availableMcg),
     dosesInOpenVials: per(openMcg),
-    needsReconstitution: openCount === 0 && sealedCount > 0,
+    /*
+     * Only ever true of a vial. A pack and a spray bottle have nothing to make
+     * up, so telling their owner to reach for the water would be advice about
+     * a container they are not holding.
+     */
+    needsReconstitution: container === "vial" && openCount === 0 && sealedCount > 0,
     dosesExpired: per(expiredMcg),
   };
 }

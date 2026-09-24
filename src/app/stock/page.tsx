@@ -17,15 +17,18 @@ import {
   Stat,
   TextInput,
 } from "@/components/ui";
-import { VialGlyph } from "@/components/Syringe";
+import { ContainerGlyph } from "@/components/Syringe";
 import { allPeptides, findPeptide, useStore, vialStatus, useProfileData } from "@/lib/store";
 import { AddCompoundInline } from "@/components/AddCompoundInline";
 import { MULTI_DOSE_VIAL_BUD_DAYS, unitsToMl } from "@/lib/calc/reconstitution";
 import { useSyringeScale } from "@/components/DoseMarks";
 import {
   diluentAfterTopUp,
+  groupOnOrder,
   groupSealedVials,
+  containerForDose,
   marksFromVial,
+  openPack,
   stockFor,
   supplyOutlook,
   vialConcentration,
@@ -35,7 +38,14 @@ import {
   type VialGroup,
 } from "@/lib/calc/inventory";
 import { dosesPerDoseDay, phaseSpanAt, scheduledDoseMcg } from "@/lib/calc/schedule";
-import { bottleRemainingMl, bottleUsable, diluentStock, pickBottle, shelfOrder } from "@/lib/calc/diluent";
+import {
+  bottleRemainingMl,
+  bottleUsable,
+  diluentStock,
+  pickBottle,
+  shelfOrder,
+  shelfRows,
+} from "@/lib/calc/diluent";
 import {
   DEFAULT_ML_PER_SPRAY,
   MEASURE_A_PRESS,
@@ -44,6 +54,7 @@ import {
   spraysRemaining,
   transferToSpray,
 } from "@/lib/calc/spray";
+import { isPack, mgPerTablet, packStrengthMg, tabletsRemaining } from "@/lib/calc/tablet";
 import { converterUrl } from "@/lib/calc/converter";
 import { formatConcentration, formatDate, formatDose, trim } from "@/lib/format";
 import {
@@ -83,6 +94,16 @@ export default function StockPage() {
   const [toppingUp, setToppingUp] = useState<string | null>(null);
   /** Which vial is being emptied into a nasal spray bottle. */
   const [transferring, setTransferring] = useState<string | null>(null);
+  /**
+   * Which row is having its tablet size set.
+   *
+   * Needed because a pack can exist before anyone said how big one tablet is:
+   * added before the compound was marked as tablets, or imported, or added
+   * while the compound was still described as a powder. Without a way to say it
+   * afterwards the pack is stuck, countable by nothing, and the form for
+   * logging a dose can only say that the size is missing.
+   */
+  const [sizing, setSizing] = useState<string | null>(null);
 
   const now = Date.now();
   /*
@@ -95,6 +116,8 @@ export default function StockPage() {
   // Off unless asked for, so nobody's Stock page rearranges itself after an update.
   const grouping = settings.groupIdenticalVials === true;
   const sealedGroups = useMemo(() => groupSealedVials(sealed), [sealed]);
+  // Always grouped, unlike the shelf. See `groupOnOrder`.
+  const onOrderGroups = useMemo(() => groupOnOrder(vials), [vials]);
   const open = vials.filter((v) => v.state === "reconstituted");
   const done = vials.filter((v) => v.state === "finished" || v.state === "discarded");
 
@@ -151,14 +174,18 @@ export default function StockPage() {
       if (hit) return hit;
 
       const p = protocols.find((x) => x.active && x.peptideId === peptideId);
+      const container = containerForDose(findPeptide(custom, peptideId)?.preparation, p?.route ?? "subcutaneous");
       const out: SupplyOutlook = p
-        ? supplyOutlook(stockFor(vials, peptideId, scheduledDoseMcg(p, now), now), p, now)
+        ? supplyOutlook(
+            stockFor(vials, peptideId, scheduledDoseMcg(p, now), now, container),
+            p,
+            now)
         : { kind: "unknown" };
 
       cache.set(peptideId, out);
       return out;
     };
-  }, [protocols, vials, now]);
+  }, [protocols, vials, custom, now]);
 
   if (!hydrated) {
     return <div className="py-20 text-center text-[14px] text-[var(--faint)]">{t("loading")}</div>;
@@ -230,7 +257,7 @@ export default function StockPage() {
         />
       )}
 
-      <DiluentShelf />
+      {!settings.waterAtBottom && <DiluentShelf />}
 
       {!vials.length && !adding && (
         <EmptyState
@@ -249,10 +276,13 @@ export default function StockPage() {
         <section>
           <SectionLabel>{t("stock_on_order")}</SectionLabel>
           <div className="space-y-2.5">
-            {onOrder.map((v) => (
+            {onOrderGroups.map((g) => {
+              const v = g.vials[0];
+              return (
               <VialRow
-                key={v.id}
+                key={g.key}
                 vial={v}
+                group={g}
                 now={now}
                 budWarningDays={settings.budWarningDays}
                 doseMcg={doseFor(v.peptideId)}
@@ -262,13 +292,25 @@ export default function StockPage() {
                 currency={currency}
                 peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                 onRemove={() => removeVial(v.id)}
-                onArrived={() =>
-                  // Arriving makes it an ordinary sealed vial, and dates it from
-                  // the day it turned up rather than the day it was ordered.
-                  updateVial(v.id, { state: "sealed", acquiredAt: Date.now() })
-                }
+                onArrived={() => {
+                  /*
+                    The whole delivery, unlike every other button on a grouped
+                    row. Those act on one vial because they are about one vial:
+                    making one up, emptying one, throwing one away. Arriving is
+                    one event that happened once, and the ten taps it used to
+                    take are what this was reported as.
+
+                    Sealed and dated from the day it turned up rather than the
+                    day it was ordered.
+                  */
+                  const at = Date.now();
+                  for (const target of g.vials) {
+                    updateVial(target.id, { state: "sealed", acquiredAt: at });
+                  }
+                }}
               />
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -290,10 +332,32 @@ export default function StockPage() {
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
-                  onTopUp={() => setToppingUp(v.id)}
-                  onTransfer={isSpray(v) ? undefined : () => setTransferring(v.id)}
+                  /*
+                    Neither offer means anything to an opened pack. There is no
+                    solution in it to dilute and nothing to pour into a spray
+                    bottle, so the two actions that assume a liquid stand down
+                    here exactly as reconstitution does in the section above.
+                  */
+                  onTopUp={isPack(v) ? undefined : () => setToppingUp(v.id)}
+                  onTransfer={isSpray(v) || isPack(v) ? undefined : () => setTransferring(v.id)}
                   onFinish={() => updateVial(v.id, { state: "finished" })}
+                  tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
+                  onSetTabletSize={() => setSizing(v.id)}
                 />
+                {sizing === v.id && (
+                  <TabletSizeForm
+                    vial={v}
+                    onCancel={() => setSizing(null)}
+                    onSave={(mgEach, tabletsInPack) => {
+                      updateVial(v.id, {
+                        container: "pack",
+                        mgPerTablet: mgEach,
+                        strengthMg: packStrengthMg(mgEach, tabletsInPack),
+                      });
+                      setSizing(null);
+                    }}
+                  />
+                )}
                 {transferring === v.id && (
                   <TransferToSprayForm
                     vial={v}
@@ -343,8 +407,47 @@ export default function StockPage() {
                   currency={currency}
                   peptideName={findPeptide(custom, v.peptideId)?.name ?? v.peptideId}
                   onRemove={() => removeVial(v.id)}
-                  onReconstitute={() => setReconstituting(v.id)}
+                  /*
+                    A pack of tablets is not made up with anything, so it is
+                    not offered the one action that would turn it into a
+                    solution it can never be.
+                  */
+                  onReconstitute={isPack(v) ? undefined : () => setReconstituting(v.id)}
+                  tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
+                  onSetTabletSize={() => setSizing(v.id)}
+                  /*
+                    What Reconstitute is to a vial. A pack needs no water and
+                    records nothing when the foil is broken, so this exists to
+                    say the box is started: the row moves up to Open, where a
+                    box being taken from belongs. The first logged dose does
+                    the same thing on its own, for anyone who never presses it.
+                  */
+                  onOpenPack={() => updateVial(v.id, openPack(v, Date.now()))}
                 />
+                {sizing === v.id && (
+                  <TabletSizeForm
+                    vial={v}
+                    onCancel={() => setSizing(null)}
+                    onSave={(mgEach, tabletsInPack) => {
+                      /*
+                        Every vial in the group, unlike the buttons beside it,
+                        which act on the oldest one alone. Those change one
+                        vial's state and the group is meant to split. This
+                        changes what the row has always been, so writing it to
+                        one member would break the group into a pack with a
+                        size and a shelf of identical packs without one.
+                      */
+                      for (const target of group ? group.vials : [v]) {
+                        updateVial(target.id, {
+                          container: "pack",
+                          mgPerTablet: mgEach,
+                          strengthMg: packStrengthMg(mgEach, tabletsInPack),
+                        });
+                      }
+                      setSizing(null);
+                    }}
+                  />
+                )}
                 {reconstituting === v.id && (
                   <ReconstituteForm
                     vial={v}
@@ -385,6 +488,14 @@ export default function StockPage() {
         </section>
       )}
 
+      {/*
+        Water sits at whichever end the owner of the fridge put it. Rendered
+        twice in the tree and once on the page: the condition is exclusive, and
+        two call sites are easier to read than one shelf lifted into a variable
+        and dropped into a slot.
+      */}
+      {settings.waterAtBottom && <DiluentShelf />}
+
       <Callout tone="info" title={t("stock_28_day_note")}>
         {t("stock_bud_explainer")}
       </Callout>
@@ -409,6 +520,9 @@ function VialRow({
   onTopUp,
   onTransfer,
   onFinish,
+  tabletCompound,
+  onSetTabletSize,
+  onOpenPack,
 }: {
   vial: Vial;
   /**
@@ -440,14 +554,20 @@ function VialRow({
   /** Only for a made-up vial, and never for a bottle that is already a spray. */
   onTransfer?: () => void;
   onFinish?: () => void;
+  /** Whether the library says this compound comes as tablets. */
+  tabletCompound?: boolean;
+  onSetTabletSize?: () => void;
+  /** Only for a pack still sealed. Moves it up to Open. */
+  onOpenPack?: () => void;
 }) {
   const { t } = useLang();
   const st = vialStatus(vial, now);
   const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
   const scale = useSyringeScale();
   const spray = isSpray(vial);
+  const pack = isPack(vial);
   // Marks are a reading off a barrel, and a nasal dose never meets one.
-  const marks = !spray && doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
+  const marks = !spray && !pack && doseMcg > 0 ? marksFromVial(vial, doseMcg, scale) : null;
   const perPress = spray ? mcgPerSpray(vial) : 0;
 
   const many = (group?.count ?? 1) > 1;
@@ -469,7 +589,11 @@ function VialRow({
   return (
     <Card className={`flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
       <div className="h-14 w-8 shrink-0">
-        <VialGlyph fraction={st.fractionRemaining} state={vial.state} />
+        <ContainerGlyph
+          container={vial.container ?? "vial"}
+          fraction={st.fractionRemaining}
+          state={vial.state}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -535,7 +659,27 @@ function VialRow({
           </div>
         ) : (
           <div className="mt-1 flex flex-wrap gap-x-3.5 text-[12.5px] text-[var(--muted)]">
-            <span>{t("stock_lyophilised")}</span>
+            {/*
+              A pack is not a lyophilised vial waiting to be made up. It is
+              ready, so it says what is in it and how many are left rather than
+              inviting a reconstitution it must never have.
+            */}
+            {pack ? (
+              <>
+                <span className="tnum font-mono">
+                  {t("stock_tablets_left", { n: tabletsRemaining(vial) })}
+                </span>
+                {mgPerTablet(vial) > 0 ? (
+                  <span className="tnum font-mono">
+                    {t("stock_per_tablet", { mg: trim(mgPerTablet(vial), 3) })}
+                  </span>
+                ) : (
+                  <span className="text-[var(--rose)]">{t("stock_no_tablet_size")}</span>
+                )}
+              </>
+            ) : (
+              <span>{t("stock_lyophilised")}</span>
+            )}
             {many && (
               <span className="tnum font-mono">
                 {t("stock_mg_in_total", { mg: trim(strengthMgTotal, 2) })}
@@ -661,6 +805,23 @@ function VialRow({
               <SprayCan size={13} /> {t("stock_to_spray")}
             </Button>
           )}
+          {onOpenPack && pack && vial.state === "sealed" && (
+            <Button variant="primary" onClick={onOpenPack} className="px-3 py-1.5 text-[13px]">
+              {t("stock_open_pack")}
+            </Button>
+          )}
+          {/*
+            Offered for a pack, and also for an ordinary row of a compound the
+            library calls tablets, which is how a row added before anyone said
+            so becomes a pack at all. Without the second case the size could
+            only ever be set at the moment of adding, and a pack added the day
+            before the compound was marked as tablets was stuck for good.
+          */}
+          {onSetTabletSize && (pack || tabletCompound) && (
+            <Button onClick={onSetTabletSize} className="px-3 py-1.5 text-[13px]">
+              {t("stock_set_tablet_size")}
+            </Button>
+          )}
           {onFinish && (
             <Button onClick={onFinish} variant="ghost" className="px-3 py-1.5 text-[13px]">
               {t("stock_mark_empty")}
@@ -700,6 +861,16 @@ function AddVialForm({
   const [strengthMg, setStrengthMg] = useState(10);
   const [count, setCount] = useState(1);
   /**
+   * Tablets in one pack, asked for only when the compound comes as tablets.
+   *
+   * The strength field above then means milligrams in one tablet, and the two
+   * multiply into the mass of the pack. Storing the product rather than the
+   * pair is what lets every figure downstream, doses left, cost per dose, the
+   * day the shelf runs dry, go on being arithmetic about a mass in a
+   * container without learning that tablets exist.
+   */
+  const [tabletsPerPack, setTabletsPerPack] = useState(30);
+  /**
    * Postage for the whole order, not for each vial.
    *
    * Sixty dollars of shipping on a single kit changes what that kit actually
@@ -736,6 +907,8 @@ function AddVialForm({
   const [arrived, setArrived] = useState(true);
 
   const peptide = peptides.find((p) => p.id === peptideId);
+  const tablets = peptide?.preparation === "tablet";
+  const packMg = packStrengthMg(strengthMg, tabletsPerPack);
 
   // Storage is always per vial, whichever way it was entered, so nothing
   // downstream has to know a kit was involved.
@@ -775,8 +948,14 @@ function AddVialForm({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field
-          label={t("stock_strength")}
-          hint={peptide?.vialSizesMg.length ? `Common: ${peptide.vialSizesMg.join(", ")} mg` : undefined}
+          label={tablets ? t("stock_mg_per_tablet") : t("stock_strength")}
+          hint={
+            tablets
+              ? t("stock_pack_holds", { mg: trim(packMg, 2) })
+              : peptide?.vialSizesMg.length
+                ? t("stock_common_sizes", { sizes: peptide.vialSizesMg.join(", ") })
+                : undefined
+          }
         >
           <NumberInput
             value={strengthMg}
@@ -786,7 +965,18 @@ function AddVialForm({
             onChange={(e) => setStrengthMg(Number(e.target.value))}
           />
         </Field>
-        <Field label={t("stock_how_many")}>
+        {/* Only for tablets, so nobody counting vials is asked about packs. */}
+        {tablets && (
+          <Field label={t("stock_tablets_per_pack")}>
+            <NumberInput
+              value={tabletsPerPack}
+              min={1}
+              step={1}
+              onChange={(e) => setTabletsPerPack(Number(e.target.value))}
+            />
+          </Field>
+        )}
+        <Field label={tablets ? t("stock_how_many_packs") : t("stock_how_many")}>
           <NumberInput
             value={count}
             min={1}
@@ -925,7 +1115,14 @@ function AddVialForm({
           onClick={() => {
             const base: Omit<Vial, "id" | "profileId"> = {
               peptideId,
-              strengthMg,
+              /*
+               * A pack is stored as the mass it holds, which is the tablet
+               * size times how many are in it. Everything downstream then
+               * treats it as any other container, and the tablet size is kept
+               * beside it as the unit to count in.
+               */
+              strengthMg: tablets ? packMg : strengthMg,
+              ...(tablets ? { container: "pack" as const, mgPerTablet: strengthMg } : {}),
               state: arrived ? "sealed" : "on-order",
               supplier: supplier.trim() || undefined,
               cost: perVial,
@@ -944,11 +1141,16 @@ function AddVialForm({
                 ? null
                 : { cost: Number(shipping), currency: payCurrency });
           }}
-          disabled={!peptideId || !(strengthMg > 0)}
+          disabled={!peptideId || !(tablets ? packMg > 0 : strengthMg > 0)}
         >
-          {arrived
-            ? t("stock_add_vials", { vials: t("count_vials", { n: count }) })
-            : t("stock_add_vials_on_order", { vials: t("count_vials", { n: count }) })}
+          {(() => {
+            const what = tablets
+              ? t("count_packs", { n: count })
+              : t("count_vials", { n: count });
+            return arrived
+              ? t("stock_add_vials", { vials: what })
+              : t("stock_add_vials_on_order", { vials: what });
+          })()}
         </Button>
       </div>
     </Card>
@@ -971,6 +1173,14 @@ const DILUENT_KEY: Record<DiluentKind, TranslationKey> = {
 };
 
 /** The kinds a vial or a bottle can actually be made up with. Oil is not one. */
+/** What a bottle's state is called, which the badge used to print raw. */
+const BOTTLE_STATE_KEY: Record<DiluentBottle["state"], TranslationKey> = {
+  sealed: "stock_bottle_sealed",
+  open: "stock_bottle_open",
+  finished: "stock_bottle_finished",
+  discarded: "stock_bottle_discarded",
+};
+
 const DILUENT_CHOICES: DiluentKind[] = ["bacteriostatic", "sterile", "saline"];
 
 function ReconstituteForm({
@@ -1251,6 +1461,91 @@ function TransferToSprayForm({
   );
 }
 
+/**
+ * Saying how big one tablet is, on a row that already exists.
+ *
+ * The add form asks for this, but only when the compound was already marked as
+ * tablets. Everything else arrives without it: a pack added before the
+ * compound was described that way, an import, a row somebody entered as an
+ * ordinary vial. All of those could be seen and none of them could be counted,
+ * and the form for logging a dose could only say the size was missing.
+ *
+ * Both numbers, not just the size, because `strengthMg` on a pack is the mass
+ * of the whole pack and is the product of the two. Asking for the size alone
+ * would leave the mass saying whatever it said before.
+ */
+function TabletSizeForm({
+  vial,
+  onCancel,
+  onSave,
+}: {
+  vial: Vial;
+  onSave: (mgEach: number, tabletsInPack: number) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useLang();
+  const known = mgPerTablet(vial);
+  const [mgEach, setMgEach] = useState(known);
+  /*
+   * The pack as bought, not what is left in it. A count of what is left would
+   * quietly write off every tablet already taken, since the mass taken is
+   * recorded separately and would then be subtracted a second time.
+   */
+  const [tablets, setTablets] = useState(
+    known > 0 ? Math.round(vial.strengthMg / known) : 0);
+
+  const packMg = packStrengthMg(mgEach, tablets);
+  const ok = mgEach > 0 && tablets > 0;
+  // What the row will say once this is saved, including any dose already taken.
+  const left = ok
+    ? tabletsRemaining({ ...vial, strengthMg: packMg, mgPerTablet: mgEach })
+    : 0;
+
+  return (
+    <Card className="mt-1.5 space-y-4 border-[var(--tangerine)]/35 p-4">
+      <SectionLabel>{t("stock_set_tablet_size")}</SectionLabel>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={t("stock_mg_per_tablet")}>
+          <NumberInput
+            value={mgEach}
+            min={0}
+            step={0.5}
+            suffix="mg"
+            onChange={(e) => setMgEach(Number(e.target.value))}
+          />
+        </Field>
+        <Field label={t("stock_tablets_per_pack")}>
+          <NumberInput
+            value={tablets}
+            min={0}
+            step={1}
+            onChange={(e) => setTablets(Number(e.target.value))}
+          />
+        </Field>
+      </div>
+
+      {ok && (
+        <p className="text-[12.5px] leading-relaxed text-[var(--faint)]">
+          {t("stock_pack_after", {
+            mg: trim(packMg, 3),
+            left: t("count_tablets", { n: left }),
+          })}
+        </p>
+      )}
+
+      <div className="flex gap-2.5">
+        <Button variant="ghost" onClick={onCancel}>
+          {t("cancel")}
+        </Button>
+        <Button variant="primary" onClick={() => onSave(mgEach, tablets)} disabled={!ok}>
+          {t("save")}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function TopUpForm({
   vial,
   bottles,
@@ -1363,6 +1658,7 @@ function TopUpForm({
 function DiluentShelf() {
   const { t } = useLang();
   const { diluents } = useProfileData();
+  const settings = useStore((s) => s.settings);
   const addDiluent = useStore((s) => s.addDiluent);
   const updateDiluent = useStore((s) => s.updateDiluent);
   const removeDiluent = useStore((s) => s.removeDiluent);
@@ -1378,11 +1674,14 @@ function DiluentShelf() {
   const [usedMl, setUsedMl] = useState(1);
 
   const now = Date.now();
-  // Ordered the way the app itself would reach for them, so the bottle at the
-  // top of the shelf is the one reconstituting will suggest.
-  const live = shelfOrder(
-    diluents.filter((b) => b.state !== "finished" && b.state !== "discarded"),
-    now);
+  const live = diluents.filter((b) => b.state !== "finished" && b.state !== "discarded");
+  /*
+    Ordered the way the app itself would reach for them, so the bottle at the
+    top of the shelf is the one reconstituting will suggest, and collapsed on
+    the same setting the vials use. One switch for one idea: somebody who wants
+    forty vials on one row wants forty bottles on one row too.
+  */
+  const rows = shelfRows(live, now, settings.groupIdenticalVials === true);
   const stock = diluentStock(diluents, "bacteriostatic", now);
 
   if (!live.length && !adding) {
@@ -1469,23 +1768,34 @@ function DiluentShelf() {
                 setAdding(false);
               }}
             >
-              Add {count > 1 ? `${count} bottles` : "bottle"}
+              {t("stock_add_bottles", { n: Math.max(1, count) })}
             </Button>
           </div>
         </Card>
       )}
 
       <div className="space-y-1.5">
-        {live.map((b) => {
+        {/* `n` rather than `count`, which is the add form's own state above. */}
+        {rows.map(({ key, bottle: b, count: n }) => {
           const left = bottleRemainingMl(b);
           return (
-            <Card key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
+            <Card key={key} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
               <span className="text-[13.5px] text-[var(--ink)]">{t(DILUENT_KEY[b.kind])}</span>
-              <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>{b.state}</Badge>
+              <Badge tone={b.state === "sealed" ? "neutral" : "tangerine"}>
+                {t(BOTTLE_STATE_KEY[b.state])}
+              </Badge>
+              {/*
+                A group is whole sealed bottles, so it counts rather than
+                measures: four times thirty is the fridge, and "120 mL" would be
+                a number you cannot pour. A single bottle says what is left in
+                it, which is the figure that matters once it is open.
+              */}
               <span className="tnum font-mono text-[13px] text-[var(--muted)]">
-                {trim(left, 1)} of {trim(b.volumeMl, 1)} mL
+                {n > 1
+                  ? t("stock_bottles_each", { n, ml: trim(b.volumeMl, 1) })
+                  : t("stock_bottle_left", { left: trim(left, 1), total: trim(b.volumeMl, 1) })}
               </span>
-              {bottleUsable(b, now) ? null : <Badge tone="rose">unusable</Badge>}
+              {bottleUsable(b, now) ? null : <Badge tone="rose">{t("stock_bottle_unusable")}</Badge>}
 
               <div className="ml-auto flex items-center gap-1">
                 {b.state === "sealed" && (
@@ -1494,7 +1804,13 @@ function DiluentShelf() {
                     className="px-2.5 py-1 text-[12px]"
                     onClick={() => openDiluent(b.id)}
                   >
-                    {t("stock_open")}
+                    {/*
+                      Its own key, not the section heading's. In English one
+                      word does both jobs, the button and the label above a
+                      list of opened things. In German it cannot: the heading
+                      is Geöffnet and the button is Öffnen.
+                    */}
+                    {t("stock_open_bottle")}
                   </Button>
                 )}
                 {b.state !== "discarded" && bottleRemainingMl(b) > 0 && (

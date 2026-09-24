@@ -40,7 +40,9 @@ import {
   pickVialForDose,
   reconcileVials,
   returnToVial,
+  containerForDose,
   stockFor as computeStock,
+  type ContainerKind,
   vialConcentration,
   vialExpired,
   vialFractionRemaining,
@@ -444,13 +446,25 @@ export const useStore = create<StoreState>()(
           const logs = [...s.logs, entry].sort((a, b) => b.at - a.at);
           if (l.skipped || !(l.doseMcg > 0)) return { logs };
 
-          // Attribute the dose to a vial so stock actually moves. The caller
-          // may name one; otherwise pick the sensible vial automatically,
-          // because requiring manual attribution just means stock never
-          // changes.
-          // Only ever draw from this profile's own stock.
+          /*
+           * Attribute the dose to a container so stock actually moves. The
+           * caller may name one; otherwise pick it, because requiring manual
+           * attribution just means stock never changes.
+           *
+           * From the container this compound actually comes in, which is the
+           * part this got wrong. Left to the default it looked for a vial, so
+           * a dose of something sold as tablets found nothing, was attributed
+           * to nothing, and drew nothing. Days of doses logged in one tap, and
+           * a pack on the shelf still reading full.
+           *
+           * Only ever draw from this profile's own stock.
+           */
           const mine = s.vials.filter((v) => v.profileId === s.activeProfileId);
-          const vialId = l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at)?.id;
+          const container = containerForDose(
+            findPeptide(s.customPeptides, l.peptideId)?.preparation,
+            l.route);
+          const vialId =
+            l.vialId ?? pickVialForDose(mine, l.peptideId, l.doseMcg, l.at, container)?.id;
           if (!vialId) return { logs };
 
           /*
@@ -480,7 +494,9 @@ export const useStore = create<StoreState>()(
 
           return {
             logs: logs.map((x) => (x.id === id ? { ...x, vialId, ...measured } : x)),
-            vials: drawFromVial(s.vials, vialId, l.doseMcg),
+            // The dose's own time, not the clock: a pack opened by a dose
+            // logged for yesterday was opened yesterday.
+            vials: drawFromVial(s.vials, vialId, l.doseMcg, l.at),
           };
         });
         return id;
@@ -601,7 +617,21 @@ export const useStore = create<StoreState>()(
         set((s) => ({ vials: s.vials.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
       addOrder: (vials, shipping) =>
         set((s) => {
-          const orderId = shipping && shipping.cost > 0 ? nanoid(10) : undefined;
+          /*
+           * A delivery, not a postage record.
+           *
+           * The order used to exist only when there was shipping to share, so
+           * ten vials bought together with free delivery were ten unrelated
+           * rows and arriving took ten taps. Anything added in one go now
+           * shares an order, and the postage is one thing that may be known
+           * about it.
+           *
+           * A single vial on its own still takes none. One vial is already one
+           * row and one tap, and an order of one would be a record that says
+           * nothing the vial does not say itself.
+           */
+          const shared = vials.length > 1 || (shipping != null && shipping.cost > 0);
+          const orderId = shared ? nanoid(10) : undefined;
           const added = vials.map((v) => ({
             ...v,
             id: nanoid(10),
@@ -611,19 +641,22 @@ export const useStore = create<StoreState>()(
 
           return {
             vials: [...s.vials, ...added],
-            orders:
-              orderId && shipping
-                ? [
-                    ...s.orders,
-                    {
-                      id: orderId,
-                      profileId: s.activeProfileId,
-                      shippingCost: shipping.cost,
-                      currency: shipping.currency,
-                      placedAt: Date.now(),
-                    },
-                  ]
-                : s.orders,
+            orders: orderId
+              ? [
+                  ...s.orders,
+                  {
+                    id: orderId,
+                    profileId: s.activeProfileId,
+                    // Absent rather than zero. Nothing paid and nothing said
+                    // are the same thing to every reader, and both are quieter
+                    // than a shipping line of 0.00.
+                    ...(shipping && shipping.cost > 0
+                      ? { shippingCost: shipping.cost, currency: shipping.currency }
+                      : {}),
+                    placedAt: Date.now(),
+                  },
+                ]
+              : s.orders,
           };
         }),
       /*
@@ -964,9 +997,20 @@ export function vialStatus(vial: Vial, nowMs = Date.now()): VialStatus {
   };
 }
 
-/** Doses of a peptide still available across every usable vial. */
-export function stockFor(vials: Vial[], peptideId: string, doseMcg: number, nowMs = Date.now()) {
-  return computeStock(vials, peptideId, doseMcg, nowMs);
+/**
+ * Doses of a peptide still available across every usable container.
+ *
+ * The container has to be passed, not defaulted, wherever the answer is shown
+ * to somebody: the default is a vial, and a caller that leaves it out counts
+ * nothing for a compound that comes as tablets or lives in a spray bottle.
+ */
+export function stockFor(
+  vials: Vial[],
+  peptideId: string,
+  doseMcg: number,
+  nowMs = Date.now(),
+  container: ContainerKind = "vial") {
+  return computeStock(vials, peptideId, doseMcg, nowMs, container);
 }
 
 export { vialCapacityMcg, pickVialForDose } from "./calc/inventory";

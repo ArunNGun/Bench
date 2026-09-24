@@ -40,8 +40,8 @@ import {
   startOfLocalDay,
   unloggedDoseTimes,
 } from "@/lib/calc/schedule";
-import { daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
-import { siteChoices, suggestSite } from "@/lib/calc/sites";
+import { containerForDose, daysOfSupplyForProtocol, vialConcentration } from "@/lib/calc/inventory";
+import { routeHasSite, siteChoices, suggestSite } from "@/lib/calc/sites";
 import {
   currentStreak,
   recentDays,
@@ -197,7 +197,9 @@ export default function NowPage() {
         at: Date.now(),
         doseMcg,
         route: protocol.route,
-        site,
+        // One guard for both callers. A site is a fact about an injection, and
+        // the suggestion is worked out before the route is looked at.
+        site: routeHasSite(protocol.route) ? site : undefined,
       });
       setLastQuickLog({ id, name });
     },
@@ -234,7 +236,17 @@ export default function NowPage() {
 
       const targetMcg = scheduledDoseMcg(protocol, now);
       const due = dueStatus(protocol, now, { lastLoggedAt });
-      const stock = stockFor(vials, protocol.peptideId, targetMcg, now);
+      /*
+       * From the container this compound is actually taken out of. Left to its
+       * default this counted vials only, so a protocol on tablets read
+       * "0 doses" with a full pack on the shelf.
+       */
+      const stock = stockFor(
+        vials,
+        protocol.peptideId,
+        targetMcg,
+        now,
+        containerForDose(peptide?.preparation, protocol.route));
 
       /**
        * What "100% of a single-dose peak" is measured against.
@@ -509,7 +521,9 @@ export default function NowPage() {
              * what lets the row name the site it is about to write.
              */
             const choices =
-              track.protocol.route === "intranasal"
+              // Every route that does not put a needle in tissue, not just the
+              // nose. A tablet was offering a thigh to rotate to.
+              !routeHasSite(track.protocol.route)
                 ? []
                 : siteChoices(
                     logs.filter((l) => l.peptideId === track.protocol.peptideId),
@@ -953,7 +967,7 @@ export default function NowPage() {
                   <span className="text-[var(--ink)]">
                     {track.lastLoggedAt ? relativeTime(track.lastLoggedAt, now) : t("now_never")}
                   </span>
-                  {track.lastLog?.site && (
+                  {track.lastLog?.site && routeHasSite(track.lastLog.route) && (
                     <span className="text-[var(--ink)]">
                       {" · "}
                       {siteLabel(track.lastLog.site)}
