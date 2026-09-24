@@ -24,11 +24,31 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.3",
+    date: "2026-09-24",
+    summary: "Tablets as a container, the public page in four languages, stock counting from the right container, and a wave of polish from the community.",
+    changes: [
+      "Tablets are now a container like any other. Track a pack, draw doses from it, and see the pack move from Sealed to Open as you use it.",
+      "Pick which pack a tablet dose comes out of, and set the tablet size on a pack you already have open.",
+      "An opened pack now lives under Open on the Stock screen instead of staying sealed.",
+      "The public page speaks all four languages (EN, DE, SL, PL), each at its own address.",
+      "Stock counts from the container the compound actually comes in, not a parent it belongs to.",
+      "The container glyph on a stock row now reflects what the row is actually holding.",
+      "Injection site is only attached to doses that were injected — oral and other routes no longer carry it.",
+      "Bacteriostatic water shelf shortens as you draw from it, and you can move it.",
+      "An open tab notices what another device did and updates without a full reload.",
+      "An app whose shell no longer matches the server now repairs itself automatically.",
+      "Mark an order as arrived with one tap; terminology updated from 'order' to 'delivery'.",
+      "Two screens that still spoke English in every language are now fully translated.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.2",
     date: "2026-09-07",
     summary: "Polish language support, full translation coverage across all four languages, a visual syringe picker, adherence fixes, and dead translation key cleanup.",
     changes: [
-      "Polish added as a fourth language, reviewed by a native speaker. Switch between EN, DE, FR and PL from the header dropdown.",
+      "Polish added as a fourth language, reviewed by a native speaker. Switch between EN, DE, SL and PL from the header dropdown.",
       "Full translation coverage across every screen, panel and component. Every string the page scanner missed, including ternary hints, helper returns, stock page labels and diluent names, is now translated.",
       "Pick a syringe by looking at one. The calculator now shows a visual barrel for each option instead of a dropdown.",
       "Real plural selection instead of bending every sentence around it. Languages that distinguish one from many now say the right thing.",
