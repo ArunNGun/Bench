@@ -22,7 +22,7 @@ import { assignColors, colorSubjects, doseColor } from "@/lib/calc/palette";
 import { adherence, logsForProtocol } from "@/lib/calc/schedule";
 import { diaryDays, ratableDay } from "@/lib/calc/checkins";
 import { overusedSites, routeHasSite } from "@/lib/calc/sites";
-import { formatDate, formatDose, formatDateTime, formatTime, percent, siteLabel, toDateInput, fromDateInput, trim } from "@/lib/format";
+import { formatDate, formatDose, formatDateTime, formatTime, formatWeekday, percent, siteLabel, toDateInput, fromDateInput, trim } from "@/lib/format";
 import { FEELING_TONE, lowestRatedTone, ratingTone } from "@/lib/calc/feeling";
 import {
   FEELING_LABELS,
@@ -245,7 +245,18 @@ export default function LogPage() {
             return (
             <section key={day}>
               <SectionLabel>
-                {day === startOfToday() ? t("checkin_today") : formatDate(day)}
+                {/*
+                  The weekday, because a date alone was being taken to a
+                  calendar to find out which day it was. Asked for on the Log
+                  and nowhere else, and it is the shape the Plan page already
+                  uses for the same reason.
+
+                  Today keeps the word on its own. It already says which day it
+                  is, more directly than the name of the day does.
+                */}
+                {day === startOfToday()
+                  ? t("checkin_today")
+                  : `${formatWeekday(day)}, ${formatDate(day)}`}
               </SectionLabel>
               <div className="space-y-1.5">
                 {entries.map((l) => {
