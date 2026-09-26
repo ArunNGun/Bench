@@ -574,6 +574,7 @@ function VialRow({
   // One row, one set of numbers: either this vial's or the whole group's.
   const remainingMcg = group ? group.remainingMcg : st.remainingMcg;
   const rowCost = group ? group.cost : vial.cost;
+  const rowSupplier = (group ? group.supplier : vial.supplier) ?? null;
   const rowCurrency = (group ? group.currency : vial.currency) ?? currency;
   /*
    * Postage, shared. Shown beside the price rather than added into it, because
@@ -601,7 +602,23 @@ function VialRow({
           <span className="text-[14.5px] text-[var(--ink)]">{peptideName}</span>
           <span className="tnum font-mono text-[13px] text-[var(--muted)]">{vial.strengthMg} mg</span>
           {spray && <Badge tone="grape">{t("stock_nasal_spray_badge")}</Badge>}
-          {many && <Badge tone="sky">{group!.count} vials</Badge>}
+          {/*
+            Who it came from, next to what it is.
+            
+            It was already in the faint line at the end of the row, and only
+            there for a row standing for one vial, because a group of identical
+            vials can hold two purchases from two suppliers. Asked for on the
+            list of what is still in the post, where the question is "where did
+            I order this from" and a delivery has exactly one answer. The group
+            supplies it when every vial agrees, so the shelf shows it too when
+            it can honestly be shown.
+          */}
+          {rowSupplier && <Badge tone="neutral">{rowSupplier}</Badge>}
+          {many && (
+            <Badge tone="sky">
+              {pack ? t("count_packs", { n: group!.count }) : t("count_vials", { n: group!.count })}
+            </Badge>
+          )}
           {st.expired && <Badge tone="rose">{t("stock_past_date")}</Badge>}
           {!st.expired && budSoon && <Badge tone="tangerine">{t("stock_use_soon")}</Badge>}
         </div>
@@ -749,11 +766,9 @@ function VialRow({
           <p className="mt-0.5 text-[12px] text-[var(--faint)]">{t("stock_over_a_year")}</p>
         )}
 
-        {((!many && (vial.supplier || vial.cost != null)) || (many && rowCost != null)) && (
+        {rowCost != null && (
           <p className="mt-1 text-[12px] text-[var(--faint)]">
             {[
-              // Suppliers can differ across a group, so only a single vial claims one.
-              many ? null : vial.supplier,
               rowCost != null
                 ? `${formatMoney(rowCost, rowCurrency)}${
                     many ? t("stock_in_total_suffix") : ""
