@@ -1080,3 +1080,44 @@ describe("groupOnOrder", () => {
     expect(g[0].currency).toBe("EUR");
   });
 });
+
+/*
+ * Asked for on the list of what is still in the post: the supplier was entered
+ * when the order was placed and the list never said it. It was in the row all
+ * along, and only for a row standing for one vial, because a group of
+ * identical vials can hold two purchases from two places.
+ */
+describe("who a group came from", () => {
+  it("names the supplier when every vial says the same one", () => {
+    const g = groupSealedVials([
+      vial({ id: "a", supplier: "Peptide Sciences" }),
+      vial({ id: "b", supplier: "Peptide Sciences" }),
+    ]);
+    expect(g[0].supplier).toBe("Peptide Sciences");
+  });
+
+  /* Never whichever came first. A row cannot name one supplier for two. */
+  it("says nothing when they disagree", () => {
+    const g = groupSealedVials([vial({ id: "a", supplier: "One" }), vial({ id: "b", supplier: "Two" })]);
+    expect(g[0].supplier).toBeNull();
+  });
+
+  it("says nothing when one of them never said", () => {
+    const g = groupSealedVials([vial({ id: "a", supplier: "One" }), vial({ id: "b" })]);
+    expect(g[0].supplier).toBeNull();
+  });
+
+  it("says nothing when nobody said", () => {
+    expect(groupSealedVials([vial({ id: "a" })])[0].supplier).toBeNull();
+  });
+
+  /* A delivery comes from one place, which is why the list can rely on this. */
+  it("names it for a delivery", () => {
+    const g = groupOnOrder([
+      vial({ id: "a", state: "on-order", orderId: "o1", supplier: "Peptide Sciences" }),
+      vial({ id: "b", state: "on-order", orderId: "o1", supplier: "Peptide Sciences" }),
+    ]);
+    expect(g[0].supplier).toBe("Peptide Sciences");
+    expect(g[0].count).toBe(2);
+  });
+});

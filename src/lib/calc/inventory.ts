@@ -272,6 +272,16 @@ export interface VialGroup {
   currency: string | null;
   /** Vials in the group with no price recorded, so a total can be read honestly. */
   unpricedCount: number;
+  /**
+   * Who it came from, when every vial in the group says the same one.
+   *
+   * Null when they disagree or when nobody said, which are different facts and
+   * the same silence: a row cannot name one supplier for two purchases, and it
+   * must not pick whichever came first. For a delivery the question does not
+   * arise, since a delivery comes from one place, which is why the on-order
+   * list can show this and the shelf can only sometimes.
+   */
+  supplier: string | null;
 }
 
 /**
@@ -315,6 +325,13 @@ export function groupOnOrder(vials: Vial[]): VialGroup[] {
     (v) => `${v.orderId ?? v.id}:${v.peptideId}:${v.strengthMg}`);
 }
 
+/** The one value every row gave, or null the moment they differ or one is missing. */
+function agreed(values: (string | undefined)[]): string | null {
+  const first = values[0];
+  if (!first) return null;
+  return values.every((v) => v === first) ? first : null;
+}
+
 function groupVials(vials: Vial[], keyOf: (v: Vial) => string): VialGroup[] {
   const order: string[] = [];
   const bucket = new Map<string, Vial[]>();
@@ -349,6 +366,7 @@ function groupVials(vials: Vial[], keyOf: (v: Vial) => string): VialGroup[] {
       cost: priced.length && oneCurrency ? priced.reduce((sum, v) => sum + v.cost!, 0) : null,
       currency: priced.length && oneCurrency ? (priced[0].currency ?? null) : null,
       unpricedCount: group.length - priced.length,
+      supplier: agreed(group.map((v) => v.supplier)),
     };
   });
 }
