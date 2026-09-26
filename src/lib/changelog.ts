@@ -24,6 +24,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.3.1",
+    date: "2026-09-26",
+    summary: "Weekday in the Log, and supplier shown on the stock row.",
+    changes: [
+      "The Log now shows the weekday above each day's entries — no more opening a calendar to figure out which day a date was.",
+      "Supplier appears as a badge on a stock row when all vials in a group came from the same place. Always shown for on-order deliveries; shown on the shelf when the group agrees.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.3",
     date: "2026-09-24",
     summary: "Tablets as a container, the public page in four languages, stock counting from the right container, and a wave of polish from the community.",
