@@ -799,29 +799,64 @@ function VialRow({
           </p>
         )}
 
+        {/*
+          Every action here says what it will do, on hover.
+
+          Asked for on Mark empty and Delete, and given to all of them: two
+          buttons out of seven carrying an explanation reads as a warning about
+          those two rather than as help, and the reporter's question, what does
+          this actually do to my records, is the same question for the rest.
+
+          `title` rather than anything of our own. It is what the marks and the
+          other hover explanations in this app already use, it needs no state
+          and nothing to dismiss, and it costs a touch screen nothing because
+          it simply does not appear there.
+        */}
         <div className="mt-2.5 flex flex-wrap gap-2">
           {onArrived && (
-            <Button variant="primary" onClick={onArrived} className="px-3 py-1.5 text-[13px]">
+            <Button
+              variant="primary"
+              onClick={onArrived}
+              title={t("stock_it_arrived_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               <PackageCheck size={13} /> {t("stock_it_arrived")}
             </Button>
           )}
           {onReconstitute && (
-            <Button onClick={onReconstitute} className="px-3 py-1.5 text-[13px]">
+            <Button
+              onClick={onReconstitute}
+              title={t("stock_reconstitute_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               {many ? t("stock_reconstitute_one") : t("stock_reconstitute")}
             </Button>
           )}
           {onTopUp && (
-            <Button onClick={onTopUp} className="px-3 py-1.5 text-[13px]">
+            <Button
+              onClick={onTopUp}
+              title={t("stock_add_diluent_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               <Droplet size={13} /> {t("stock_add_diluent")}
             </Button>
           )}
           {onTransfer && (
-            <Button onClick={onTransfer} className="px-3 py-1.5 text-[13px]">
+            <Button
+              onClick={onTransfer}
+              title={t("stock_to_spray_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               <SprayCan size={13} /> {t("stock_to_spray")}
             </Button>
           )}
           {onOpenPack && pack && vial.state === "sealed" && (
-            <Button variant="primary" onClick={onOpenPack} className="px-3 py-1.5 text-[13px]">
+            <Button
+              variant="primary"
+              onClick={onOpenPack}
+              title={t("stock_open_pack_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               {t("stock_open_pack")}
             </Button>
           )}
@@ -833,18 +868,28 @@ function VialRow({
             before the compound was marked as tablets was stuck for good.
           */}
           {onSetTabletSize && (pack || tabletCompound) && (
-            <Button onClick={onSetTabletSize} className="px-3 py-1.5 text-[13px]">
+            <Button
+              onClick={onSetTabletSize}
+              title={t("stock_set_tablet_size_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               {t("stock_set_tablet_size")}
             </Button>
           )}
           {onFinish && (
-            <Button onClick={onFinish} variant="ghost" className="px-3 py-1.5 text-[13px]">
+            <Button
+              onClick={onFinish}
+              variant="ghost"
+              title={t("stock_mark_empty_tip")}
+              className="px-3 py-1.5 text-[13px]"
+            >
               {t("stock_mark_empty")}
             </Button>
           )}
           <Button
             onClick={onRemove}
             variant="ghost"
+            title={t("stock_delete_tip")}
             className="px-3 py-1.5 text-[13px] text-[var(--rose)] hover:border-[var(--rose)]/40 hover:text-[var(--rose)]"
           >
             {/* Never the whole group. One click, one vial, the oldest of them. */}
