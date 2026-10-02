@@ -779,3 +779,32 @@ reloads constantly and a reload is a trigger.
 
 Worth checking against any future trigger list: at least one entry has to come
 from outside this device, whether that is a poll, a push channel, or a button.
+
+## One predicate answering two questions
+
+Marks vanished from the daily overview the day a vial went past its beyond-use
+date, while the Stock page went on showing them. Reported as patronising, and it
+was, but nobody decided it.
+
+`vialUsable` means two things at once: there is nothing here to take (finished,
+discarded, on order, empty), and this is past its date. The first is a fact
+about whether a vial can supply anything. The second is a warning. Every reader
+of that predicate inherits both meanings whether it wants them or not, and
+`marksForDose` wanted only the first: marks are what the syringe would read,
+which follows from the concentration, and a date does not change a
+concentration.
+
+Stock was right by accident. A row calls `marksFromVial` on its own vial and
+never asks the picker, so it never inherited the second meaning. Two screens
+answering the same question through different paths is how the disagreement
+became visible at all.
+
+Fixed narrowly: the marks fall back to the freshest made-up vial that is only
+disqualified by its date. What the app will draw from, count as stock, and
+attribute a dose to is untouched, because that is a different question and it is
+the owner's to decide.
+
+The general shape: **a predicate that combines a capability with a warning will
+be read by somebody who wanted only one of them.** When a name like `usable`
+covers both "can" and "should", the call sites that mean "can" are already
+wrong and nothing will say so.

@@ -485,7 +485,43 @@ export function marksForDose(
   // Vials only, and not by omission. Marks are a reading off a barrel, and a
   // nasal dose never meets one, so a spray bottle must not be able to answer
   // this question even when it is the only stock of that compound on the shelf.
-  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs, "vial"), doseMcg, scale);
+  const drawable = pickVialForDose(vials, peptideId, doseMcg, nowMs, "vial");
+  return marksFromVial(drawable ?? pickPastItsDate(vials, peptideId, nowMs), doseMcg, scale);
+}
+
+/**
+ * The made-up vial a dose would be read off once every date has passed.
+ *
+ * Reading and drawing are different questions and this is the reading one.
+ * `pickVialForDose` answers the other, and refuses a vial past its date, which
+ * is right: it decides what the app will take from and what it will count as
+ * stock. Marks decide nothing. They are what the syringe would say, which
+ * follows from the concentration and from nothing else, and a date does not
+ * change a concentration.
+ *
+ * Reported as marks disappearing from the daily overview the day a vial went
+ * past its beyond-use date, while the Stock page went on showing them correctly
+ * because the row reads its own vial rather than asking the picker. The warning
+ * is the useful part and it stays, in red, on every screen that shows the vial.
+ * Withholding the number on top of the warning only means working it out by
+ * hand, and whether to carry on using something is the owner's decision.
+ *
+ * Only reconstituted vials, because `marksFromVial` answers for no other kind:
+ * a sealed powder has no concentration to read. The freshest of them, by the
+ * date it passed, since that is the one in the fridge door.
+ */
+function pickPastItsDate(vials: Vial[], peptideId: string, nowMs: number): Vial | null {
+  const candidates = vials.filter(
+    (v) =>
+      v.peptideId === peptideId &&
+      matchesContainer(v, "vial") &&
+      v.state === "reconstituted" &&
+      vialRemainingMcg(v) > 0 &&
+      vialExpired(v, nowMs));
+
+  if (!candidates.length) return null;
+  return [...candidates].sort(
+    (a, b) => (b.budAt ?? b.expiresAt ?? 0) - (a.budAt ?? a.expiresAt ?? 0))[0];
 }
 
 /**

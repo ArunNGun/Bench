@@ -343,6 +343,51 @@ describe("marksForDose", () => {
     const later = { ...open, budAt: NOW + 20 * DAY };
     expect(marksForDose([later, soon], "bpc-157", 250, "U100", NOW)).toBeCloseTo(5, 9);
   });
+
+  /*
+   * Reported as marks disappearing from the daily overview the day a vial went
+   * past its beyond-use date, while the Stock page went on showing them,
+   * because a row reads its own vial rather than asking the picker.
+   *
+   * Reading and drawing are different questions. The picker answers the
+   * drawing one and refuses a vial past its date, which is right. Marks decide
+   * nothing: they follow from the concentration, and a date does not change a
+   * concentration.
+   */
+  it("still reads a vial that is past its date", () => {
+    const expired = { ...open, budAt: NOW - DAY };
+    expect(marksForDose([expired], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  it("prefers one that is not, when there is one", () => {
+    const expired = {
+      ...open,
+      id: "expired",
+      diluentMl: 1,
+      budAt: NOW - DAY,
+    };
+    const fine = { ...open, budAt: NOW + 20 * DAY };
+    // 2 mL rather than 1, so the two give different readings for one dose.
+    expect(marksForDose([expired, fine], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  /* The freshest of the expired ones, which is the one in the fridge door. */
+  it("reads the one that passed most recently", () => {
+    const old = { ...open, id: "old", diluentMl: 1, budAt: NOW - 40 * DAY };
+    const recent = { ...open, id: "recent", diluentMl: 2, budAt: NOW - DAY };
+    expect(marksForDose([old, recent], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  it("still says nothing for an expired vial with nothing left in it", () => {
+    const drained = { ...open, budAt: NOW - DAY, drawnMcg: 5000 };
+    expect(marksForDose([drained], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  /* A date does not resurrect a vial that was finished or thrown away. */
+  it("still says nothing for a vial that is gone", () => {
+    const binned = { ...open, budAt: NOW - DAY, state: "discarded" as const };
+    expect(marksForDose([binned], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
 });
 
 describe("daysOfSupply", () => {
