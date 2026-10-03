@@ -15,11 +15,10 @@ import { allPeptides, findPeptide, useProfileData, useStore, vialStatus } from "
 import { AddCompoundInline } from "./AddCompoundInline";
 import {
   containerForDose,
-  matchesContainer,
+  drawableVials,
   pickVialForDose,
   stockFor,
   vialRemainingMcg,
-  vialUsable,
 } from "@/lib/calc/inventory";
 import { isPack, mcgForTablets, mcgPerTablet, tabletsForDose, tabletsRemaining } from "@/lib/calc/tablet";
 import {
@@ -268,13 +267,11 @@ export function LogDoseSheet({
 
   // Every vial that could supply this dose, open or still sealed. Restricting
   // this to reconstituted vials is what stopped stock from moving.
+  //
+  // The same list the picker chooses from, so the vial it pre-selects is always
+  // among the options. An open vial past its date is in it, marked as such.
   const usableVials = useMemo(
-    () =>
-      vials.filter(
-        (v) =>
-          v.peptideId === peptideId &&
-          matchesContainer(v, container) &&
-          vialUsable(v, Date.now())),
+    () => drawableVials(vials, peptideId, Date.now(), container),
     [vials, peptideId, container]);
 
   // Reset the form each time it opens, prefilled from the protocol.
@@ -812,10 +809,14 @@ export function LogDoseSheet({
                     : v.state === "reconstituted" && v.diluentMl
                       ? t("log_ml_left", { ml: trim(st.remainingMl, 2) })
                       : t("stock_sealed");
+                  // Offered, and said plainly. The choice is the owner's; the
+                  // date is the app's to state.
+                  const pastDate = st.expired ? ` · ${t("stock_past_date")}` : "";
                   return (
                     <option key={v.id} value={v.id}>
                       {v.strengthMg} mg · {left} ·{" "}
                       {t("log_mcg_remaining", { mcg: formatDose(st.remainingMcg) })}
+                      {pastDate}
                     </option>
                   );
                 })}
