@@ -799,10 +799,26 @@ never asks the picker, so it never inherited the second meaning. Two screens
 answering the same question through different paths is how the disagreement
 became visible at all.
 
-Fixed narrowly: the marks fall back to the freshest made-up vial that is only
-disqualified by its date. What the app will draw from, count as stock, and
-attribute a dose to is untouched, because that is a different question and it is
-the owner's to decide.
+**The first fix was wrong, and the way it was wrong is the lesson.** It gave the
+marks a fallback of their own: when no vial is drawable, read the freshest open
+one past its date. It passed every test and did nothing on the screen it was
+written for, because the person reporting it had four sealed vials in the
+fridge. Sealed vials are drawable, so the picker returned one, the fallback never
+ran, and a sealed vial has no concentration to read. Worse, the same picker had
+been drawing that morning's one-tap dose out of a sealed vial nobody had made up.
+An existing test required exactly that: "skips an expired open vial and reaches
+for the sealed one".
+
+The second fix is one rule in one place. `drawableVials` is the list every
+screen offers and the picker chooses from, and it includes an open vial past its
+date; the picker reaches for that vial before breaking into a sealed one; the
+marks read whatever the picker returns and have no rule of their own. A sealed
+vial past the manufacturer's date stays out. The stock figures still count only
+what is within date, with the rest reported as expired.
+
+The general shape, twice over: a fallback is a second rule, and it runs only in
+the case its author imagined. When the first answer is wrong, change the first
+answer.
 
 The general shape: **a predicate that combines a capability with a warning will
 be read by somebody who wanted only one of them.** When a name like `usable`

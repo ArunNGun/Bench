@@ -105,12 +105,50 @@ export function containerForDose(
 }
 
 /**
+ * Every container this dose could honestly come out of.
+ *
+ * Something to take, which rules out finished, discarded, on order and empty.
+ * And either within its date, or already open. An open vial past its
+ * beyond-use date is still the one in the fridge door and still the one being
+ * drawn from, and the decision to stop is the owner's: the date is shown in
+ * red on every screen that shows the vial, which is the app's whole part in
+ * it. A sealed vial past the manufacturer's date stays out. Nobody is midway
+ * through it, and breaking into one is a choice the app should not make for
+ * anybody.
+ *
+ * One list for every screen that offers a choice and for the picker that
+ * makes one, so the log form can never pre-select a vial its own list does
+ * not contain.
+ */
+export function drawableVials(
+  vials: Vial[],
+  peptideId: string,
+  nowMs: number,
+  container: ContainerKind = "vial"): Vial[] {
+  return vials.filter(
+    (v) =>
+      v.peptideId === peptideId &&
+      matchesContainer(v, container) &&
+      !UNAVAILABLE_STATES.includes(v.state) &&
+      vialRemainingMcg(v) > 0 &&
+      (!vialExpired(v, nowMs) || v.state === "reconstituted"));
+}
+
+/**
  * Which vial a dose should come out of.
  *
  * Prefers an already-open vial over breaking into a sealed one, and among
  * equals prefers whichever expires soonest, so stock gets used before it has
  * to be thrown away. Falls back to an open vial with a partial amount left
  * rather than opening a new one for the remainder.
+ *
+ * An open vial past its date comes next, ahead of every sealed one. This used
+ * to be the other way round, with a test saying so, and the result was worse
+ * than a refusal: the morning a vial crossed its beyond-use date, a dose
+ * logged in one tap was drawn out of a sealed vial nobody had made up, and the
+ * daily overview lost its marks, because a sealed vial has no concentration to
+ * read. Reported twice, the second time by somebody holding the open vial and
+ * four sealed spares, who wanted the dose to come out of the one in his hand.
  */
 export function pickVialForDose(
   vials: Vial[],
@@ -118,22 +156,30 @@ export function pickVialForDose(
   doseMcg: number,
   nowMs: number,
   container: ContainerKind = "vial"): Vial | null {
-  const candidates = vials.filter(
-    (v) => v.peptideId === peptideId && matchesContainer(v, container) && vialUsable(v, nowMs));
+  const candidates = drawableVials(vials, peptideId, nowMs, container);
   if (!candidates.length) return null;
 
   const byDeadline = (a: Vial, b: Vial) =>
     (a.budAt ?? a.expiresAt ?? Infinity) - (b.budAt ?? b.expiresAt ?? Infinity);
 
-  const open = candidates.filter((v) => v.state === "reconstituted");
+  const inDate = candidates.filter((v) => !vialExpired(v, nowMs));
+
+  const open = inDate.filter((v) => v.state === "reconstituted");
   const fullEnough = open.filter((v) => vialRemainingMcg(v) >= doseMcg - 1e-6);
   if (fullEnough.length) return [...fullEnough].sort(byDeadline)[0];
   if (open.length) return [...open].sort(byDeadline)[0];
 
-  const sealed = candidates.filter((v) => v.state === "sealed");
+  // The freshest of them, by the date it passed: the one in the fridge door.
+  const openPast = candidates.filter((v) => v.state === "reconstituted" && vialExpired(v, nowMs));
+  if (openPast.length) {
+    return [...openPast].sort(
+      (a, b) => (b.budAt ?? b.expiresAt ?? 0) - (a.budAt ?? a.expiresAt ?? 0))[0];
+  }
+
+  const sealed = inDate.filter((v) => v.state === "sealed");
   if (sealed.length) return [...sealed].sort(byDeadline)[0];
 
-  return [...candidates].sort(byDeadline)[0];
+  return [...inDate].sort(byDeadline)[0] ?? null;
 }
 
 /**
@@ -428,6 +474,15 @@ export function stockFor(
         vialRemainingMcg(v) > 0)
     .reduce((sum, v) => sum + vialRemainingMcg(v), 0);
 
+  /*
+   * An open vial past its date is still where the next dose comes from, so it
+   * is not a reason to tell anybody to make one up. Its mass is not counted as
+   * available, since the stock figures stay a statement about what is within
+   * date; it is only the nudge that has to stop contradicting the picker.
+   */
+  const openPastDate = mine.some(
+    (v) => v.state === "reconstituted" && vialExpired(v, nowMs) && vialRemainingMcg(v) > 0);
+
   let availableMcg = 0;
   let openMcg = 0;
   let sealedCount = 0;
@@ -457,7 +512,8 @@ export function stockFor(
      * up, so telling their owner to reach for the water would be advice about
      * a container they are not holding.
      */
-    needsReconstitution: container === "vial" && openCount === 0 && sealedCount > 0,
+    needsReconstitution:
+      container === "vial" && openCount === 0 && sealedCount > 0 && !openPastDate,
     dosesExpired: per(expiredMcg),
   };
 }
@@ -485,43 +541,13 @@ export function marksForDose(
   // Vials only, and not by omission. Marks are a reading off a barrel, and a
   // nasal dose never meets one, so a spray bottle must not be able to answer
   // this question even when it is the only stock of that compound on the shelf.
-  const drawable = pickVialForDose(vials, peptideId, doseMcg, nowMs, "vial");
-  return marksFromVial(drawable ?? pickPastItsDate(vials, peptideId, nowMs), doseMcg, scale);
-}
-
-/**
- * The made-up vial a dose would be read off once every date has passed.
- *
- * Reading and drawing are different questions and this is the reading one.
- * `pickVialForDose` answers the other, and refuses a vial past its date, which
- * is right: it decides what the app will take from and what it will count as
- * stock. Marks decide nothing. They are what the syringe would say, which
- * follows from the concentration and from nothing else, and a date does not
- * change a concentration.
- *
- * Reported as marks disappearing from the daily overview the day a vial went
- * past its beyond-use date, while the Stock page went on showing them correctly
- * because the row reads its own vial rather than asking the picker. The warning
- * is the useful part and it stays, in red, on every screen that shows the vial.
- * Withholding the number on top of the warning only means working it out by
- * hand, and whether to carry on using something is the owner's decision.
- *
- * Only reconstituted vials, because `marksFromVial` answers for no other kind:
- * a sealed powder has no concentration to read. The freshest of them, by the
- * date it passed, since that is the one in the fridge door.
- */
-function pickPastItsDate(vials: Vial[], peptideId: string, nowMs: number): Vial | null {
-  const candidates = vials.filter(
-    (v) =>
-      v.peptideId === peptideId &&
-      matchesContainer(v, "vial") &&
-      v.state === "reconstituted" &&
-      vialRemainingMcg(v) > 0 &&
-      vialExpired(v, nowMs));
-
-  if (!candidates.length) return null;
-  return [...candidates].sort(
-    (a, b) => (b.budAt ?? b.expiresAt ?? 0) - (a.budAt ?? a.expiresAt ?? 0))[0];
+  //
+  // The vial the dose would come out of, and nothing else. This briefly had a
+  // fallback of its own for vials past their date, which only ran when nothing
+  // at all was drawable, and so never ran for anybody with a sealed spare in
+  // the fridge. The picker now answers that case, and two rules for one
+  // question is how the first one went wrong.
+  return marksFromVial(pickVialForDose(vials, peptideId, doseMcg, nowMs, "vial"), doseMcg, scale);
 }
 
 /**
