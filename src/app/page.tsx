@@ -171,6 +171,9 @@ export default function NowPage() {
     [vials, custom, lang]);
   const [logOpen, setLogOpen] = useState(false);
   const [logPeptideId, setLogPeptideId] = useState<string | undefined>();
+  // Set only by the "All sites" row, and cleared on close, so no other way in
+  // ever inherits it.
+  const [logAnySite, setLogAnySite] = useState(false);
   /** `${protocolId}:${scheduledAt}` of a later dose whose Taken button is asking. */
   const [confirmEarly, setConfirmEarly] = useState<string | null>(null);
   /**
@@ -604,6 +607,7 @@ export default function NowPage() {
                     onLog={(site) => logDose(track.protocol, name, track.targetMcg, site)}
                     onAllSites={() => {
                       setLogPeptideId(track.protocol.peptideId);
+                      setLogAnySite(true);
                       setLogOpen(true);
                     }}
                   />
@@ -1102,8 +1106,12 @@ export default function NowPage() {
 
       <LogDoseSheet
         open={logOpen}
-        onClose={() => setLogOpen(false)}
+        onClose={() => {
+          setLogOpen(false);
+          setLogAnySite(false);
+        }}
         defaultPeptideId={logPeptideId}
+        anySite={logAnySite}
       />
     </div>
   );

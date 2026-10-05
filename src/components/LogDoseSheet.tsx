@@ -71,12 +71,24 @@ export function LogDoseSheet({
   onClose,
   defaultPeptideId,
   editId,
+  anySite,
 }: {
   open: boolean;
   onClose: () => void;
   defaultPeptideId?: string;
   /** Editing an existing dose rather than recording a new one. */
   editId?: string;
+  /**
+   * Open with every site on offer rather than only the protocol's pinned ones.
+   *
+   * For the one way in that has already said so: the "All sites" row at the
+   * foot of the site panel on the overview. That row exists for the sites a
+   * protocol has not pinned, and it used to open this form restricted to the
+   * pinned ones, so the next thing anybody did was press "Inject somewhere
+   * else" to undo it. Every other way in keeps the pinned list, which is where
+   * rotation by plan belongs.
+   */
+  anySite?: boolean;
 }) {
   const { t } = useLang();
   const custom = useStore((s) => s.customPeptides);
@@ -309,8 +321,11 @@ export function LogDoseSheet({
     setProtocolId(proto?.id ?? NO_PROTOCOL);
     // Suggests the site used least recently, so rotation happens by default.
     applyProtocol(proto, id, Date.now());
+    // After it, because applyProtocol is also what every protocol change runs
+    // and it puts the pinned list back each time.
+    if (anySite) setSiteOverride(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultPeptideId, editId]);
+  }, [open, defaultPeptideId, editId, anySite]);
 
   // If a pinned set is in force and the current pick falls outside it, treat
   // that as an override rather than silently logging the wrong site.
