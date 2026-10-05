@@ -3,6 +3,7 @@ import {
   daysOfSupply,
   daysOfSupplyForProtocol,
   diluentAfterTopUp,
+  drawableVials,
   marksForDose,
   matchesContainer,
   drawFromVial,
@@ -139,14 +140,100 @@ describe("pickVialForDose", () => {
     expect(pickVialForDose(vials, "klow", 4000, NOW)?.id).toBe("nearly-empty");
   });
 
-  it("skips an expired open vial and reaches for the sealed one", () => {
+  /*
+   * Reversed, deliberately. This test used to say the opposite: skip an open
+   * vial past its date and reach for a sealed one. The result was a dose logged
+   * in one tap being drawn out of a vial nobody had made up, and the daily
+   * overview losing its marks, the morning the open vial crossed its date.
+   * Reported by somebody holding that open vial and four sealed spares, who
+   * wanted the dose to come out of the one in his hand.
+   */
+  it("keeps drawing from an open vial past its date rather than breaking into a sealed one", () => {
     const vials = [
       vial({ id: "expired", state: "reconstituted", diluentMl: 4, budAt: NOW - DAY }),
+      vial({ id: "sealed" }),
+    ];
+    expect(pickVialForDose(vials, "klow", 4000, NOW)?.id).toBe("expired");
+  });
+
+  it("still prefers an open vial within its date", () => {
+    const vials = [
+      vial({ id: "expired", state: "reconstituted", diluentMl: 4, budAt: NOW - DAY }),
+      vial({ id: "fine", state: "reconstituted", diluentMl: 4, budAt: NOW + 10 * DAY }),
+    ];
+    expect(pickVialForDose(vials, "klow", 4000, NOW)?.id).toBe("fine");
+  });
+
+  it("takes the freshest of two open vials past their date", () => {
+    const vials = [
+      vial({ id: "old", state: "reconstituted", diluentMl: 4, budAt: NOW - 30 * DAY }),
+      vial({ id: "recent", state: "reconstituted", diluentMl: 4, budAt: NOW - DAY }),
+    ];
+    expect(pickVialForDose(vials, "klow", 4000, NOW)?.id).toBe("recent");
+  });
+
+  /* Nobody is midway through it, and breaking into one is not the app's call. */
+  it("never draws from a sealed vial past the manufacturer's date", () => {
+    const vials = [vial({ id: "stale", expiresAt: NOW - DAY })];
+    expect(pickVialForDose(vials, "klow", 4000, NOW)).toBeNull();
+  });
+
+  it("does not draw from an open vial past its date with nothing left", () => {
+    const vials = [
+      vial({ id: "drained", state: "reconstituted", diluentMl: 4, budAt: NOW - DAY, drawnMcg: 80_000 }),
       vial({ id: "sealed" }),
     ];
     expect(pickVialForDose(vials, "klow", 4000, NOW)?.id).toBe("sealed");
   });
 });
+
+/*
+ * The case that broke #143, exactly as it was found: Retatrutide, one open
+ * 10 mg vial made up in 2 mL with 5.5 mg left, its beyond-use date two hours
+ * gone, and four sealed vials in the fridge. The earlier fix only looked past
+ * the date when nothing at all was drawable, and four sealed vials were.
+ */
+describe("an open vial past its date, with sealed spares beside it", () => {
+  const open = vial({
+    id: "open",
+    peptideId: "retatrutide",
+    strengthMg: 10,
+    state: "reconstituted",
+    diluentMl: 2,
+    drawnMcg: 4500,
+    budAt: NOW - 2 * 3_600_000,
+  });
+  const spares = ["a", "b", "c", "d"].map((id) =>
+    vial({ id, peptideId: "retatrutide", strengthMg: 10 }));
+
+  it("is where the dose comes from", () => {
+    expect(pickVialForDose([...spares, open], "retatrutide", 1500, NOW)?.id).toBe("open");
+  });
+
+  it("gives the overview its marks", () => {
+    // 10 mg in 2 mL is 5000 mcg/mL, so 1.5 mg is 0.3 mL: 30 marks on U-100.
+    expect(marksForDose([...spares, open], "retatrutide", 1500, "U100", NOW)).toBeCloseTo(30, 9);
+  });
+
+  it("is offered in the log form, beside the spares", () => {
+    const ids = drawableVials([...spares, open], "retatrutide", NOW).map((v) => v.id);
+    expect(ids).toContain("open");
+    expect(ids).toHaveLength(5);
+  });
+
+  /* Something will draw, so nobody should be told to make a vial up. */
+  it("does not ask for a vial to be reconstituted", () => {
+    expect(stockFor([...spares, open], "retatrutide", 1500, NOW).needsReconstitution).toBe(false);
+  });
+
+  /* The stock figures stay a statement about what is within date. */
+  it("is not counted as stock within date", () => {
+    const s = stockFor([...spares, open], "retatrutide", 1500, NOW);
+    expect(s.availableMcg).toBe(40_000);
+    expect(s.dosesExpired).toBe(3);
+  });
+});
+
 
 describe("drawFromVial", () => {
   it("subtracts the dose mass", () => {
@@ -342,6 +429,51 @@ describe("marksForDose", () => {
     });
     const later = { ...open, budAt: NOW + 20 * DAY };
     expect(marksForDose([later, soon], "bpc-157", 250, "U100", NOW)).toBeCloseTo(5, 9);
+  });
+
+  /*
+   * Reported as marks disappearing from the daily overview the day a vial went
+   * past its beyond-use date, while the Stock page went on showing them,
+   * because a row reads its own vial rather than asking the picker.
+   *
+   * Reading and drawing are different questions. The picker answers the
+   * drawing one and refuses a vial past its date, which is right. Marks decide
+   * nothing: they follow from the concentration, and a date does not change a
+   * concentration.
+   */
+  it("still reads a vial that is past its date", () => {
+    const expired = { ...open, budAt: NOW - DAY };
+    expect(marksForDose([expired], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  it("prefers one that is not, when there is one", () => {
+    const expired = {
+      ...open,
+      id: "expired",
+      diluentMl: 1,
+      budAt: NOW - DAY,
+    };
+    const fine = { ...open, budAt: NOW + 20 * DAY };
+    // 2 mL rather than 1, so the two give different readings for one dose.
+    expect(marksForDose([expired, fine], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  /* The freshest of the expired ones, which is the one in the fridge door. */
+  it("reads the one that passed most recently", () => {
+    const old = { ...open, id: "old", diluentMl: 1, budAt: NOW - 40 * DAY };
+    const recent = { ...open, id: "recent", diluentMl: 2, budAt: NOW - DAY };
+    expect(marksForDose([old, recent], "bpc-157", 250, "U100", NOW)).toBeCloseTo(10, 9);
+  });
+
+  it("still says nothing for an expired vial with nothing left in it", () => {
+    const drained = { ...open, budAt: NOW - DAY, drawnMcg: 5000 };
+    expect(marksForDose([drained], "bpc-157", 250, "U100", NOW)).toBeNull();
+  });
+
+  /* A date does not resurrect a vial that was finished or thrown away. */
+  it("still says nothing for a vial that is gone", () => {
+    const binned = { ...open, budAt: NOW - DAY, state: "discarded" as const };
+    expect(marksForDose([binned], "bpc-157", 250, "U100", NOW)).toBeNull();
   });
 });
 

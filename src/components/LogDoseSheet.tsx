@@ -15,11 +15,10 @@ import { allPeptides, findPeptide, useProfileData, useStore, vialStatus } from "
 import { AddCompoundInline } from "./AddCompoundInline";
 import {
   containerForDose,
-  matchesContainer,
+  drawableVials,
   pickVialForDose,
   stockFor,
   vialRemainingMcg,
-  vialUsable,
 } from "@/lib/calc/inventory";
 import { isPack, mcgForTablets, mcgPerTablet, tabletsForDose, tabletsRemaining } from "@/lib/calc/tablet";
 import {
@@ -72,12 +71,24 @@ export function LogDoseSheet({
   onClose,
   defaultPeptideId,
   editId,
+  anySite,
 }: {
   open: boolean;
   onClose: () => void;
   defaultPeptideId?: string;
   /** Editing an existing dose rather than recording a new one. */
   editId?: string;
+  /**
+   * Open with every site on offer rather than only the protocol's pinned ones.
+   *
+   * For the one way in that has already said so: the "All sites" row at the
+   * foot of the site panel on the overview. That row exists for the sites a
+   * protocol has not pinned, and it used to open this form restricted to the
+   * pinned ones, so the next thing anybody did was press "Inject somewhere
+   * else" to undo it. Every other way in keeps the pinned list, which is where
+   * rotation by plan belongs.
+   */
+  anySite?: boolean;
 }) {
   const { t } = useLang();
   const custom = useStore((s) => s.customPeptides);
@@ -268,13 +279,11 @@ export function LogDoseSheet({
 
   // Every vial that could supply this dose, open or still sealed. Restricting
   // this to reconstituted vials is what stopped stock from moving.
+  //
+  // The same list the picker chooses from, so the vial it pre-selects is always
+  // among the options. An open vial past its date is in it, marked as such.
   const usableVials = useMemo(
-    () =>
-      vials.filter(
-        (v) =>
-          v.peptideId === peptideId &&
-          matchesContainer(v, container) &&
-          vialUsable(v, Date.now())),
+    () => drawableVials(vials, peptideId, Date.now(), container),
     [vials, peptideId, container]);
 
   // Reset the form each time it opens, prefilled from the protocol.
@@ -312,8 +321,11 @@ export function LogDoseSheet({
     setProtocolId(proto?.id ?? NO_PROTOCOL);
     // Suggests the site used least recently, so rotation happens by default.
     applyProtocol(proto, id, Date.now());
+    // After it, because applyProtocol is also what every protocol change runs
+    // and it puts the pinned list back each time.
+    if (anySite) setSiteOverride(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultPeptideId, editId]);
+  }, [open, defaultPeptideId, editId, anySite]);
 
   // If a pinned set is in force and the current pick falls outside it, treat
   // that as an override rather than silently logging the wrong site.
@@ -812,10 +824,14 @@ export function LogDoseSheet({
                     : v.state === "reconstituted" && v.diluentMl
                       ? t("log_ml_left", { ml: trim(st.remainingMl, 2) })
                       : t("stock_sealed");
+                  // Offered, and said plainly. The choice is the owner's; the
+                  // date is the app's to state.
+                  const pastDate = st.expired ? ` · ${t("stock_past_date")}` : "";
                   return (
                     <option key={v.id} value={v.id}>
                       {v.strengthMg} mg · {left} ·{" "}
                       {t("log_mcg_remaining", { mcg: formatDose(st.remainingMcg) })}
+                      {pastDate}
                     </option>
                   );
                 })}

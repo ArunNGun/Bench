@@ -408,6 +408,14 @@ export const TRANSLATIONS = {
     stock_transfer_spray: "Transfer to a nasal spray",
     stock_add_diluent: "Add diluent",
     stock_mark_empty: "Mark empty",
+    stock_reconstitute_tip: "Record the water you add, so the app knows the concentration. The vial counts as open from then, with a beyond-use date 28 days out.",
+    stock_add_diluent_tip: "Add more water to a vial that is already open. The mass does not change, so the concentration drops and every dose takes more volume. The beyond-use date stays where it is.",
+    stock_to_spray_tip: "Empty this vial into a pump bottle, with more saline if you add it. What is left and what it cost move across with it.",
+    stock_mark_empty_tip: "Say this one is finished. It stops counting towards your stock and stays in your records, with the doses already drawn from it.",
+    stock_delete_tip: "Remove this vial from your records, with its price and whatever is left in it. Doses already logged keep their amount and their day. There is no undo.",
+    stock_it_arrived_tip: "Mark the whole delivery as here. Each vial becomes sealed stock, dated today rather than the day it was ordered.",
+    stock_open_pack_tip: "Say the box is open, so it moves up with the rest of what is in use. The first dose logged from it does the same on its own.",
+    stock_set_tablet_size_tip: "Record how many milligrams one tablet holds and how many are in the pack, so the tablets can be counted.",
     stock_shipping: "Shipping",
 
     // ── Labs page ─────────────────────────────────────────────────────────────
@@ -1826,6 +1834,14 @@ export const TRANSLATIONS = {
     stock_transfer_spray: "In Nasenspray \u00fcbertragen",
     stock_add_diluent: "Verd\u00fcnnungsmittel hinzuf\u00fcgen",
     stock_mark_empty: "Als leer markieren",
+    stock_reconstitute_tip: "Trag das Wasser ein, das du zugibst, damit die App die Konzentration kennt. Die Ampulle gilt ab dann als geöffnet, mit einem Verfallsdatum 28 Tage später.",
+    stock_add_diluent_tip: "Gib einer bereits geöffneten Ampulle mehr Wasser zu. Die Masse bleibt gleich, die Konzentration sinkt also und jede Dosis braucht mehr Volumen. Das Verfallsdatum bleibt, wo es ist.",
+    stock_to_spray_tip: "Diese Ampulle in eine Pumpflasche umfüllen, mit weiterer Kochsalzlösung, wenn du welche zugibst. Der Rest und die Kosten gehen mit über.",
+    stock_mark_empty_tip: "Diese hier ist aufgebraucht. Sie zählt nicht mehr zum Vorrat und bleibt mit den daraus entnommenen Dosen in deinen Aufzeichnungen.",
+    stock_delete_tip: "Entfernt diese Ampulle aus deinen Aufzeichnungen, mit ihrem Preis und allem, was noch drin ist. Bereits eingetragene Dosen behalten Menge und Tag. Das lässt sich nicht rückgängig machen.",
+    stock_it_arrived_tip: "Die ganze Lieferung als da markieren. Jede Ampulle wird versiegelter Vorrat, datiert auf heute statt auf den Bestelltag.",
+    stock_open_pack_tip: "Die Packung gilt als geöffnet und rückt zu dem, was in Gebrauch ist. Die erste daraus eingetragene Dosis tut dasselbe von allein.",
+    stock_set_tablet_size_tip: "Trag ein, wie viele Milligramm eine Tablette enthält und wie viele in der Packung sind, damit sich die Tabletten zählen lassen.",
     stock_shipping: "Versand",
 
     // ── Labs page ─────────────────────────────────────────────────────────────
@@ -3268,6 +3284,14 @@ export const TRANSLATIONS = {
     stock_transfer_spray: "Prelij v nosno pršilo",
     stock_add_diluent: "Dodaj topilo",
     stock_mark_empty: "Označi kot prazno",
+    stock_reconstitute_tip: "Vpiši vodo, ki jo dodaš, da aplikacija pozna koncentracijo. Vialka od takrat velja za odprto, z rokom uporabe čez 28 dni.",
+    stock_add_diluent_tip: "Dodaj več vode vialki, ki je že odprta. Masa se ne spremeni, zato koncentracija pade in vsaka doza vzame več volumna. Rok uporabe ostane, kjer je.",
+    stock_to_spray_tip: "Prelij to vialko v stekleničko s pumpico, z dodatno fiziološko raztopino, če jo dodaš. Preostanek in cena gresta zraven.",
+    stock_mark_empty_tip: "Ta je porabljena. Neha šteti v zalogo in ostane v zapisih, skupaj z dozami, ki so bile vzete iz nje.",
+    stock_delete_tip: "Odstrani to vialko iz zapisov, skupaj s ceno in vsem, kar je še v njej. Že zabeležene doze obdržijo količino in dan. Razveljaviti se ne da.",
+    stock_it_arrived_tip: "Označi celo dostavo kot prispelo. Vsaka vialka postane zaprta zaloga, datirana na danes in ne na dan naročila.",
+    stock_open_pack_tip: "Škatlica velja za odprto in se premakne med tisto, kar je v uporabi. Prva doza, zabeležena iz nje, naredi isto sama od sebe.",
+    stock_set_tablet_size_tip: "Vpiši, koliko miligramov ima ena tableta in koliko jih je v škatlici, da se tablete lahko štejejo.",
     stock_shipping: "Poštnina",
 
     // ── Labs page ─────────────────────────────────────────────────────────────
@@ -4772,6 +4796,14 @@ export const TRANSLATIONS = {
     stock_transfer_spray: "Przelej do sprayu do nosa",
     stock_add_diluent: "Dodaj rozpuszczalnik",
     stock_mark_empty: "Oznacz jako pustą",
+    stock_reconstitute_tip: "Zapisz wodę, którą dodajesz, żeby aplikacja znała stężenie. Fiolka liczy się od tej chwili jako otwarta, z datą przydatności za 28 dni.",
+    stock_add_diluent_tip: "Dodaj więcej wody do fiolki, która jest już otwarta. Masa się nie zmienia, więc stężenie spada i każda dawka zajmuje więcej objętości. Data przydatności zostaje tam, gdzie jest.",
+    stock_to_spray_tip: "Przelej tę fiolkę do butelki z pompką, z dodatkową solą fizjologiczną, jeśli ją dolewasz. Reszta i koszt przechodzą razem z nią.",
+    stock_mark_empty_tip: "Ta jest skończona. Przestaje liczyć się do zapasu i zostaje w zapisach, razem z dawkami z niej pobranymi.",
+    stock_delete_tip: "Usuwa tę fiolkę z zapisów, razem z ceną i wszystkim, co w niej zostało. Już zapisane dawki zachowują ilość i dzień. Nie da się tego cofnąć.",
+    stock_it_arrived_tip: "Oznacz całą dostawę jako obecną. Każda fiolka staje się zaplombowanym zapasem, z datą dzisiejszą zamiast dnia zamówienia.",
+    stock_open_pack_tip: "Opakowanie liczy się jako otwarte i przenosi się do tego, co jest w użyciu. Pierwsza zapisana z niego dawka robi to samo sama z siebie.",
+    stock_set_tablet_size_tip: "Zapisz, ile miligramów ma jedna tabletka i ile ich jest w opakowaniu, żeby można je było liczyć.",
     stock_shipping: "Wysyłka",
 
     // ── Labs page ─────────────────────────────────────────────────────────────

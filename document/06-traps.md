@@ -779,3 +779,48 @@ reloads constantly and a reload is a trigger.
 
 Worth checking against any future trigger list: at least one entry has to come
 from outside this device, whether that is a poll, a push channel, or a button.
+
+## One predicate answering two questions
+
+Marks vanished from the daily overview the day a vial went past its beyond-use
+date, while the Stock page went on showing them. Reported as patronising, and it
+was, but nobody decided it.
+
+`vialUsable` means two things at once: there is nothing here to take (finished,
+discarded, on order, empty), and this is past its date. The first is a fact
+about whether a vial can supply anything. The second is a warning. Every reader
+of that predicate inherits both meanings whether it wants them or not, and
+`marksForDose` wanted only the first: marks are what the syringe would read,
+which follows from the concentration, and a date does not change a
+concentration.
+
+Stock was right by accident. A row calls `marksFromVial` on its own vial and
+never asks the picker, so it never inherited the second meaning. Two screens
+answering the same question through different paths is how the disagreement
+became visible at all.
+
+**The first fix was wrong, and the way it was wrong is the lesson.** It gave the
+marks a fallback of their own: when no vial is drawable, read the freshest open
+one past its date. It passed every test and did nothing on the screen it was
+written for, because the person reporting it had four sealed vials in the
+fridge. Sealed vials are drawable, so the picker returned one, the fallback never
+ran, and a sealed vial has no concentration to read. Worse, the same picker had
+been drawing that morning's one-tap dose out of a sealed vial nobody had made up.
+An existing test required exactly that: "skips an expired open vial and reaches
+for the sealed one".
+
+The second fix is one rule in one place. `drawableVials` is the list every
+screen offers and the picker chooses from, and it includes an open vial past its
+date; the picker reaches for that vial before breaking into a sealed one; the
+marks read whatever the picker returns and have no rule of their own. A sealed
+vial past the manufacturer's date stays out. The stock figures still count only
+what is within date, with the rest reported as expired.
+
+The general shape, twice over: a fallback is a second rule, and it runs only in
+the case its author imagined. When the first answer is wrong, change the first
+answer.
+
+The general shape: **a predicate that combines a capability with a warning will
+be read by somebody who wanted only one of them.** When a name like `usable`
+covers both "can" and "should", the call sites that mean "can" are already
+wrong and nothing will say so.
