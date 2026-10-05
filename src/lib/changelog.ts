@@ -24,6 +24,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.4",
+    date: "2026-10-05",
+    summary: "Draw from a vial past its date, all sites open immediately, and stock rows tell you what each action does.",
+    changes: [
+      "A vial that has passed its expiry date no longer hides its marks. You can keep drawing from it and the dose amount stays visible.",
+      "Opening a vial past its date no longer blocks you — the app keeps the vial open and continues tracking from it.",
+      "Choosing \"All Sites\" on the overview now opens the logging form with every injection site already available. No extra tap required.",
+      "Each action button on a stock row now has a short label so you know what it will do before you tap it.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.3.1",
     date: "2026-09-26",
     summary: "Weekday in the Log, and supplier shown on the stock row.",
