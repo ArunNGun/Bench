@@ -225,8 +225,9 @@ export default function NowPage() {
   const tracks = useMemo(() => {
     return active.map((protocol) => {
       const peptide = findPeptide(custom, protocol.peptideId);
-      const protocolLogs = logs.filter(
-        (l) => !l.skipped && (l.protocolId === protocol.id || l.peptideId === protocol.peptideId));
+      const answered = logs.filter(
+        (l) => l.protocolId === protocol.id || l.peptideId === protocol.peptideId);
+      const protocolLogs = answered.filter((l) => !l.skipped);
       const doses: DoseEvent[] = protocolLogs.map((l) => ({
         at: l.at,
         amountMcg: l.doseMcg,
@@ -238,7 +239,15 @@ export default function NowPage() {
       const lastLoggedAt = lastLog?.at ?? null;
 
       const targetMcg = scheduledDoseMcg(protocol, now);
-      const due = dueStatus(protocol, now, { lastLoggedAt });
+      /*
+       * Due is asked of every log, skipped ones included, while everything
+       * else on the card reads only the doses that went in. Reading both from
+       * `lastLog` kept a skipped Mounjaro dose on the card as Overdue for the
+       * rest of its week: the skip was in the log and the card never saw it.
+       */
+      const lastAnsweredAt = answered.reduce<number | null>(
+        (latest, l) => (latest == null || l.at > latest ? l.at : latest), null);
+      const due = dueStatus(protocol, now, { lastLoggedAt: lastAnsweredAt });
       /*
        * From the container this compound is actually taken out of. Left to its
        * default this counted vials only, so a protocol on tablets read
@@ -1145,17 +1154,19 @@ function TodayCard({
           size={84}
           stroke={9}
           tone={tone}
-          label={t("now_done_today", { taken: today.taken, expected: today.expected })}
+          label={t("now_done_today", { taken: today.taken, expected: today.owed })}
         >
           {today.restDay ? (
             <span className="text-[11px] font-bold text-[var(--faint)]">{t("now_rest")}</span>
+          ) : today.owed === 0 ? (
+            <span className="text-[11px] font-bold text-[var(--faint)]">{t("log_skipped")}</span>
           ) : (
             <>
               <span className="tnum text-[22px] font-extrabold leading-none text-[var(--ink)]">
                 {today.taken}
               </span>
               <span className="tnum text-[11px] font-semibold text-[var(--faint)]">
-                {t("plan_of")} {today.expected}
+                {t("plan_of")} {today.owed}
               </span>
             </>
           )}
@@ -1170,7 +1181,7 @@ function TodayCard({
               ? t("now_nothing_scheduled")
               : today.complete
                 ? t("now_all_logged")
-                : t("now_left_to_log", { n: today.expected - today.taken })}
+                : t("now_left_to_log", { n: today.owed - today.taken })}
           </p>
 
           {streak > 0 && (
@@ -1198,32 +1209,37 @@ function TodayCard({
       <div className="mt-5 flex items-end justify-between gap-1.5">
         {week.map((d) => {
           const isToday = d.day === startOfLocalDay(now);
-          const filled = d.restDay ? 0 : Math.round(d.fraction * 100);
+          // Nothing owed is drawn as a rest day whether it got there by having
+          // nothing scheduled or by every dose being skipped.
+          const idle = d.owed === 0;
+          const filled = idle ? 0 : Math.round(d.fraction * 100);
 
           return (
             <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
               <span
                 className="relative h-9 w-full overflow-hidden rounded-[8px]"
                 style={{
-                  background: d.restDay
+                  background: idle
                     ? "var(--line)"
                     : isToday || d.complete
                       ? "var(--line)"
                       : d.taken > 0
                         ? "var(--tangerine)"
                         : "var(--line)",
-                  opacity: d.restDay ? 0.5 : 1,
+                  opacity: idle ? 0.5 : 1,
                   boxShadow: isToday ? "inset 0 0 0 1.5px var(--faint)" : undefined,
                 }}
                 title={
                   d.restDay
                     ? t("now_nothing_scheduled_day")
-                    : isToday
-                      ? t("now_day_partial", { taken: d.taken, expected: d.expected })
-                      : t("now_day_logged", { taken: d.taken, expected: d.expected })
+                    : idle
+                      ? t("now_day_skipped")
+                      : isToday
+                        ? t("now_day_partial", { taken: d.taken, expected: d.owed })
+                        : t("now_day_logged", { taken: d.taken, expected: d.owed })
                 }
               >
-                {(isToday || d.complete) && !d.restDay && filled > 0 && (
+                {(isToday || d.complete) && filled > 0 && (
                   <span
                     className="absolute inset-x-0 bottom-0 block"
                     style={{ height: `${filled}%`, background: "var(--leaf)" }}

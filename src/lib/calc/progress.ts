@@ -19,7 +19,12 @@ export interface DayProgress {
   taken: number;
   /** Doses explicitly marked skipped. */
   skipped: number;
-  /** taken / expected, or 1 when nothing was scheduled. */
+  /**
+   * What the day still asks to be taken: scheduled, less what was skipped.
+   * Zero on a rest day and on a day where every dose was skipped.
+   */
+  owed: number;
+  /** taken / owed, or 1 when nothing is owed. */
   fraction: number;
   /** Nothing was scheduled, so the day is neither a win nor a miss. */
   restDay: boolean;
@@ -85,15 +90,25 @@ export function dayProgress(
   const skipped = credited.reduce((sum, c) => sum + c.skipped, 0);
 
   const restDay = expected === 0;
+  /*
+   * A skip leaves the day rather than staying in it as a dose not yet taken.
+   * Counting it as owed said "1 left to log" over a dose already answered,
+   * turned the day orange, and ended a streak of twenty four days because
+   * somebody decided against one injection. Counting it as taken would be the
+   * opposite lie. Taking it out of what is owed is the position the rest day
+   * already holds: neither a win nor a miss.
+   */
+  const owed = expected - skipped;
 
   return {
     day,
     expected,
     taken,
     skipped,
-    fraction: restDay ? 1 : Math.min(1, taken / expected),
+    owed,
+    fraction: owed === 0 ? 1 : Math.min(1, taken / owed),
     restDay,
-    complete: restDay || taken >= expected,
+    complete: taken >= owed,
   };
 }
 
@@ -106,10 +121,12 @@ export function todayProgress(
 }
 
 /**
- * Consecutive days where every scheduled dose was taken.
+ * Consecutive days where every scheduled dose was taken or skipped.
  *
- * Days with nothing scheduled pass through without counting or breaking, so a
- * weeks-on/weeks-off protocol does not reset the streak during its off weeks.
+ * Days with nothing owed pass through without counting or breaking, so a
+ * weeks-on/weeks-off protocol does not reset the streak during its off weeks,
+ * and neither does a day whose only dose was skipped. A day earns its place in
+ * the streak by something having been taken on it.
  * Today counts only once it is complete, an unfinished today is not a miss.
  */
 export function currentStreak(
@@ -130,7 +147,7 @@ export function currentStreak(
     }
 
     if (!d.complete) break;
-    if (!d.restDay) streak++;
+    if (d.owed > 0) streak++;
 
     cursor = addLocalDays(cursor, -1);
   }

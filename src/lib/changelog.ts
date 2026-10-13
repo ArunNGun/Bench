@@ -24,6 +24,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.4.1",
+    date: "2026-10-13",
+    summary: "A skipped dose now answers its slot — no more orange days or broken streaks after a skip.",
+    changes: [
+      "Skipping a dose now marks the slot as answered. Today no longer shows a skipped dose as Overdue, and the next day no longer says it was due yesterday.",
+      "The ring, week strip, and streak all recognise a skip as covering the slot. A day where everything was skipped is drawn idle — it neither extends the streak nor breaks it, and the ring says \"skipped\" rather than \"0 of 0\".",
+      "The site picker hides when the skip box is ticked, so the Log no longer records a site on a skipped dose.",
+      "Reminders and the rest-of-today count now treat a skip the same way as the Today card does.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.4",
     date: "2026-10-05",
     summary: "Draw from a vial past its date, all sites open immediately, and stock rows tell you what each action does.",

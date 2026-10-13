@@ -82,6 +82,43 @@ describe("dayProgress", () => {
     const d = dayProgress([protocol()], [dose(0, { skipped: true })], NOW);
     expect(d.taken).toBe(0);
     expect(d.skipped).toBe(1);
+  });
+
+  it("takes a skipped dose out of what the day owes", () => {
+    // Reported from use: Mounjaro skipped, and the ring still said one left to
+    // log, the day went orange and a streak of twenty four days ended.
+    const d = dayProgress([protocol()], [dose(0, { skipped: true })], NOW);
+    expect(d.expected).toBe(1);
+    expect(d.owed).toBe(0);
+    expect(d.fraction).toBe(1);
+    expect(d.complete).toBe(true);
+    expect(d.restDay).toBe(false);
+  });
+
+  it("finishes a day once what was not skipped was taken", () => {
+    const two = [
+      protocol({ id: "bpc", peptideId: "bpc-157" }),
+      protocol({ id: "mounjaro", peptideId: "tirzepatide" }),
+    ];
+    const logs = [
+      dose(0, { protocolId: "bpc", peptideId: "bpc-157" }),
+      dose(0, { protocolId: "mounjaro", peptideId: "tirzepatide", skipped: true }),
+    ];
+    const d = dayProgress(two, logs, NOW);
+    expect(d.owed).toBe(1);
+    expect(d.taken).toBe(1);
+    expect(d.complete).toBe(true);
+  });
+
+  it("still waits for the dose that was not skipped", () => {
+    const two = [
+      protocol({ id: "bpc", peptideId: "bpc-157" }),
+      protocol({ id: "mounjaro", peptideId: "tirzepatide" }),
+    ];
+    const logs = [dose(0, { protocolId: "mounjaro", peptideId: "tirzepatide", skipped: true })];
+    const d = dayProgress(two, logs, NOW);
+    expect(d.owed).toBe(1);
+    expect(d.taken).toBe(0);
     expect(d.complete).toBe(false);
   });
 
@@ -164,9 +201,9 @@ describe("currentStreak", () => {
     expect(currentStreak([protocol()], logs, NOW)).toBe(2);
   });
 
-  it("treats a skipped dose as breaking the streak", () => {
+  it("passes through a day whose only dose was skipped, without counting or breaking", () => {
     const logs = [dose(0), dose(1, { skipped: true }), dose(2)];
-    expect(currentStreak([protocol()], logs, NOW)).toBe(1);
+    expect(currentStreak([protocol()], logs, NOW)).toBe(2);
   });
 
   it("passes through rest days without counting or breaking", () => {
