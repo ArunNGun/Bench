@@ -495,3 +495,37 @@ once.
 The migration changed with it. It used to drop an order whose postage was
 unusable, which was right when postage was the point; it now drops the figure
 and keeps the order, because the order still says which vials arrived together.
+
+## A skip answers the dose
+
+A skipped dose was a record for the log and silence for everything that asks
+what is owed. The Today card took its last dose from taken logs only, so a
+weekly Mounjaro injection recorded as skipped on Monday stayed on the card as
+Overdue, and on Tuesday it still said "was due yesterday", because the slot
+behind it was still the Monday one. Reminders and the rest of today went
+through `unloggedDoseTimes`, which ignored skips on purpose, to agree with the
+card. They agreed, and both were wrong.
+
+So there are now two questions where there was one. Whether a dose was
+*answered* reads every log, skips included, and drives due status, the rest of
+today and reminders. Whether a dose *went in* reads taken logs only, and drives
+everything modelled from the drug: the curve, the phase, the time since, the
+site, stock.
+
+The day's figures had the same fault in a different place. A skip was neither
+taken nor gone, so the ring said one left to log over a dose already answered,
+the day went orange, and a streak of twenty four days ended over one decision
+not to inject. Counting the skip as taken was considered and rejected: the
+ring and the streak report on the plan being followed, and reporting a dose
+that was declined as one that was taken would make both figures flattering
+rather than true.
+
+What was chosen is the position the rest day already held. A skip comes off
+what the day owes (`DayProgress.owed`). A day where something was taken and the
+rest was skipped is finished and counts. A day where everything was skipped is
+drawn as idle, neither extends a streak nor breaks it, and the ring says
+skipped rather than "0 of 0". Adherence is untouched: it already reported
+skipped apart from taken and missed, which was the original point of the box.
+
+A skip also stops carrying an injection site. The form kept offering one, the
+Log showed one, and a site is a fact about an injection.

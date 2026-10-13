@@ -439,8 +439,9 @@ export function LogDoseSheet({
         doseMcg,
         route,
         // A dose that went nowhere near tissue carries no site, whatever the
-        // form had suggested before the route was settled.
-        site: (hasSite && site) || undefined,
+        // form had suggested before the route was settled. A skipped one went
+        // nowhere at all, and its site was landing in the Log as if it had.
+        site: (hasSite && !skipped && site) || undefined,
         vialId: vialId || undefined,
         volumeMl: draw?.volumeRoundedMl,
         units: draw?.unitsRounded,
@@ -465,7 +466,7 @@ export function LogDoseSheet({
       at,
       doseMcg,
       route,
-      site: (hasSite && site) || undefined,
+      site: (hasSite && !skipped && site) || undefined,
       vialId: vialId || undefined,
       volumeMl: draw?.volumeRoundedMl,
       units: draw?.unitsRounded,
@@ -731,7 +732,7 @@ export function LogDoseSheet({
               </Select>
             </Field>
 
-            {hasSite && (
+            {hasSite && !skipped && (
             <Field
               label={t("log_site_short")}
               hint={
@@ -759,7 +760,7 @@ export function LogDoseSheet({
             other routes does that, and asking which nostril, or which side a
             tablet went down, would invite a record nobody can act on.
           */}
-          {hasSite && (
+          {hasSite && !skipped && (
           <div>
             <SiteMap
               logs={peptideLogs}

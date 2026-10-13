@@ -266,9 +266,11 @@ export default function LogPage() {
                     Only for a dose that went into tissue. Records written
                     before the form was corrected carry a site whatever the
                     route was, and a box of tablets reading "left abdomen" is
-                    the complaint this answers.
+                    the complaint this answers. Skips recorded before the form
+                    stopped saving a site carry one too, and a skipped dose went
+                    nowhere at all.
                   */
-                  const site = l.site && routeHasSite(l.route) ? siteLabel(l.site) : undefined;
+                  const site = l.site && !l.skipped && routeHasSite(l.route) ? siteLabel(l.site) : undefined;
                   return (
                     <Card
                       key={l.id}
