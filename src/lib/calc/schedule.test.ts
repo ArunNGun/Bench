@@ -755,10 +755,25 @@ describe("unloggedDoseTimes", () => {
     expect(rest(day(8))).toEqual([day(19)]);
   });
 
-  it("keeps asking for a dose that was marked skipped", () => {
-    // Consistent with dueStatus, which counts only doses actually taken.
+  it("stops asking for a dose that was marked skipped", () => {
+    // Reported from use: a weekly Mounjaro dose recorded as skipped stayed on
+    // Today as Overdue into the next day. A skip answers the dose.
     logs = [{ at: day(19), skipped: true }];
-    expect(rest(day(12))).toEqual([day(19)]);
+    expect(rest(day(12))).toEqual([]);
+  });
+
+  it("does not call a weekly dose overdue the day after it was skipped", () => {
+    // The Today card asks dueStatus, and is now handed the skip as the last
+    // log. Skipped four hours late, looked at the next morning.
+    const weekly: Protocol = {
+      ...twice,
+      schedule: { kind: "interval-days", intervalDays: 7, timeOfDay: "07:00" },
+    };
+    const skippedAt = local(2026, 9, 7, 10, 58);
+    expect(dueStatus(weekly, local(2026, 9, 8, 9, 0), { lastLoggedAt: skippedAt }).state)
+      .toBe("scheduled");
+    expect(dueStatus(weekly, local(2026, 9, 8, 9, 0), { lastLoggedAt: null }).state)
+      .toBe("overdue");
   });
 
   it("is empty once the day is out", () => {

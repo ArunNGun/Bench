@@ -117,6 +117,16 @@ describe("a dose already taken", () => {
     expect(out.some((r) => r.doseAt === first)).toBe(false);
   });
 
+  it("stops asking for a dose recorded as skipped ahead of its hour", () => {
+    // Decided the night before not to take it. An alarm at seven for a dose
+    // already answered is the same complaint the Today card had.
+    const first = new Date(2026, 0, 5, 7, 0, 0).getTime();
+    const out = run({
+      logs: [{ at: first - 30 * 60_000, peptideId: "bpc-157", protocolId: "p1", skipped: true }],
+    });
+    expect(out.some((r) => r.doseAt === first)).toBe(false);
+  });
+
   it("keeps asking for a dose belonging to a different compound", () => {
     const first = new Date(2026, 0, 5, 7, 0, 0).getTime();
     const out = run({ logs: [{ at: first, peptideId: "tb-500", protocolId: "p2" }] });

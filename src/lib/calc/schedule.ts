@@ -678,6 +678,11 @@ export function adherence(
  * little ahead of its hour stops asking rather than sitting there until it is
  * late.
  *
+ * A skipped log covers it too. Skipping is an answer to the question this
+ * function asks, and it used to be read as silence: a weekly Mounjaro dose
+ * recorded as skipped on Monday went on asking to be taken, and went on asking
+ * on Tuesday, because the slot behind it was still the Monday one.
+ *
  * `logs` must already be narrowed to this protocol, via `logsForProtocol`.
  */
 export function unloggedDoseTimes(
@@ -695,7 +700,7 @@ export function unloggedDoseTimes(
 
     const before = protocolPreviousDoseTime(protocol, at - 1);
     const early = earlyWindowMs(before != null ? at - before : null, tolerance);
-    return !logs.some((l) => !l.skipped && l.at >= at - early && l.at <= at);
+    return !logs.some((l) => l.at >= at - early && l.at <= at);
   });
 }
 
@@ -747,6 +752,9 @@ export interface DueOptions {
    * When the most recent dose was logged. Required to tell "overdue" from
    * "already taken, waiting for the next one", without it every protocol
    * would read as overdue for most of the gap between doses.
+   *
+   * Skipped logs belong in here as well. The question is whether the dose was
+   * answered, not whether it went in, and a skip is an answer.
    */
   lastLoggedAt?: number | null;
   /** Hours either side of the scheduled time that still count as on time. */
