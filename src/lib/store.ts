@@ -864,7 +864,40 @@ export const useStore = create<StoreState>()(
         // field this build has never heard of still reaches the file.
         return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
-      resetAll: () => set({ ...EMPTY_DATA }),
+      /*
+       * Erase everything, and mean it.
+       *
+       * Reported as "they always come back": backup, erase, confirm, and the
+       * next backup held everything again. Two things undid the erase.
+       *
+       * Sync, first and within seconds. Writing EMPTY_DATA wholesale reset the
+       * settings too, `sync` with them, so the device forgot which server
+       * version it had last agreed with. An empty device that has never agreed
+       * with a server is a fresh install, and `decideSync` pulls the server's
+       * copy into it, which is exactly right for a fresh install and exactly
+       * wrong here. Keeping `sync` leaves the device in step with the server and
+       * holding a change, so the empty document is sent up and every device on
+       * the account follows. That is what "erase everything" means once there
+       * is an account; erasing only this browser is what signing out does.
+       *
+       * The rescue copy, second. The guard in `setItem` saw every record go and
+       * set them aside, and the notice then offered them back. That guard is for
+       * losses nobody meant, and this is the one deletion the app knows was
+       * meant, behind its own confirmation, so it goes the way `wipeLocal` does:
+       * no baseline to compare against, and no leftover copy from an earlier
+       * attempt. `lastWritten` is cleared before `set`, because the persist
+       * write that compares against it starts inside `set`.
+       */
+      resetAll: () => {
+        lastWritten = null;
+        void clearRescue();
+        set((s) => ({
+          ...EMPTY_DATA,
+          settings: s.settings.sync
+            ? { ...EMPTY_DATA.settings, sync: s.settings.sync }
+            : EMPTY_DATA.settings,
+        }));
+      },
 
       putRecordsBack: (rescue) => {
         set((s) => restoreLost(documentFrom(s), rescue));
