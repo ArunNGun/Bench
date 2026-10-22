@@ -55,6 +55,7 @@ import { TONE_SOLID } from "@/components/ui";
 import type { AppData } from "@/lib/types";
 import { UpdateButton } from "@/components/UpdateButton";
 import { useLang } from "@/lib/i18n";
+import { useSyncState } from "@/lib/sync/state";
 
 export default function SettingsPage() {
   const hydrated = useStore((s) => s.hydrated);
@@ -64,6 +65,8 @@ export default function SettingsPage() {
   const updateSettings = useStore((s) => s.updateSettings);
   const exportData = useStore((s) => s.exportData);
   const resetAll = useStore((s) => s.resetAll);
+  // Erasing a synced device empties the account, and the warning has to say so.
+  const syncing = useSyncState((s) => s.engine != null);
   const custom = useStore((s) => s.customPeptides);
 
   const [message, setMessage] = useState<{ tone: "info" | "danger"; text: string } | null>(null);
@@ -252,7 +255,7 @@ export default function SettingsPage() {
       <Card className="space-y-3 border-[var(--rose)]/35 p-4">
         <SectionLabel>{t("settings_erase")}</SectionLabel>
         <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
-          {t("settings_erase_desc")}
+          {syncing ? t("settings_erase_desc_synced") : t("settings_erase_desc")}
         </p>
         {confirmingReset ? (
           <div className="flex flex-wrap gap-2.5">
