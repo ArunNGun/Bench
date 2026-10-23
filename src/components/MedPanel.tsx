@@ -3,11 +3,8 @@
 /**
  * The Now page section for medicines and supplements.
  *
- * Two states:
- *   - Empty: user has no active meds → "Set up meds" CTA
- *   - Active: each med with today's intake status, one-tap log, and a mini
- *     pharmacokinetic sparkline (absorption peak + decay) for library-linked
- *     meds that have a known half-life.
+ * Active state: a single shared PK chart (all meds, each a different colour)
+ * followed by the med list with colour-coded status dots and one-tap log buttons.
  */
 
 import { useMemo } from "react";
@@ -19,116 +16,221 @@ import { MED_LIBRARY_BY_ID } from "@/lib/data/meds";
 import type { Med, MedLog } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
-// PK math (one-compartment oral, normalised to peak = 1)
+// Colour palette — distinct, works on light + dark
 // ---------------------------------------------------------------------------
 
-function pkCurve(
+const COLORS = [
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ef4444", // red
+  "#8b5cf6", // violet
+  "#06b6d4", // cyan
+  "#f97316", // orange
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#14b8a6", // teal
+];
+
+// ---------------------------------------------------------------------------
+// PK math — one-compartment oral, normalised to peak = 1 PER COMPOUND
+// (compounds have very different half-lives; we normalise each independently
+//  so a 3-week dutasteride curve and a 45-min melatonin curve both show shape)
+// ---------------------------------------------------------------------------
+
+function pkPoints(
   tmaxH: number,
   halfLifeH: number,
-  points: number,
   windowH: number,
+  pts: number,
 ): number[] {
   const ke = Math.LN2 / halfLifeH;
-  // ka solved so the curve peaks at tmax
-  const ka = tmaxH > 0 ? ke * Math.exp(1 / (tmaxH * (1 / tmaxH - ke) || 0.001)) : ke * 100;
-  const safeKa = isFinite(ka) && ka > ke ? ka : ke * 10;
+  const ka = (() => {
+    // ka must be > ke; bisect log-space to find ka such that tmax is satisfied
+    if (tmaxH <= 0) return ke * 100;
+    const tmaxFor = (k: number) => Math.log(k / ke) / (k - ke);
+    const limit = 1 / ke;
+    if (tmaxH >= limit * 0.999) return ke * 1.0001;
+    let lo = ke * 1.0001, hi = ke * 1e6;
+    for (let i = 0; i < 120; i++) {
+      const mid = Math.sqrt(lo * hi);
+      tmaxFor(mid) > tmaxH ? (lo = mid) : (hi = mid);
+    }
+    return Math.sqrt(lo * hi);
+  })();
 
-  const vals: number[] = [];
-  for (let i = 0; i < points; i++) {
-    const t = (i / (points - 1)) * windowH;
-    const v = Math.exp(-ke * t) - Math.exp(-safeKa * t);
-    vals.push(Math.max(0, v));
+  const raw: number[] = [];
+  for (let i = 0; i < pts; i++) {
+    const t = (i / (pts - 1)) * windowH;
+    raw.push(Math.max(0, Math.exp(-ke * t) - Math.exp(-ka * t)));
   }
-  const peak = Math.max(...vals, 1e-9);
-  return vals.map((v) => v / peak);
+  const peak = Math.max(...raw, 1e-9);
+  return raw.map((v) => v / peak);
 }
 
 // ---------------------------------------------------------------------------
-// Mini sparkline SVG
+// Combined chart
 // ---------------------------------------------------------------------------
 
-function MedSparkline({
-  tmaxH,
-  halfLifeH,
-  elapsedH,
-  windowH = 48,
-}: {
+interface ChartSeries {
+  medId: string;
+  name: string;
+  color: string;
   tmaxH: number;
   halfLifeH: number;
-  elapsedH: number | null; // null = not taken today
-  windowH?: number;
+  loggedAt: number | null; // null = not taken today
+}
+
+function MedCombinedChart({
+  series,
+  nowMs,
+}: {
+  series: ChartSeries[];
+  nowMs: number;
 }) {
-  const PTS = 80;
-  const W = 200;
-  const H = 44;
+  const PTS = 120;
+  const W = 400;
+  const H = 80;
+  const PAD_B = 14; // room for x-axis labels
 
-  const curve = useMemo(
-    () => pkCurve(tmaxH, halfLifeH, PTS, windowH),
-    [tmaxH, halfLifeH, windowH],
-  );
+  // Window = max(48 h, largest 3×halfLife among taken meds, else 24 h default)
+  const windowH = useMemo(() => {
+    const taken = series.filter((s) => s.loggedAt != null);
+    if (!taken.length) return Math.max(48, ...series.map((s) => s.halfLifeH * 3));
+    return Math.max(48, ...taken.map((s) => s.halfLifeH * 3));
+  }, [series]);
 
-  // SVG polyline points
-  const points = curve
-    .map((v, i) => `${(i / (PTS - 1)) * W},${H - v * (H - 2) - 1}`)
-    .join(" ");
+  const nowX = useMemo(() => {
+    // now is at "hours since the earliest dose today" on the x-axis
+    const earliest = series
+      .map((s) => s.loggedAt)
+      .filter((t): t is number => t != null)
+      .reduce((a, b) => Math.min(a, b), nowMs);
+    const elapsedH = (nowMs - earliest) / 3_600_000;
+    return Math.min((elapsedH / windowH) * W, W);
+  }, [series, nowMs, windowH]);
 
-  // "now" x position
-  const nowX = elapsedH != null ? Math.min((elapsedH / windowH) * W, W) : null;
+  // Render each series
+  const rendered = useMemo(() =>
+    series.map((s) => {
+      const curve = pkPoints(s.tmaxH, s.halfLifeH, windowH, PTS);
+      // Offset the curve so t=0 is when the dose was taken
+      const doseOffsetH = s.loggedAt != null ? (nowMs - s.loggedAt) / 3_600_000 : 0;
+      const doseOffsetPts = (doseOffsetH / windowH) * PTS;
 
-  // current fraction on board
-  const currentIdx =
-    nowX != null ? Math.round((nowX / W) * (PTS - 1)) : null;
-  const currentFrac = currentIdx != null ? (curve[currentIdx] ?? 0) : 0;
-  const nowY = currentFrac != null ? H - currentFrac * (H - 2) - 1 : null;
+      // Build points: shift curve right by dose offset
+      const pts: string[] = [];
+      for (let i = 0; i < PTS; i++) {
+        const srcIdx = Math.round(i - doseOffsetPts);
+        const v = srcIdx >= 0 && srcIdx < PTS ? curve[srcIdx]! : 0;
+        const x = (i / (PTS - 1)) * W;
+        const y = H - v * (H - 2) - 1;
+        pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+
+      // Current level dot
+      const nowIdx = Math.round(doseOffsetPts);
+      const nowFrac = nowIdx >= 0 && nowIdx < PTS ? (curve[nowIdx] ?? 0) : 0;
+      const dotY = H - nowFrac * (H - 2) - 1;
+
+      return { ...s, pts: pts.join(" "), dotY, taken: s.loggedAt != null };
+    }),
+  [series, nowMs, windowH]);
+
+  // X-axis tick labels
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
+    x: f * W,
+    label: fmt(f * windowH),
+  }));
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full"
-      style={{ height: 44 }}
-      preserveAspectRatio="none"
-    >
-      {/* Area fill */}
-      <defs>
-        <linearGradient id="mgfill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--mint)" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="var(--mint)" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <polygon
-        points={`0,${H} ${points} ${W},${H}`}
-        fill="url(#mgfill)"
-      />
-      {/* Curve line */}
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--mint)"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        opacity={elapsedH != null ? 1 : 0.35}
-      />
-      {/* Now line */}
-      {nowX != null && nowY != null && (
-        <>
+    <div className="rounded-[var(--r-inner)] bg-[var(--sunken)] px-3 pb-1 pt-3">
+      <svg
+        viewBox={`0 0 ${W} ${H + PAD_B}`}
+        className="w-full"
+        style={{ height: 90 }}
+        preserveAspectRatio="none"
+      >
+        <defs>
+          {rendered.map((s) => (
+            <linearGradient key={s.medId} id={`mfill-${s.medId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity={s.taken ? 0.18 : 0.06} />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75].map((f) => (
           <line
-            x1={nowX} y1={0} x2={nowX} y2={H}
-            stroke="var(--mint-ink)"
-            strokeWidth="1"
-            strokeDasharray="2 2"
-            opacity={0.5}
+            key={f}
+            x1={0} y1={H * (1 - f)} x2={W} y2={H * (1 - f)}
+            stroke="var(--line)"
+            strokeWidth="0.5"
+            opacity="0.5"
           />
+        ))}
+
+        {/* Area fills */}
+        {rendered.map((s) => (
+          <polygon
+            key={`fill-${s.medId}`}
+            points={`0,${H} ${s.pts} ${W},${H}`}
+            fill={`url(#mfill-${s.medId})`}
+          />
+        ))}
+
+        {/* Curves */}
+        {rendered.map((s) => (
+          <polyline
+            key={`line-${s.medId}`}
+            points={s.pts}
+            fill="none"
+            stroke={s.color}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={s.taken ? 1 : 0.25}
+          />
+        ))}
+
+        {/* Now line */}
+        <line
+          x1={nowX} y1={0} x2={nowX} y2={H}
+          stroke="var(--ink)"
+          strokeWidth="1"
+          strokeDasharray="3 2"
+          opacity="0.3"
+        />
+
+        {/* Dots at current level for taken meds */}
+        {rendered.filter((s) => s.taken).map((s) => (
           <circle
+            key={`dot-${s.medId}`}
             cx={nowX}
-            cy={nowY}
-            r="3"
-            fill="var(--mint-ink)"
-            opacity={0.85}
+            cy={s.dotY}
+            r="3.5"
+            fill={s.color}
+            stroke="var(--card)"
+            strokeWidth="1.5"
           />
-        </>
-      )}
-    </svg>
+        ))}
+
+        {/* X-axis labels */}
+        {ticks.map((tk) => (
+          <text
+            key={tk.x}
+            x={tk.x}
+            y={H + PAD_B - 1}
+            textAnchor={tk.x === 0 ? "start" : tk.x === W ? "end" : "middle"}
+            fontSize="7"
+            fill="var(--faint)"
+          >
+            {tk.label}
+          </text>
+        ))}
+      </svg>
+    </div>
   );
 }
 
@@ -137,14 +239,13 @@ function MedSparkline({
 // ---------------------------------------------------------------------------
 
 function hoursUntilCleared(loggedAt: number, halfLifeH: number, nowMs: number): number {
-  const clearAt = loggedAt + 4.32 * halfLifeH * 3_600_000;
-  return Math.max(0, (clearAt - nowMs) / 3_600_000);
+  return Math.max(0, (loggedAt + 4.32 * halfLifeH * 3_600_000 - nowMs) / 3_600_000);
 }
 
 function fmt(h: number): string {
-  if (h < 1) return `${Math.round(h * 60)} min`;
-  if (h < 24) return `${h.toFixed(0)} h`;
-  return `${(h / 24).toFixed(1)} d`;
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  if (h < 24) return `${h.toFixed(0)}h`;
+  return `${(h / 24).toFixed(1)}d`;
 }
 
 function todayStart() {
@@ -154,98 +255,59 @@ function todayStart() {
 }
 
 // ---------------------------------------------------------------------------
-// Med row
+// Med row (no per-row chart anymore)
 // ---------------------------------------------------------------------------
 
 function MedRow({
   med,
+  color,
   todayLogs,
-  nowMs,
   onLog,
 }: {
   med: Med;
+  color: string;
   todayLogs: MedLog[];
-  nowMs: number;
   onLog: (med: Med) => void;
 }) {
-  const entry = med.libraryId ? MED_LIBRARY_BY_ID.get(med.libraryId) : undefined;
   const lastLog = todayLogs.find((l) => !l.skipped);
   const loggedToday = !!lastLog;
   const skippedToday = !lastLog && todayLogs.some((l) => l.skipped);
 
-  const elapsedH = lastLog ? (nowMs - lastLog.at) / 3_600_000 : null;
-  const hoursLeft =
-    lastLog && entry?.halfLife
-      ? hoursUntilCleared(lastLog.at, entry.halfLife.hours, nowMs)
-      : null;
-
-  // window = max(48h, 3x half-life) so the curve always shows the full tail
-  const windowH = entry?.halfLife
-    ? Math.max(48, entry.halfLife.hours * 3)
-    : 48;
-
   return (
-    <div className="py-3 first:pt-0 last:pb-0">
-      {/* Top row: name + status */}
-      <div className="flex items-center gap-3">
-        <div
-          className={`h-2.5 w-2.5 shrink-0 rounded-full transition-colors ${
-            loggedToday
-              ? "bg-[var(--leaf)]"
-              : skippedToday
-                ? "bg-[var(--faint)]"
-                : "border-2 border-[var(--border)] bg-transparent"
-          }`}
-        />
-        <div className="flex flex-1 items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[13.5px] font-semibold text-[var(--ink)]">{med.name}</span>
-            <span className="ml-2 text-[12px] text-[var(--muted)]">{med.dose}</span>
-          </div>
-          <div className="shrink-0">
-            {loggedToday ? (
-              <Badge tone="mint">
-                <Check size={10} className="mr-1" />
-                Taken
-              </Badge>
-            ) : skippedToday ? (
-              <Badge tone="neutral">Skipped</Badge>
-            ) : (
-              <button
-                onClick={() => onLog(med)}
-                className="flex items-center gap-1 rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 text-[12px] font-medium text-[var(--ink)] hover:bg-[var(--sunken)]"
-              >
-                <Plus size={11} />
-                Log
-              </button>
-            )}
-          </div>
+    <div className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+      {/* Colour dot */}
+      <div
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{
+          background: loggedToday ? color : "transparent",
+          border: loggedToday ? "none" : `2px solid ${skippedToday ? "var(--faint)" : color}`,
+          opacity: skippedToday ? 0.4 : 1,
+        }}
+      />
+      <div className="flex flex-1 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="text-[13.5px] font-semibold text-[var(--ink)]">{med.name}</span>
+          <span className="ml-2 text-[12px] text-[var(--muted)]">{med.dose}</span>
+        </div>
+        <div className="shrink-0">
+          {loggedToday ? (
+            <Badge tone="mint">
+              <Check size={10} className="mr-1" />
+              Taken
+            </Badge>
+          ) : skippedToday ? (
+            <Badge tone="neutral">Skipped</Badge>
+          ) : (
+            <button
+              onClick={() => onLog(med)}
+              className="flex items-center gap-1 rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 text-[12px] font-medium text-[var(--ink)] hover:bg-[var(--card)]"
+            >
+              <Plus size={11} />
+              Log
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Sparkline — only when the library entry has a half-life */}
-      {entry?.halfLife && (
-        <div className="ml-5 mt-2 rounded-[var(--r-inner)] bg-[var(--sunken)] px-3 py-2">
-          <div className="mb-1 flex items-center justify-between text-[10.5px] text-[var(--muted)]">
-            <span>
-              {loggedToday
-                ? `On board · clears in ${fmt(hoursLeft ?? 0)}`
-                : "Take to see levels"}
-            </span>
-            <span>t½ {fmt(entry.halfLife.hours)}</span>
-          </div>
-          <MedSparkline
-            tmaxH={entry.tmaxHours}
-            halfLifeH={entry.halfLife.hours}
-            elapsedH={elapsedH}
-            windowH={windowH}
-          />
-          <div className="mt-0.5 flex justify-between text-[9.5px] text-[var(--faint)]">
-            <span>{loggedToday ? "dose" : "0 h"}</span>
-            <span>{fmt(windowH)}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -298,6 +360,28 @@ export function MedPanel({
     );
   }
 
+  // Assign colours
+  const medColors = Object.fromEntries(
+    activeMeds.map((m, i) => [m.id, COLORS[i % COLORS.length]!]),
+  );
+
+  // Build chart series — only for meds with library entries that have a half-life
+  const chartSeries: ChartSeries[] = activeMeds
+    .map((med) => {
+      const entry = med.libraryId ? MED_LIBRARY_BY_ID.get(med.libraryId) : undefined;
+      if (!entry?.halfLife) return null;
+      const lastLog = (todayLogsByMed.get(med.id) ?? []).find((l) => !l.skipped);
+      return {
+        medId: med.id,
+        name: med.name,
+        color: medColors[med.id]!,
+        tmaxH: entry.tmaxHours,
+        halfLifeH: entry.halfLife.hours,
+        loggedAt: lastLog?.at ?? null,
+      };
+    })
+    .filter((s): s is ChartSeries => s !== null);
+
   const takenCount = activeMeds.filter(
     (m) => (todayLogsByMed.get(m.id) ?? []).some((l) => !l.skipped),
   ).length;
@@ -315,21 +399,42 @@ export function MedPanel({
         </Link>
       </div>
 
-      <Card className="divide-y divide-[var(--line)] px-4 py-0">
-        {activeMeds.map((med) => (
-          <MedRow
-            key={med.id}
-            med={med}
-            todayLogs={todayLogsByMed.get(med.id) ?? []}
-            nowMs={nowMs}
-            onLog={onLogMed}
-          />
-        ))}
-      </Card>
+      <Card className="p-[14px]">
+        {/* Combined chart — shown when at least one med has library PK data */}
+        {chartSeries.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
+              {chartSeries.map((s) => (
+                <span key={s.medId} className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                  <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                  {s.name}
+                </span>
+              ))}
+            </div>
+            <MedCombinedChart series={chartSeries} nowMs={nowMs} />
+            <p className="mt-1 text-right text-[10px] text-[var(--faint)]">
+              Relative levels · dashed line = now
+            </p>
+          </div>
+        )}
 
-      <p className="mt-2 text-right text-[11.5px] text-[var(--faint)]">
-        {takenCount} of {activeMeds.length} taken today
-      </p>
+        {/* Med list */}
+        <div className="divide-y divide-[var(--line)]">
+          {activeMeds.map((med) => (
+            <MedRow
+              key={med.id}
+              med={med}
+              color={medColors[med.id]!}
+              todayLogs={todayLogsByMed.get(med.id) ?? []}
+              onLog={onLogMed}
+            />
+          ))}
+        </div>
+
+        <p className="mt-3 text-right text-[11.5px] text-[var(--faint)]">
+          {takenCount} of {activeMeds.length} taken today
+        </p>
+      </Card>
     </section>
   );
 }
