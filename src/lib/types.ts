@@ -1001,6 +1001,8 @@ export interface Med {
   /** Whether this med is currently active (shown on Today). */
   active: boolean;
   createdAt: number;
+  /** Links to a MedEntry in the built-in library, for half-life and interaction data. */
+  libraryId?: string;
 }
 
 /** A single intake record for a Med. */

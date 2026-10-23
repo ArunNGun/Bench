@@ -58,15 +58,18 @@ const CATEGORY_EMOJI: Record<MedCategory, string> = {
   other: "💊",
 };
 
-const SUGGESTED_MEDS: { name: string; dose: string; category: MedCategory; frequency: MedFrequency }[] = [
-  { name: "Finasteride", dose: "1 mg", category: "hair", frequency: "daily" },
-  { name: "Dutasteride", dose: "0.5 mg", category: "hair", frequency: "daily" },
-  { name: "Minoxidil", dose: "5 mg", category: "hair", frequency: "daily" },
-  { name: "Omega-3", dose: "1000 mg", category: "omega", frequency: "daily" },
-  { name: "Magnesium Glycinate", dose: "400 mg", category: "mineral", frequency: "daily" },
-  { name: "Vitamin D3", dose: "5000 IU", category: "vitamin", frequency: "daily" },
-  { name: "Vitamin B12", dose: "1000 mcg", category: "vitamin", frequency: "daily" },
-  { name: "Zinc", dose: "30 mg", category: "mineral", frequency: "daily" },
+const SUGGESTED_MEDS: { name: string; dose: string; category: MedCategory; frequency: MedFrequency; libraryId?: string }[] = [
+  { name: "Finasteride", dose: "1 mg", category: "hair", frequency: "daily", libraryId: "finasteride" },
+  { name: "Dutasteride", dose: "0.5 mg", category: "hair", frequency: "daily", libraryId: "dutasteride" },
+  { name: "Minoxidil (oral)", dose: "2.5 mg", category: "hair", frequency: "daily", libraryId: "minoxidil-oral" },
+  { name: "Omega-3", dose: "1000 mg", category: "omega", frequency: "daily", libraryId: "omega3" },
+  { name: "Magnesium Glycinate", dose: "400 mg", category: "mineral", frequency: "daily", libraryId: "magnesium" },
+  { name: "Vitamin D3", dose: "5000 IU", category: "vitamin", frequency: "daily", libraryId: "vitamin-d3" },
+  { name: "Vitamin B12", dose: "1000 mcg", category: "vitamin", frequency: "daily", libraryId: "vitamin-b12" },
+  { name: "Zinc", dose: "30 mg", category: "mineral", frequency: "daily", libraryId: "zinc" },
+  { name: "NAC", dose: "600 mg", category: "general", frequency: "daily", libraryId: "nac" },
+  { name: "Creatine", dose: "5 g", category: "general", frequency: "daily", libraryId: "creatine" },
+  { name: "Melatonin", dose: "1 mg", category: "general", frequency: "daily", libraryId: "melatonin" },
   { name: "Multivitamin", dose: "1 tablet", category: "general", frequency: "daily" },
 ];
 
@@ -88,26 +91,28 @@ function MedForm({ initial, onSave, onClose }: MedFormProps) {
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [active, setActive] = useState(initial?.active ?? true);
   const [showSuggested, setShowSuggested] = useState(!initial);
+  const [libraryId, setLibraryId] = useState<string | undefined>(initial?.libraryId);
 
   function handleSuggest(s: typeof SUGGESTED_MEDS[number]) {
     setName(s.name);
     setDose(s.dose);
     setCategory(s.category);
     setFrequency(s.frequency);
+    setLibraryId(s.libraryId);
     setShowSuggested(false);
   }
 
   function handleSubmit() {
     if (!name.trim() || !dose.trim()) return;
-    onSave({ name: name.trim(), dose: dose.trim(), frequency, category, notes: notes.trim() || undefined, active });
+    onSave({ name: name.trim(), dose: dose.trim(), frequency, category, notes: notes.trim() || undefined, active, libraryId });
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
-      <div className="w-full max-w-md rounded-t-2xl bg-[var(--bg)] p-5 pb-8 sm:rounded-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center">
+      <div className="w-full max-w-md rounded-t-2xl bg-[var(--card)] p-5 pb-8 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold">{initial?.id ? "Edit med" : "Add med"}</h2>
-          <button onClick={onClose} className="rounded-full p-1 hover:bg-[var(--card)]">
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-[var(--sunken)]">
             <X size={18} />
           </button>
         </div>
@@ -219,11 +224,11 @@ function LogMedSheet({ med, onLog, onSkip, onClose }: LogMedSheetProps) {
   const [notes, setNotes] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
-      <div className="w-full max-w-md rounded-t-2xl bg-[var(--bg)] p-5 pb-8 sm:rounded-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center">
+      <div className="w-full max-w-md rounded-t-2xl bg-[var(--card)] p-5 pb-8 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold">Log {med.name}</h2>
-          <button onClick={onClose} className="rounded-full p-1 hover:bg-[var(--card)]">
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-[var(--sunken)]">
             <X size={18} />
           </button>
         </div>

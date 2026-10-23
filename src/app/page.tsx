@@ -67,11 +67,13 @@ import { LabsCard } from "@/components/LabsCard";
 import { HistoryWithoutPlan } from "@/components/HistoryWithoutPlan";
 import { BackupNag } from "@/components/BackupNag";
 import { DoseMarks } from "@/components/DoseMarks";
+import { MedPanel } from "@/components/MedPanel";
 import {
   INJECTION_SITES,
   type DoseLog,
   type HalfLifeEstimate,
   type Protocol,
+  type Med,
 } from "@/lib/types";
 
 const DAY = 86_400_000;
@@ -86,9 +88,13 @@ export default function NowPage() {
   const settings = useStore((s) => s.settings);
   const addLog = useStore((s) => s.addLog);
   const removeLog = useStore((s) => s.removeLog);
+  const addMedLog = useStore((s) => s.addMedLog);
 
   // Lets a one-tap log be undone without hunting through the Log page.
   const [lastQuickLog, setLastQuickLog] = useState<{ id: string; name: string } | null>(null);
+
+  // Med being quick-logged from the Now page.
+  const [quickLogMed, setQuickLogMed] = useState<Med | null>(null);
 
   // A ticking clock, so "due in 3 hours" stays honest without a refresh.
   const [now, setNow] = useState(() => Date.now());
@@ -388,6 +394,7 @@ export default function NowPage() {
         <TodayCard protocols={protocols} logs={logs} now={now} />
         <BackupNag />
         <HistoryWithoutPlan nowMs={now} />
+        <MedPanel nowMs={now} onLogMed={setQuickLogMed} />
         <WeightCard nowMs={now} />
         <CheckInCard nowMs={now} />
         <LabsCard />
@@ -883,6 +890,8 @@ export default function NowPage() {
 
       <CheckInCard nowMs={now} />
 
+      <MedPanel nowMs={now} onLogMed={setQuickLogMed} />
+
       <LabsCard />
 
       <Insights tracks={tracks} logs={logs} now={now} />
@@ -928,6 +937,79 @@ export default function NowPage() {
         onClose={() => setLogOpen(false)}
         defaultPeptideId={logPeptideId}
       />
+
+      {/* Quick-log sheet for meds tapped on the Now page */}
+      {quickLogMed && (
+        <QuickMedLogSheet
+          med={quickLogMed}
+          onLog={(dose, notes) => {
+            addMedLog({ medId: quickLogMed.id, at: Date.now(), dose, notes, skipped: false });
+            setQuickLogMed(null);
+          }}
+          onSkip={() => {
+            addMedLog({ medId: quickLogMed.id, at: Date.now(), skipped: true });
+            setQuickLogMed(null);
+          }}
+          onClose={() => setQuickLogMed(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Lightweight sheet for logging a med from the Now page.
+ * Full edit is available on /meds; this just needs taken/skipped + optional note.
+ */
+function QuickMedLogSheet({
+  med,
+  onLog,
+  onSkip,
+  onClose,
+}: {
+  med: Med;
+  onLog: (dose: string, notes: string | undefined) => void;
+  onSkip: () => void;
+  onClose: () => void;
+}) {
+  const [dose, setDose] = useState(med.dose);
+  const [notes, setNotes] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center">
+      <div className="w-full max-w-md rounded-t-2xl bg-[var(--card)] p-5 pb-8 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold">Log {med.name}</h2>
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-[var(--sunken)]">
+            <Plus size={18} className="rotate-45" />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Dose taken</label>
+            <input
+              value={dose}
+              onChange={(e) => setDose(e.target.value)}
+              className="w-full rounded-[var(--r-inner)] border border-[var(--border)] bg-[var(--sunken)] px-3 py-2 text-[14px] text-[var(--ink)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Note (optional)</label>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="with food, before bed…"
+              className="w-full rounded-[var(--r-inner)] border border-[var(--border)] bg-[var(--sunken)] px-3 py-2 text-[14px] text-[var(--ink)] placeholder:text-[var(--faint)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <Button variant="ghost" onClick={onSkip} className="flex-1">Skip today</Button>
+          <Button onClick={() => onLog(dose, notes.trim() || undefined)} className="flex-1">
+            <Check size={15} className="mr-1" />
+            Taken
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
