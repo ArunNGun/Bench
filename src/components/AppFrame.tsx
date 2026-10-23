@@ -201,7 +201,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--line)] bg-[var(--card)]/95 backdrop-blur-xl md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <ul className="grid grid-cols-6">
+        <ul className="grid grid-cols-7">
           {PRIMARY_ROUTES.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -209,20 +209,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className="press flex h-16 flex-col items-center justify-center gap-1"
+                  className="press flex h-14 flex-col items-center justify-center gap-0.5"
                 >
                   <span
-                    className="flex h-8 w-10 items-center justify-center rounded-[var(--r-pill)] transition-colors"
+                    className="flex h-7 w-8 items-center justify-center rounded-[var(--r-pill)] transition-colors"
                     style={{ background: active ? "var(--mint-soft)" : "transparent" }}
                   >
                     <item.icon
-                      size={20}
+                      size={17}
                       strokeWidth={active ? 2.5 : 2}
                       style={{ color: active ? "var(--mint-ink)" : "var(--faint)" }}
                     />
                   </span>
                   <span
-                    className="text-[10.5px] font-semibold"
+                    className="text-[9px] font-semibold"
                     style={{ color: active ? "var(--mint-ink)" : "var(--faint)" }}
                   >
                     {t(item.labelKey)}

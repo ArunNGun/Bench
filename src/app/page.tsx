@@ -398,6 +398,20 @@ export default function NowPage() {
         <WeightCard nowMs={now} />
         <CheckInCard nowMs={now} />
         <LabsCard />
+        {quickLogMed && (
+          <QuickMedLogSheet
+            med={quickLogMed}
+            onLog={(dose, notes) => {
+              addMedLog({ medId: quickLogMed.id, at: Date.now(), dose, notes, skipped: false });
+              setQuickLogMed(null);
+            }}
+            onSkip={() => {
+              addMedLog({ medId: quickLogMed.id, at: Date.now(), skipped: true });
+              setQuickLogMed(null);
+            }}
+            onClose={() => setQuickLogMed(null)}
+          />
+        )}
       </div>
     );
   }
