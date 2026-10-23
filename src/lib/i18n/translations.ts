@@ -32,6 +32,7 @@ export const TRANSLATIONS = {
     nav_stock: "Stock",
     nav_calc: "Calc",
     nav_about: "About",
+    nav_meds: "Meds",
     nav_bloodwork: "Bloodwork",
     nav_library: "Library",
 
@@ -1204,6 +1205,7 @@ export const TRANSLATIONS = {
     nav_stock: "Vorrat",
     nav_calc: "Rechner",
     nav_about: "Info",
+    nav_meds: "Medis",
     nav_bloodwork: "Blutbild",
     nav_library: "Bibliothek",
 
@@ -2376,6 +2378,7 @@ export const TRANSLATIONS = {
     nav_stock: "Zaloga",
     nav_calc: "Izračun",
     nav_about: "O Benchu",
+    nav_meds: "Zdravila",
     nav_bloodwork: "Krvne slike",
     nav_library: "Knjižnica",
 
@@ -3614,6 +3617,7 @@ export const TRANSLATIONS = {
     nav_stock: "Zapas",
     nav_calc: "Oblicz",
     nav_about: "O Benchu",
+    nav_meds: "Leki",
     nav_bloodwork: "Badania krwi",
     nav_library: "Biblioteka",
 

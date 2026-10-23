@@ -11,6 +11,7 @@ import {
   Info,
   ListChecks,
   NotebookPen,
+  Pill,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ProfileSwitcher } from "./ProfileSwitcher";
@@ -34,6 +35,7 @@ const PRIMARY_ROUTES = [
   { href: "/plan", labelKey: "nav_plan" as const, icon: ListChecks },
   { href: "/log", labelKey: "nav_log" as const, icon: NotebookPen },
   { href: "/stock", labelKey: "nav_stock" as const, icon: FlaskConical },
+  { href: "/meds", labelKey: "nav_meds" as const, icon: Pill },
   { href: "/calculator", labelKey: "nav_calc" as const, icon: Calculator },
   { href: "/about", labelKey: "nav_about" as const, icon: Info },
 ];

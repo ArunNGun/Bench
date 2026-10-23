@@ -974,6 +974,47 @@ export interface Order {
   placedAt: number;
 }
 
+/**
+ * A medicine or supplement the user tracks (finasteride, omega-3, magnesium, etc.)
+ * Lives in a flat library owned by the user — no built-in catalogue.
+ */
+export type MedFrequency = "daily" | "twice-daily" | "weekly" | "as-needed";
+
+export type MedCategory =
+  | "hair"         // finasteride, dutasteride
+  | "general"      // multivitamins
+  | "mineral"      // magnesium, zinc, iron
+  | "omega"        // omega-3, fish oil
+  | "vitamin"      // vitamin D, B12, C
+  | "prescription" // other Rx
+  | "other";
+
+export interface Med {
+  id: string;
+  profileId: string;
+  name: string;
+  /** e.g. "1 mg", "500 mg", "3 capsules" */
+  dose: string;
+  frequency: MedFrequency;
+  category: MedCategory;
+  notes?: string;
+  /** Whether this med is currently active (shown on Today). */
+  active: boolean;
+  createdAt: number;
+}
+
+/** A single intake record for a Med. */
+export interface MedLog {
+  id: string;
+  profileId: string;
+  medId: string;
+  at: number;
+  /** Actual dose taken — may differ from Med.dose for flexible meds. */
+  dose?: string;
+  skipped?: boolean;
+  notes?: string;
+}
+
 export interface AppData {
   version: number;
   profiles: Profile[];
@@ -999,6 +1040,10 @@ export interface AppData {
   orders: Order[];
   /** Bottles of water and saline, counted in millilitres rather than mass. */
   diluents: DiluentBottle[];
+  /** Medicines and supplements the user tracks. */
+  meds: Med[];
+  /** Individual intake records for meds. */
+  medLogs: MedLog[];
 }
 
 /**
@@ -1063,6 +1108,8 @@ export const EMPTY_DATA: AppData = {
   halfLifeOverrides: {},
   orders: [],
   diluents: [],
+  meds: [],
+  medLogs: [],
 };
 
 /** Currencies offered in settings. Any ISO code works; these are shortcuts. */

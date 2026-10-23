@@ -68,6 +68,8 @@ export const WATCHED_KEYS = [
   "halfLifeOverrides",
   "orders",
   "diluents",
+  "meds",
+  "medLogs",
 ] as const satisfies readonly (keyof AppData)[];
 
 /** Deliberately not watched, with the reason written down rather than implied. */

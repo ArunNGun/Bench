@@ -21,6 +21,8 @@ import {
   type Vial,
   type DiluentBottle,
   type DiluentKind,
+  type Med,
+  type MedLog,
 } from "./types";
 import { DATA_VERSION, migrateAppData } from "./migrate";
 import { documentChanged, documentFrom } from "./calc/document";
@@ -333,6 +335,12 @@ interface StoreState extends AppData {
   setHalfLifeOverride: (peptideId: string, hours: number | null, note?: string) => void;
 
   importData: (data: AppData) => void;
+
+  addMed: (m: Omit<Med, "id" | "profileId" | "createdAt">) => string;
+  updateMed: (id: string, patch: Partial<Med>) => void;
+  removeMed: (id: string) => void;
+  addMedLog: (l: Omit<MedLog, "id" | "profileId">) => string;
+  removeMedLog: (id: string) => void;
   /**
    * Merge history read out of another app's export.
    *
@@ -767,6 +775,8 @@ export const useStore = create<StoreState>()(
           halfLifeOverrides: migrated.halfLifeOverrides ?? {},
           orders: migrated.orders,
           diluents: migrated.diluents,
+          meds: migrated.meds,
+          medLogs: migrated.medLogs,
         }));
       },
       importHistory: ({ logs, measurements }) => {
@@ -801,6 +811,30 @@ export const useStore = create<StoreState>()(
         return { ...documentFrom(s), settings, halfLifeOverrides: s.halfLifeOverrides ?? {} };
       },
       resetAll: () => set({ ...EMPTY_DATA }),
+
+      addMed: (m) => {
+        const id = nanoid(10);
+        set((s) => ({
+          meds: [...s.meds, { ...m, id, profileId: s.activeProfileId, createdAt: Date.now() }],
+        }));
+        return id;
+      },
+      updateMed: (id, patch) =>
+        set((s) => ({ meds: s.meds.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
+      removeMed: (id) =>
+        set((s) => ({
+          meds: s.meds.filter((m) => m.id !== id),
+          medLogs: s.medLogs.filter((l) => l.medId !== id),
+        })),
+      addMedLog: (l) => {
+        const id = nanoid(10);
+        set((s) => ({
+          medLogs: [{ ...l, id, profileId: s.activeProfileId }, ...s.medLogs],
+        }));
+        return id;
+      },
+      removeMedLog: (id) =>
+        set((s) => ({ medLogs: s.medLogs.filter((l) => l.id !== id) })),
 
       putRecordsBack: (rescue) => {
         set((s) => restoreLost(documentFrom(s), rescue));
@@ -878,6 +912,8 @@ export function useProfileData() {
   const checkIns = useStore((s) => s.checkIns);
   const orders = useStore((s) => s.orders);
   const diluents = useStore((s) => s.diluents);
+  const meds = useStore((s) => s.meds);
+  const medLogs = useStore((s) => s.medLogs);
   const activeId = useStore((s) => s.activeProfileId);
 
   return useMemo(
@@ -890,8 +926,10 @@ export function useProfileData() {
       checkIns: checkIns.filter((x) => x.profileId === activeId),
       orders: orders.filter((x) => x.profileId === activeId),
       diluents: diluents.filter((x) => x.profileId === activeId),
+      meds: meds.filter((x) => x.profileId === activeId),
+      medLogs: medLogs.filter((x) => x.profileId === activeId),
     }),
-    [protocols, logs, vials, measurements, labs, checkIns, orders, diluents, activeId]);
+    [protocols, logs, vials, measurements, labs, checkIns, orders, diluents, meds, medLogs, activeId]);
 }
 
 /** Built-in library plus anything the user added, user entries winning. */

@@ -26,9 +26,9 @@ export const RELEASES: Release[] = [
   {
     version: "2.2",
     date: "2026-09-07",
-    summary: "Polish language support, full translation coverage across all four languages, a visual syringe picker, adherence fixes, and dead translation key cleanup.",
+    summary: "Polish language support, full translation coverage across all four languages (EN, DE, SL, PL), a visual syringe picker, adherence fixes, and dead translation key cleanup.",
     changes: [
-      "Polish added as a fourth language, reviewed by a native speaker. Switch between EN, DE, FR and PL from the header dropdown.",
+      "Polish added as a fourth language, reviewed by a native speaker. Switch between EN, DE, SL and PL from the header dropdown.",
       "Full translation coverage across every screen, panel and component. Every string the page scanner missed, including ternary hints, helper returns, stock page labels and diluent names, is now translated.",
       "Pick a syringe by looking at one. The calculator now shows a visual barrel for each option instead of a dropdown.",
       "Real plural selection instead of bending every sentence around it. Languages that distinguish one from many now say the right thing.",

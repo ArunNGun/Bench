@@ -150,6 +150,9 @@ export function migrateAppData(data: StoredData | null | undefined): AppData {
     orders: saneOrders(own(data.orders)),
     // v8. Bottles of water, counted apart from vials because they are not one.
     diluents: saneBottles(own(data.diluents)),
+    // med_tracker. Medicines and supplements; absent in every older payload.
+    meds: own(data.meds ?? []).filter((m) => m && m.id && m.name),
+    medLogs: own(data.medLogs ?? []).filter((l) => l && l.id && l.medId),
   };
 }
 
@@ -217,6 +220,8 @@ function emptyLike(): AppData {
     halfLifeOverrides: {},
     orders: [],
     diluents: [],
+    meds: [],
+    medLogs: [],
   };
 }
 

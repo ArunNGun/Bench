@@ -41,6 +41,8 @@ export const RECORD_KEYS = [
   "customPeptides",
   "orders",
   "diluents",
+  "meds",
+  "medLogs",
 ] as const satisfies readonly (keyof AppData)[];
 
 export type RecordKey = (typeof RECORD_KEYS)[number];
@@ -180,6 +182,8 @@ export const RECORD_LABEL: Record<RecordKey, { one: string; many: string }> = {
   customPeptides: { one: "compound you added", many: "compounds you added" },
   orders: { one: "order", many: "orders" },
   diluents: { one: "bottle of water", many: "bottles of water" },
+  meds: { one: "med", many: "meds" },
+  medLogs: { one: "med intake", many: "med intakes" },
 };
 
 /** "3 bottles of water", for a sentence rather than for a table. */
