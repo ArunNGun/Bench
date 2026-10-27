@@ -850,3 +850,31 @@ The general shape: **resetting "everything" includes things that are not the
 user's data but the device's knowledge of where it stands.** Before writing a
 blank over a whole record, ask which of its fields describe the content and
 which describe the relationship to something outside it.
+
+## A spread that grows with the data
+
+Reported as "Sync failed" on a phone while the desktop showed a day of doses as
+overdue. The server's log was empty, and the proxy's showed why: the phone
+read the account every minute and had not tried to write since Monday at
+07:27. The push died on the phone, before any request.
+
+`toBase64` in `sync/crypto.ts` was `btoa(String.fromCharCode(...bytes))`.
+Spreading passes every byte as its own argument, and engines cap arguments,
+reporting it as a stack overflow. Chrome on Android reached the cap at about
+125 kB of ciphertext, which one account's history crossed that morning. Node
+on a desktop gets somewhere between 125 kB and 200 kB, so every device would
+have followed. `import/pdf.ts` already did this in slices for the same reason.
+The lesson did not travel, because nothing about the line looked dangerous at
+the size it was written for.
+
+Two things made it worse. The error was not a `SyncError`, so the status line
+said "See the console", on a phone. And "this device has unsent changes" lived
+only in memory, so the reload that installs the fix would have left the phone
+believing it was in step and holding doses it would never send. Both are fixed
+alongside: the message carries the error's own text, and the flag is kept in
+`settings.sync.unsent`, which stays on the device.
+
+The general shape: **any operation whose cost grows with the user's data has a
+size at which it fails, and the test data never reaches it.** Spread, recursion
+and single string concatenations of a whole collection are the usual suspects.
+Test them at a size no real account has reached yet.

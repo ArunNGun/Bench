@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveKeys, isSealedEnvelope, open, seal, type SealedEnvelope } from "./crypto";
+import { deriveKeys, isSealedEnvelope, open, seal, toBase64, type SealedEnvelope } from "./crypto";
 
 /**
  * Deliberately far below the production count. These tests are about whether
@@ -133,5 +133,30 @@ describe("isSealedEnvelope", () => {
     for (const junk of [null, undefined, 1, "text", {}, { v: 1 }, { iv: "a", ct: "b" }, []]) {
       expect(isSealedEnvelope(junk)).toBe(false);
     }
+  });
+});
+
+describe("a large history", () => {
+  /*
+   * Reported from use: a phone stopped sending once the sealed history passed
+   * about 125 kB, because the base64 step spread every byte into one call. A
+   * megabyte is far past where any engine gives up on that.
+   */
+  it("seals and opens a payload far larger than one call can take as arguments", async () => {
+    const { dataKey } = await deriveKeys("correct horse", SALT, FAST);
+    const logs = Array.from({ length: 6000 }, (_, i) => ({
+      id: `log-${i}`,
+      at: 1_700_000_000_000 + i * 3_600_000,
+      note: "x".repeat(150),
+    }));
+    const sealed = await seal({ logs }, dataKey);
+    expect(sealed.ct.length).toBeGreaterThan(1_000_000);
+    await expect(open(sealed, dataKey)).resolves.toEqual({ logs });
+  });
+
+  it("encodes the same as the platform does, across slice boundaries", () => {
+    const bytes = Uint8Array.from({ length: 0x8000 * 3 + 7 }, (_, i) => (i * 31) % 256);
+    expect(toBase64(bytes)).toBe(Buffer.from(bytes).toString("base64"));
+    expect(toBase64(new Uint8Array(0))).toBe("");
   });
 });

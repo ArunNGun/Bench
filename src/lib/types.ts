@@ -771,6 +771,16 @@ export interface Settings {
      * treated as a question to ask rather than a race to win.
      */
     remoteSeenAt?: number;
+    /**
+     * This device holds a change the server has not accepted yet.
+     *
+     * Stored rather than held in memory, because memory is exactly what a
+     * failed push loses next. A phone that could not send for a day, then
+     * reloaded to install the fix, came back believing it was in step with the
+     * server: nothing would ever have sent the doses logged in between, and
+     * the next change from another device would have been pulled over them.
+     */
+    unsent?: boolean;
   };
 
   /**
