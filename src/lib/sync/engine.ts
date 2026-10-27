@@ -256,7 +256,11 @@ export function createSyncEngine(ports: SyncPorts) {
 
       setStatus({
         phase: "error",
-        message: err instanceof SyncError ? err.message : "Sync failed. See the console.",
+        // The reason itself, not a pointer to a console a phone does not have.
+        // "See the console" was all a stack overflow said for a day and a half.
+        message: err instanceof SyncError
+          ? err.message
+          : `Sync failed: ${err instanceof Error ? err.message : String(err)}`,
       });
       if (!(err instanceof SyncError)) console.error(err);
       schedule(RETRY_MAX_MS);

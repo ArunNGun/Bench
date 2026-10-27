@@ -176,6 +176,23 @@ describe("sync engine", () => {
     expect(h.engine.getStatus().phase).toBe("idle");
   });
 
+  it("says what went wrong when the failure is not one it expected, and keeps the change", async () => {
+    // Reported from use: a push that overflowed the stack said only "Sync
+    // failed. See the console.", on a phone, for a day and a half.
+    const h = harness();
+    h.state.dirty = true;
+    h.ports.push = async () => {
+      throw new RangeError("Maximum call stack size exceeded");
+    };
+
+    h.engine.start();
+    await tick(0);
+    const status = h.engine.getStatus();
+    expect(status.phase).toBe("error");
+    expect(status.message).toContain("Maximum call stack size exceeded");
+    expect(h.state.dirty).toBe(true);
+  });
+
   it("backs off further on each failure and recovers on success", async () => {
     const h = harness();
     h.state.dirty = true;
