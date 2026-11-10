@@ -731,6 +731,49 @@ export interface Vial {
   notes?: string;
 }
 
+/**
+ * Configuration for an external AI assistant.
+ *
+ * The URL and key are entered by the user and stored only on this device.
+ * Any OpenAI-compatible endpoint works: Fuelix, OpenAI, a local Ollama
+ * instance, or anything else with a /chat/completions endpoint.
+ *
+ * Nothing is sent anywhere until the user opens the Assistant tab and types
+ * a message. The URL and secret never leave the device in any other way.
+ */
+export interface AiConfig {
+  url: string;
+  secret: string;
+  model: string;
+}
+
+/**
+ * Which data to include when building the context sent to the AI on each
+ * message. The user controls this from the chat screen.
+ */
+export interface AiChatPrefs {
+  /** Days of dose logs to include. Ignored when includeAllLogs is true. */
+  logsWindowDays: number;
+  /** Send the full log history rather than a rolling window. */
+  includeAllLogs: boolean;
+  /** Include daily check-in ratings. */
+  includeCheckIns: boolean;
+  /** Include weight and body-composition readings. */
+  includeMeasurements: boolean;
+  /** Include bloodwork results. */
+  includeLabs: boolean;
+  /** Custom role/persona text prepended to the system prompt. Replaces the default when set. */
+  customRole?: string;
+}
+
+/** One turn in the AI chat history. Stored separately from AppData. */
+export interface AiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  at: number;
+}
+
 export interface Settings {
   theme: "dark" | "light" | "system";
   /** Preferred display unit for doses. */
@@ -848,6 +891,16 @@ export interface Settings {
    * timeline. Off by default; toggled from the Weight card.
    */
   plotWeightOnChart?: boolean;
+
+  /**
+   * Optional AI assistant configuration. Absent means the feature is off,
+   * which is the default for every install. Nothing is sent to any AI service
+   * until the user has entered a URL and key here.
+   */
+  ai?: AiConfig;
+
+  /** Context preferences for the AI assistant chat. */
+  aiChat?: AiChatPrefs;
 }
 
 /**

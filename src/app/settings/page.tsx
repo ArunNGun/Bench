@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
+  Bot,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   HardDriveDownload,
   Printer,
   RefreshCw,
@@ -24,6 +27,7 @@ import {
   SectionLabel,
   Rich,
   Select,
+  TextInput,
 } from "@/components/ui";
 import { useStore, useProfileData } from "@/lib/store";
 import { findPeptide, useActiveProfile } from "@/lib/store";
@@ -115,6 +119,8 @@ export default function SettingsPage() {
       <Profiles />
 
       <RemindersPanel />
+
+      <AiPanel />
 
       <HealthConnect />
 
@@ -783,6 +789,90 @@ function HealthConnect() {
       )}
 
       {result && <p className="text-[13px] font-medium text-[var(--ink)]">{result}</p>}
+    </Card>
+  );
+}
+
+/**
+ * AI assistant configuration.
+ *
+ * URL, API key and model are the three things any OpenAI-compatible provider
+ * needs. The secret is stored in settings like any other preference; it never
+ * leaves the device except in the chat request to the URL the user entered.
+ */
+function AiPanel() {
+  const { t } = useLang();
+  const settings = useStore((s) => s.settings);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const [showSecret, setShowSecret] = useState(false);
+
+  const ai = settings.ai ?? { url: "", secret: "", model: "" };
+  const isConfigured = !!(ai.url && ai.secret && ai.model);
+
+  function patch(fields: Partial<typeof ai>) {
+    updateSettings({ ai: { ...ai, ...fields } });
+  }
+
+  return (
+    <Card className="space-y-4 p-4">
+      <SectionLabel
+        action={
+          <span
+            className="rounded-[var(--r-pill)] px-2 py-0.5 text-[12px] font-semibold"
+            style={{
+              background: isConfigured ? "var(--mint-soft)" : "var(--sunken)",
+              color: isConfigured ? "var(--mint-ink)" : "var(--muted)",
+            }}
+          >
+            {isConfigured ? t("settings_ai_configured") : t("settings_ai_not_configured")}
+          </span>
+        }
+      >
+        <Bot size={15} className="inline-block" /> {t("settings_ai")}
+      </SectionLabel>
+
+      <p className="text-[13px] leading-relaxed text-[var(--muted)]">
+        {t("settings_ai_desc")}
+      </p>
+
+      <Field label={t("settings_ai_url")} hint={t("settings_ai_url_hint")}>
+        <TextInput
+          type="url"
+          inputMode="url"
+          value={ai.url}
+          placeholder="https://api.openai.com/v1"
+          onChange={(e) => patch({ url: e.target.value.trim() })}
+        />
+      </Field>
+
+      <Field label={t("settings_ai_secret")} hint={t("settings_ai_secret_hint")}>
+        <div className="relative">
+          <TextInput
+            type={showSecret ? "text" : "password"}
+            value={ai.secret}
+            placeholder={t("settings_ai_secret_placeholder")}
+            autoComplete="off"
+            className="pr-12"
+            onChange={(e) => patch({ secret: e.target.value })}
+          />
+          <button
+            type="button"
+            onClick={() => setShowSecret((v) => !v)}
+            aria-label={showSecret ? "Hide key" : "Show key"}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--faint)] hover:text-[var(--muted)]"
+          >
+            {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+      </Field>
+
+      <Field label={t("settings_ai_model")} hint={t("settings_ai_model_hint")}>
+        <TextInput
+          value={ai.model}
+          placeholder="gpt-4o"
+          onChange={(e) => patch({ model: e.target.value.trim() })}
+        />
+      </Field>
     </Card>
   );
 }
