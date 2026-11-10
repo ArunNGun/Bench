@@ -111,9 +111,30 @@ export function SyncRunner() {
   useEffect(() => {
     if (isNative() || !url || !key) return;
 
-    // Held here rather than in the store: it describes this session's progress,
-    // not the person's data, and it must not be something a pull can overwrite.
+    /*
+     * Whether this device holds a change the server has not accepted.
+     *
+     * Kept in memory for speed and written to `settings.sync.unsent` so it
+     * survives a reload. Held only in memory, a push that failed and a reload
+     * that followed added up to a device that thought it was in step, and the
+     * changes it was holding were never sent. `settings.sync` is the right
+     * place because it stays on this device: `exportData` strips it, so a pull
+     * cannot overwrite it and a push cannot carry it to another device.
+     */
     let dirty = false;
+    const markUnsent = (unsent: boolean) => {
+      const state = useStore.getState();
+      const sync = state.settings.sync;
+      if ((sync?.unsent === true) === unsent) return;
+      state.updateSettings({
+        sync: {
+          ...sync,
+          url: sync?.url ?? url,
+          username: sync?.username ?? useSyncState.getState().session?.username ?? "",
+          unsent: unsent || undefined,
+        },
+      });
+    };
 
     const ports: SyncPorts = {
       fetchRemote: () => fetchBlob(url),
@@ -130,9 +151,10 @@ export function SyncRunner() {
         return blob.updatedAt;
       },
 
-      isDirty: () => dirty,
+      isDirty: () => dirty || useStore.getState().settings.sync?.unsent === true,
       clearDirty: () => {
         dirty = false;
+        markUnsent(false);
       },
       isEmpty: () => isEmptyData(useStore.getState()),
       // Only where an account is the point of the build. An address on its own
@@ -163,6 +185,9 @@ export function SyncRunner() {
         const sync = state.settings.sync;
         state.updateSettings({
           sync: {
+            // Spread first, so `unsent` is not dropped by the write that only
+            // meant to move the version along.
+            ...sync,
             url: sync?.url ?? url,
             username: sync?.username ?? useSyncState.getState().session?.username ?? "",
             remoteSeenAt: at ?? undefined,
@@ -194,6 +219,7 @@ export function SyncRunner() {
 
       if (!changed) return;
       dirty = true;
+      markUnsent(true);
       engine.request("change");
     });
 

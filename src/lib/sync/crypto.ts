@@ -48,7 +48,22 @@ export interface DerivedKeys {
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+/*
+ * In slices, because spreading the whole array passes every byte as its own
+ * argument, and an engine has a ceiling on arguments that it reports as a stack
+ * overflow. Chrome on Android reached it at about 125 kB of ciphertext: a phone
+ * whose history crossed that size could still read the server's copy and could
+ * no longer send its own, and said only "Sync failed". `import/pdf.ts` learned
+ * the same thing about PDFs earlier.
+ */
+const BASE64_SLICE = 0x8000;
+export const toBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += BASE64_SLICE) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_SLICE));
+  }
+  return btoa(binary);
+};
 
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 

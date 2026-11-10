@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BookOpen,
+  Bot,
   Calculator,
   Droplet,
   FlaskConical,
@@ -35,7 +36,7 @@ const PRIMARY_ROUTES = [
   { href: "/log", labelKey: "nav_log" as const, icon: NotebookPen },
   { href: "/stock", labelKey: "nav_stock" as const, icon: FlaskConical },
   { href: "/calculator", labelKey: "nav_calc" as const, icon: Calculator },
-  { href: "/about", labelKey: "nav_about" as const, icon: Info },
+  { href: "/assistant", labelKey: "nav_assistant" as const, icon: Bot },
 ];
 
 /**
@@ -53,6 +54,7 @@ const BARE_ROUTES = ["/landing"];
 const SECONDARY_ROUTES = [
   { href: "/labs", labelKey: "nav_bloodwork" as const, icon: Droplet },
   { href: "/library", labelKey: "nav_library" as const, icon: BookOpen },
+  { href: "/about", labelKey: "nav_about" as const, icon: Info },
 ];
 
 function isActive(pathname: string, href: string) {

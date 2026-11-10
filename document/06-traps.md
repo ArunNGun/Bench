@@ -824,3 +824,57 @@ The general shape: **a predicate that combines a capability with a warning will
 be read by somebody who wanted only one of them.** When a name like `usable`
 covers both "can" and "should", the call sites that mean "can" are already
 wrong and nothing will say so.
+
+## A reset that also reset the device's memory of the server
+
+Reported as "Bench won't let me delete my data": backup, erase everything,
+confirm, and the next backup held all of it again, three times over.
+
+`resetAll` wrote `EMPTY_DATA` over the store, settings included, and the sync
+record lives in the settings. The device therefore forgot which server version
+it had last agreed with, and an empty device that has never agreed with a
+server is a fresh install. `decideSync` answers a fresh install by pulling the
+server's copy, which is the right answer to the question it was asked. It was
+asked the wrong question. The erase came back within seconds.
+
+The rescue guard made it worse in the same direction. It saw every record go,
+set them all aside, and the notice offered them back.
+
+Fixed by keeping `settings.sync` through the reset, so the device is in step
+with the server and holding a change, and the empty document goes up. The
+rescue copy is skipped for this one deletion, the way `wipeLocal` already skips
+it, because it sits behind its own confirmation and is the one loss the app
+knows was meant.
+
+The general shape: **resetting "everything" includes things that are not the
+user's data but the device's knowledge of where it stands.** Before writing a
+blank over a whole record, ask which of its fields describe the content and
+which describe the relationship to something outside it.
+
+## A spread that grows with the data
+
+Reported as "Sync failed" on a phone while the desktop showed a day of doses as
+overdue. The server's log was empty, and the proxy's showed why: the phone
+read the account every minute and had not tried to write since Monday at
+07:27. The push died on the phone, before any request.
+
+`toBase64` in `sync/crypto.ts` was `btoa(String.fromCharCode(...bytes))`.
+Spreading passes every byte as its own argument, and engines cap arguments,
+reporting it as a stack overflow. Chrome on Android reached the cap at about
+125 kB of ciphertext, which one account's history crossed that morning. Node
+on a desktop gets somewhere between 125 kB and 200 kB, so every device would
+have followed. `import/pdf.ts` already did this in slices for the same reason.
+The lesson did not travel, because nothing about the line looked dangerous at
+the size it was written for.
+
+Two things made it worse. The error was not a `SyncError`, so the status line
+said "See the console", on a phone. And "this device has unsent changes" lived
+only in memory, so the reload that installs the fix would have left the phone
+believing it was in step and holding doses it would never send. Both are fixed
+alongside: the message carries the error's own text, and the flag is kept in
+`settings.sync.unsent`, which stays on the device.
+
+The general shape: **any operation whose cost grows with the user's data has a
+size at which it fails, and the test data never reaches it.** Spread, recursion
+and single string concatenations of a whole collection are the usual suspects.
+Test them at a size no real account has reached yet.
