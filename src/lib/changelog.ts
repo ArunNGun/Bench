@@ -24,6 +24,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.5.0",
+    date: "2026-11-11",
+    summary: "Built-in AI assistant, sync fixes for large histories and erased devices.",
+    changes: [
+      "AI assistant built into the app. Configure any OpenAI-compatible endpoint in Settings and ask questions about your protocols, doses, stock and bloodwork. Chat history is stored on your device.",
+      "Sync fix: erasing a synced device now also erases the account. Previously, on a synced device, the erase was undone within seconds by the next sync pull.",
+      "Sync fix: a large dose history can now be sent in full. Previously, once the history grew past a certain size, the phone would read the account every minute with no write, causing doses logged on mobile to appear overdue on desktop.",
+    ],
+    contributors: ["suskozaver"],
+  },
+  {
     version: "2.4.1",
     date: "2026-10-13",
     summary: "A skipped dose now answers its slot — no more orange days or broken streaks after a skip.",
