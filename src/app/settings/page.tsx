@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   HardDriveDownload,
+  Plus,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -805,12 +806,31 @@ function AiPanel() {
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
   const [showSecret, setShowSecret] = useState(false);
+  const [newHeaderKey, setNewHeaderKey] = useState("");
+  const [newHeaderVal, setNewHeaderVal] = useState("");
 
   const ai = settings.ai ?? { url: "", secret: "", model: "" };
   const isConfigured = !!(ai.url && ai.secret && ai.model);
+  const extraHeaders = ai.extraHeaders ?? {};
+  const headerEntries = Object.entries(extraHeaders);
 
   function patch(fields: Partial<typeof ai>) {
     updateSettings({ ai: { ...ai, ...fields } });
+  }
+
+  function addHeader() {
+    const key = newHeaderKey.trim();
+    const val = newHeaderVal.trim();
+    if (!key || !val) return;
+    patch({ extraHeaders: { ...extraHeaders, [key]: val } });
+    setNewHeaderKey("");
+    setNewHeaderVal("");
+  }
+
+  function removeHeader(key: string) {
+    const next = { ...extraHeaders };
+    delete next[key];
+    patch({ extraHeaders: Object.keys(next).length ? next : undefined });
   }
 
   return (
@@ -872,6 +892,58 @@ function AiPanel() {
           placeholder="gpt-4o"
           onChange={(e) => patch({ model: e.target.value.trim() })}
         />
+      </Field>
+
+      <Field label={t("settings_ai_endpoint_path")} hint={t("settings_ai_endpoint_path_hint")}>
+        <TextInput
+          value={ai.endpointPath ?? ""}
+          placeholder="/chat/completions"
+          onChange={(e) => patch({ endpointPath: e.target.value.trim() || undefined })}
+        />
+      </Field>
+
+      <Field label={t("settings_ai_headers")} hint={t("settings_ai_headers_hint")}>
+        <div className="space-y-2">
+          {headerEntries.map(([key, val]) => (
+            <div key={key} className="flex items-center gap-2 rounded-[var(--r-inner)] border border-[var(--line)] bg-[var(--sunken)] px-2.5 py-1.5">
+              <span className="flex-1 truncate font-mono text-[12px] text-[var(--ink)]">
+                <span className="text-[var(--muted)]">{key}:</span> {val}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${key}`}
+                onClick={() => removeHeader(key)}
+                className="shrink-0 text-[var(--faint)] hover:text-[var(--rose)] transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <TextInput
+              value={newHeaderKey}
+              placeholder={t("settings_ai_header_key")}
+              className="flex-1 font-mono text-[13px]"
+              onChange={(e) => setNewHeaderKey(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addHeader()}
+            />
+            <TextInput
+              value={newHeaderVal}
+              placeholder={t("settings_ai_header_value")}
+              className="flex-1 font-mono text-[13px]"
+              onChange={(e) => setNewHeaderVal(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addHeader()}
+            />
+            <button
+              type="button"
+              disabled={!newHeaderKey.trim() || !newHeaderVal.trim()}
+              onClick={addHeader}
+              className="flex shrink-0 items-center gap-1 rounded-[var(--r-btn)] bg-[var(--mint-soft)] px-3 py-2 text-[13px] font-semibold text-[var(--mint-ink)] transition-opacity disabled:opacity-40"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
       </Field>
     </Card>
   );

@@ -765,6 +765,17 @@ export interface AiConfig {
   url: string;
   secret: string;
   model: string;
+  /**
+   * Path appended to the base URL. Defaults to "/chat/completions" when absent.
+   * Override for providers that use a different route, e.g. "/v1/messages".
+   */
+  endpointPath?: string;
+  /**
+   * Extra HTTP headers sent with every request. Keys and values are user-supplied.
+   * "Content-Type" and "Authorization" are always set by the client and cannot
+   * be overridden here.
+   */
+  extraHeaders?: Record<string, string>;
 }
 
 /**

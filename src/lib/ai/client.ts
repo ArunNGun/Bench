@@ -80,7 +80,8 @@ export async function sendChat(req: ChatRequest): Promise<ChatResult | ChatError
   }
 
   const baseUrl = config.url.replace(/\/$/, "");
-  const endpoint = `${baseUrl}/chat/completions`;
+  const path = (config.endpointPath ?? "/chat/completions").replace(/^([^/])/, "/$1");
+  const endpoint = `${baseUrl}${path}`;
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -92,6 +93,7 @@ export async function sendChat(req: ChatRequest): Promise<ChatResult | ChatError
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
+        ...config.extraHeaders,
         "Content-Type": "application/json",
         Authorization: `Bearer ${config.secret}`,
       },
