@@ -226,6 +226,11 @@ export const TRANSLATIONS = {
     plan_weekly: "Weekly",
     plan_every_n_days: "Every {n} days",
     plan_cycle: "{on} on / {off} off",
+    plan_no_inventory: "No inventory tracking",
+    plan_no_inventory_hint: "Log doses at the set amount without drawing from a vial. Use this for protocols tracked in IU or compounds you do not store here.",
+    plan_dose_note: "Dose reminder",
+    plan_dose_note_hint: "Shown on the Now page when this dose is due. Use it for draw amounts, prep steps or any reminder you want visible at log time.",
+    plan_dose_note_placeholder: "e.g. Draw 4 units · Do 10 pushups after pinning",
 
     // ── Log page ──────────────────────────────────────────────────────────────
     log_title: "Log",
@@ -1219,6 +1224,7 @@ export const TRANSLATIONS = {
     pk_nothing_circulating: "Nothing circulating at this point.",
     stock_nasal_spray_badge: "nasal spray",
     stock_past_date: "past date",
+    stock_keep_using: "Keep using past date",
     stock_use_soon: "use soon",
     syringe_label: "Syringe",
     syringe_ask_each_time: "Ask each time",
@@ -1700,6 +1706,11 @@ export const TRANSLATIONS = {
     plan_weekly: "W\u00f6chentlich",
     plan_every_n_days: "Alle {n} Tage",
     plan_cycle: "{on} ein / {off} aus",
+    plan_no_inventory: "Ohne Bestandsverfolgung",
+    plan_no_inventory_hint: "Dosen werden mit dem eingestellten Wert eingetragen, ohne aus einer Ampulle abzuziehen. Geeignet für IU-Protokolle oder Verbindungen, die hier nicht gelagert werden.",
+    plan_dose_note: "Dosierungshinweis",
+    plan_dose_note_hint: "Wird auf der Jetzt-Seite angezeigt, wenn diese Dosis fällig ist. Für Aufzugsmenge, Vorbereitungsschritte oder andere Hinweise beim Eintragen.",
+    plan_dose_note_placeholder: "z.B. 4 Einheiten aufziehen · 10 Liegestütze nach dem Setzen",
 
     // ── Log page ──────────────────────────────────────────────────────────────
     log_title: "Protokoll",
@@ -2688,6 +2699,7 @@ export const TRANSLATIONS = {
     pk_nothing_circulating: "Zu diesem Zeitpunkt zirkuliert nichts.",
     stock_nasal_spray_badge: "Nasenspray",
     stock_past_date: "Datum überschritten",
+    stock_keep_using: "Weiterhin verwenden",
     stock_use_soon: "bald verbrauchen",
     syringe_label: "Spritze",
     syringe_ask_each_time: "Jedes Mal fragen",
@@ -3185,6 +3197,11 @@ export const TRANSLATIONS = {
     plan_weekly: "Tedensko",
     plan_every_n_days: "Vsakih {n} dni",
     plan_cycle: "{on} jemanja / {off} pavze",
+    plan_no_inventory: "Brez sledenja zalogi",
+    plan_no_inventory_hint: "Doze se beležijo z nastavljeno vrednostjo brez odštevanja iz vialke. Primerno za protokole v IE ali spojine, ki jih tu ne shranjuješ.",
+    plan_dose_note: "Opomnik za dozo",
+    plan_dose_note_hint: "Prikaže se na strani Zdaj, ko je doza zapadla. Za količino vleka, korake priprave ali drug opomnik ob beleženju.",
+    plan_dose_note_placeholder: "npr. Vleči 4 enote · 10 sklec po injiciranju",
 
     // ── Log page ──────────────────────────────────────────────────────────────
     log_title: "Dnevnik",
@@ -4229,6 +4246,7 @@ export const TRANSLATIONS = {
     pk_nothing_circulating: "V tem trenutku ne kroži nič.",
     stock_nasal_spray_badge: "nosno pršilo",
     stock_past_date: "datum potekel",
+    stock_keep_using: "Nadaljuj uporabo po datumu",
     stock_use_soon: "porabi kmalu",
     syringe_label: "Brizga",
     syringe_ask_each_time: "Vprašaj vsakič",
@@ -4744,6 +4762,11 @@ export const TRANSLATIONS = {
     plan_weekly: "Co tydzień",
     plan_every_n_days: "Co {n} dni",
     plan_cycle: "{on} brania / {off} przerwy",
+    plan_no_inventory: "Bez śledzenia zapasów",
+    plan_no_inventory_hint: "Dawki są rejestrowane z ustawioną wartością bez pobierania z fiolki. Przydatne dla protokołów w IU lub związków, których tu nie przechowujesz.",
+    plan_dose_note: "Przypomnienie o dawce",
+    plan_dose_note_hint: "Wyświetlane na stronie Teraz, gdy dawka jest należna. Wpisz ilość do nabrania, kroki przygotowania lub inną notatkę widoczną podczas rejestrowania.",
+    plan_dose_note_placeholder: "np. Nabrać 4 jednostki · 10 pompek po wstrzyknięciu",
 
     // ── Log page ──────────────────────────────────────────────────────────────
     log_title: "Dziennik",
@@ -5788,6 +5811,7 @@ export const TRANSLATIONS = {
     pk_nothing_circulating: "W tym punkcie nic nie krąży.",
     stock_nasal_spray_badge: "spray do nosa",
     stock_past_date: "po dacie",
+    stock_keep_using: "Kontynuuj używanie po dacie",
     stock_use_soon: "zużyj wkrótce",
     syringe_label: "Strzykawka",
     syringe_ask_each_time: "Pytaj za każdym razem",

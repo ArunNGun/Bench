@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  FileText,
   FileUp,
   ImagePlus,
   Paperclip,
@@ -46,21 +47,76 @@ const DEFAULT_PREFS: AiChatPrefs = {
   includeLabs: true,
 };
 
-/** Very light markdown rendering: bold, paragraphs, bullets, numbered lists. */
+/** Markdown rendering: bold, italic, paragraphs, bullets, numbered lists, headings, tables, horizontal rules. */
 function renderMarkdown(text: string): React.ReactNode[] {
-  const paragraphs = text.split(/\n{2,}/);
+  // Split on blank lines but keep table blocks together by pre-joining consecutive pipe lines
+  const rawBlocks = text.split(/\n{2,}/);
   const nodes: React.ReactNode[] = [];
+  let key = 0;
 
-  for (let pi = 0; pi < paragraphs.length; pi++) {
-    const para = paragraphs[pi].trim();
+  for (const block of rawBlocks) {
+    const para = block.trim();
     if (!para) continue;
+
+    // Horizontal rule: a line of only dashes, underscores or asterisks (3+)
+    if (/^[-*_]{3,}$/.test(para)) {
+      nodes.push(<hr key={key++} className="my-2 border-[var(--line)]" />);
+      continue;
+    }
 
     const lines = para.split("\n");
 
-    // Bullet list
+    // Table: at least two pipe-delimited rows, second row is separator
+    if (
+      lines.length >= 2 &&
+      lines[0].includes("|") &&
+      /^\|?[\s\-:|]+\|/.test(lines[1])
+    ) {
+      const parseRow = (row: string) =>
+        row.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+
+      const headers = parseRow(lines[0]);
+      const body = lines.slice(2).map(parseRow);
+
+      nodes.push(
+        <div key={key++} className="overflow-x-auto">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th
+                    key={i}
+                    className="border border-[var(--line)] bg-[var(--sunken)] px-2.5 py-1.5 text-left font-semibold"
+                  >
+                    {inlineParts(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td
+                      key={ci}
+                      className="border border-[var(--line)] px-2.5 py-1.5"
+                    >
+                      {inlineParts(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // Bullet list (each line starts with - or *)
     if (lines.every((l) => /^[-*] /.test(l.trim()))) {
       nodes.push(
-        <ul key={pi} className="ml-4 list-disc space-y-1">
+        <ul key={key++} className="ml-4 list-disc space-y-1">
           {lines.map((l, li) => (
             <li key={li}>{inlineParts(l.replace(/^[-*] /, ""))}</li>
           ))}
@@ -72,7 +128,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // Numbered list
     if (lines.every((l) => /^\d+\. /.test(l.trim()))) {
       nodes.push(
-        <ol key={pi} className="ml-4 list-decimal space-y-1">
+        <ol key={key++} className="ml-4 list-decimal space-y-1">
           {lines.map((l, li) => (
             <li key={li}>{inlineParts(l.replace(/^\d+\. /, ""))}</li>
           ))}
@@ -81,19 +137,42 @@ function renderMarkdown(text: string): React.ReactNode[] {
       continue;
     }
 
-    // Heading
+    // Heading (h1-h3)
     if (lines.length === 1 && /^#{1,3} /.test(lines[0])) {
+      const level = lines[0].match(/^(#{1,3}) /)?.[1].length ?? 1;
+      const content = lines[0].replace(/^#{1,3} /, "");
+      const cls =
+        level === 1
+          ? "text-[14px] font-bold"
+          : level === 2
+            ? "text-[13px] font-bold"
+            : "text-[12.5px] font-semibold text-[var(--muted)]";
       nodes.push(
-        <p key={pi} className="font-bold">
-          {inlineParts(lines[0].replace(/^#{1,3} /, ""))}
+        <p key={key++} className={cls}>
+          {inlineParts(content)}
         </p>
       );
       continue;
     }
 
-    // Regular paragraph (may have soft line breaks)
+    // Mixed block: some lines may be headings, some bullets — fall back to line-by-line
+    const hasHeadings = lines.some((l) => /^#{1,3} /.test(l));
+    if (hasHeadings) {
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) { nodes.push(<br key={key++} />); continue; }
+        if (/^#{1,3} /.test(trimmed)) {
+          nodes.push(<p key={key++} className="font-bold">{inlineParts(trimmed.replace(/^#{1,3} /, ""))}</p>);
+        } else {
+          nodes.push(<p key={key++}>{inlineParts(trimmed)}</p>);
+        }
+      }
+      continue;
+    }
+
+    // Regular paragraph (may have soft line breaks inside)
     nodes.push(
-      <p key={pi}>
+      <p key={key++}>
         {lines.map((l, li) => (
           <span key={li}>
             {inlineParts(l)}
@@ -109,28 +188,71 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
 function inlineParts(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  let rest = text;
+  // Pattern: **bold** or *italic* or `code`
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  let last = 0;
   let key = 0;
+  let m: RegExpExecArray | null;
 
-  while (rest.length) {
-    const open = rest.indexOf("**");
-    if (open === -1) break;
-    const close = rest.indexOf("**", open + 2);
-    if (close === -1) break;
-    if (open > 0) parts.push(<span key={key++}>{rest.slice(0, open)}</span>);
-    parts.push(<strong key={key++}>{rest.slice(open + 2, close)}</strong>);
-    rest = rest.slice(close + 2);
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<span key={key++}>{text.slice(last, m.index)}</span>);
+    if (m[2] !== undefined) {
+      parts.push(<strong key={key++}>{m[2]}</strong>);
+    } else if (m[3] !== undefined) {
+      parts.push(<em key={key++}>{m[3]}</em>);
+    } else if (m[4] !== undefined) {
+      parts.push(
+        <code key={key++} className="rounded bg-[var(--sunken)] px-1 py-0.5 font-mono text-[11px]">
+          {m[4]}
+        </code>
+      );
+    }
+    last = m.index + m[0].length;
   }
-  if (rest) parts.push(<span key={key}>{rest}</span>);
-  return parts;
+  if (last < text.length) parts.push(<span key={key}>{text.slice(last)}</span>);
+  return parts.length ? parts : [<span key={0}>{text}</span>];
+}
+
+/** Extract plain text from a PDF using pdfjs-dist (lazy-loaded). */
+async function extractPdfText(file: File): Promise<string> {
+  const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
+  if (!GlobalWorkerOptions.workerSrc) {
+    GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).toString();
+  }
+  const buffer = await file.arrayBuffer();
+  const pdf = await getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(
+      content.items
+        .map((item) => ("str" in item ? (item as { str: string }).str : ""))
+        .join(" ")
+    );
+  }
+  return pages.join("\n\n");
 }
 
 /** Read a File and return an Attachment, or null if the type is unsupported. */
 async function readAttachment(file: File): Promise<Attachment | null> {
   const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
   const isText = file.type.startsWith("text/") || /\.(txt|md|csv|json)$/i.test(file.name);
 
-  if (!isImage && !isText) return null;
+  if (!isImage && !isPdf && !isText) return null;
+
+  if (isPdf) {
+    try {
+      const text = await extractPdfText(file);
+      return { name: file.name, kind: "text", data: text, mime: "application/pdf" };
+    } catch {
+      return null;
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -185,6 +307,7 @@ export default function AssistantPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextInputRef = useRef<HTMLInputElement>(null);
   const dataLoaded = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load history and custom context from IDB once profile is known
   useEffect(() => {
@@ -193,6 +316,11 @@ export default function AssistantPage() {
     loadHistory(profile.id).then(setMessages);
     loadCustomContext(profile.id).then(setCustomContext);
   }, [hydrated, profile.id]);
+
+  // Cancel any in-flight request when navigating away
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -209,6 +337,14 @@ export default function AssistantPage() {
     setInput("");
     setAttachments([]);
     setSending(true);
+
+    // Persist user message immediately so it survives a tab switch
+    await saveHistory(profile.id, next);
+
+    // Cancel any previous in-flight request, then arm a new one
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const systemPrompt = customContext ?? buildSystemPrompt({
       profile,
@@ -228,7 +364,11 @@ export default function AssistantPage() {
       history: messages,
       userMessage: text,
       attachments,
+      signal: controller.signal,
     });
+
+    // Component may have unmounted while we were waiting - don't update state
+    if (controller.signal.aborted) return;
 
     const assistantMsg: AiMessage = {
       id: nanoid(),
@@ -585,6 +725,8 @@ export default function AssistantPage() {
                   alt={a.name}
                   className="h-7 w-7 rounded object-cover"
                 />
+              ) : a.mime === "application/pdf" ? (
+                <FileText size={13} className="text-[var(--rose)]" />
               ) : (
                 <Paperclip size={13} className="text-[var(--muted)]" />
               )}
@@ -620,7 +762,7 @@ export default function AssistantPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.txt,.md,.csv,.json"
+          accept="image/*,.pdf,.txt,.md,.csv,.json"
           multiple
           className="hidden"
           onChange={handleAttachFiles}

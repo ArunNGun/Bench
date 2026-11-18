@@ -343,6 +343,7 @@ export default function StockPage() {
                   onFinish={() => updateVial(v.id, { state: "finished" })}
                   tabletCompound={findPeptide(custom, v.peptideId)?.preparation === "tablet"}
                   onSetTabletSize={() => setSizing(v.id)}
+                  onToggleIgnoreExpiry={() => updateVial(v.id, { ignoreExpiry: !v.ignoreExpiry })}
                 />
                 {sizing === v.id && (
                   <TabletSizeForm
@@ -423,6 +424,7 @@ export default function StockPage() {
                     the same thing on its own, for anyone who never presses it.
                   */
                   onOpenPack={() => updateVial(v.id, openPack(v, Date.now()))}
+                  onToggleIgnoreExpiry={() => updateVial(v.id, { ignoreExpiry: !v.ignoreExpiry })}
                 />
                 {sizing === v.id && (
                   <TabletSizeForm
@@ -523,6 +525,7 @@ function VialRow({
   tabletCompound,
   onSetTabletSize,
   onOpenPack,
+  onToggleIgnoreExpiry,
 }: {
   vial: Vial;
   /**
@@ -559,10 +562,16 @@ function VialRow({
   onSetTabletSize?: () => void;
   /** Only for a pack still sealed. Moves it up to Open. */
   onOpenPack?: () => void;
+  onToggleIgnoreExpiry?: () => void;
 }) {
   const { t } = useLang();
   const st = vialStatus(vial, now);
-  const budSoon = st.daysToBud != null && st.daysToBud < budWarningDays;
+  // Physical expiry regardless of the ignoreExpiry flag, so the override UI
+  // can be shown even when the flag is already set (vialExpired returns false then).
+  const physicallyPastDate =
+    (vial.budAt != null && vial.budAt < now) ||
+    (vial.state === "sealed" && vial.expiresAt != null && vial.expiresAt < now);
+  const budSoon = !physicallyPastDate && st.daysToBud != null && st.daysToBud < budWarningDays;
   const scale = useSyringeScale();
   const spray = isSpray(vial);
   const pack = isPack(vial);
@@ -588,7 +597,7 @@ function VialRow({
   const strengthMgTotal = group ? group.strengthMg * group.count : vial.strengthMg;
 
   return (
-    <Card className={`flex items-start gap-3 p-3.5 ${st.expired ? "border-[var(--rose)]/45" : ""}`}>
+    <Card className={`flex items-start gap-3 p-3.5 ${physicallyPastDate && !vial.ignoreExpiry ? "border-[var(--rose)]/45" : ""}`}>
       <div className="h-14 w-8 shrink-0">
         <ContainerGlyph
           container={vial.container ?? "vial"}
@@ -619,8 +628,9 @@ function VialRow({
               {pack ? t("count_packs", { n: group!.count }) : t("count_vials", { n: group!.count })}
             </Badge>
           )}
-          {st.expired && <Badge tone="rose">{t("stock_past_date")}</Badge>}
-          {!st.expired && budSoon && <Badge tone="tangerine">{t("stock_use_soon")}</Badge>}
+          {physicallyPastDate && !vial.ignoreExpiry && <Badge tone="rose">{t("stock_past_date")}</Badge>}
+          {physicallyPastDate && vial.ignoreExpiry && <Badge tone="neutral">{t("stock_past_date")}</Badge>}
+          {!physicallyPastDate && budSoon && <Badge tone="tangerine">{t("stock_use_soon")}</Badge>}
         </div>
 
         {vial.state === "on-order" ? (
@@ -812,6 +822,18 @@ function VialRow({
           and nothing to dismiss, and it costs a touch screen nothing because
           it simply does not appear there.
         */}
+        {physicallyPastDate && onToggleIgnoreExpiry && (
+          <label className="mt-2 flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={vial.ignoreExpiry ?? false}
+              onChange={onToggleIgnoreExpiry}
+              className="h-3.5 w-3.5 rounded accent-[var(--mint)]"
+            />
+            <span className="text-[12.5px] text-[var(--muted)]">{t("stock_keep_using")}</span>
+          </label>
+        )}
+
         <div className="mt-2.5 flex flex-wrap gap-2">
           {onArrived && (
             <Button

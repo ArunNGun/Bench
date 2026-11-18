@@ -252,6 +252,8 @@ export function LogDoseSheet({
    */
   const hasSite = routeHasSite(route);
   const container = containerForDose(peptide?.preparation, route);
+  const noInventory = protocol?.noInventory ?? false;
+  const protocolUnit = protocol?.doseUnit;
 
   /*
    * What the library says, plus intranasal once a spray bottle of this compound
@@ -574,6 +576,7 @@ export function LogDoseSheet({
                   {protocol && (
                     <span>{t("log_protocol_calls_for", { dose: formatDose(scheduledDoseMcg(protocol, at)) })}</span>
                   )}
+                  {protocolUnit !== "IU" && (
                   <button
                     type="button"
                     onClick={() => setDoseUnit((u) => (u === "mcg" ? "mg" : "mcg"))}
@@ -582,14 +585,15 @@ export function LogDoseSheet({
                   >
                     {doseUnit === "mcg" ? t("log_switch_to_mg") : t("log_switch_to_mcg")}
                   </button>
+                  )}
                 </span>
               }
             >
               <NumberInput
                 value={doseUnit === "mg" ? Number((doseMcg / 1000).toFixed(4)) : doseMcg}
                 min={0}
-                step={doseUnit === "mg" ? 0.025 : 25}
-                suffix={doseUnit}
+                step={protocolUnit === "IU" ? 50 : doseUnit === "mg" ? 0.025 : 25}
+                suffix={protocolUnit === "IU" ? "IU" : doseUnit}
                 onChange={(e) => {
                   const raw = Number(e.target.value);
                   setDoseAndUnits(doseUnit === "mg" ? raw * 1000 : raw);
@@ -789,7 +793,7 @@ export function LogDoseSheet({
           </div>
           )}
 
-          {usableVials.length > 0 ? (
+          {!noInventory && (usableVials.length > 0 ? (
             <Field
               /*
                 Three containers, three sets of words. Nothing is drawn out of
@@ -846,9 +850,9 @@ export function LogDoseSheet({
                   ? t("log_no_pack_in_stock")
                   : t("log_no_vial_in_stock")}
             </Callout>
-          )}
+          ))}
 
-          {vialId && doseMcg > 0 && !skipped && (
+          {!noInventory && vialId && doseMcg > 0 && !skipped && (
             <div className="rounded border border-[var(--line)] bg-[var(--sunken)]/45 px-3 py-2.5">
               <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
                 <span className="tnum font-mono text-[17px] text-[var(--tangerine)]">

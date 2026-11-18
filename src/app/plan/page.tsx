@@ -13,6 +13,7 @@ import {
   SectionLabel,
   Segmented,
   Select,
+  Textarea,
   TextInput,
 } from "@/components/ui";
 import { PctPanel } from "@/components/PctPanel";
@@ -442,7 +443,10 @@ function ProtocolForm({
 
   const [peptideId, setPeptideId] = useState(initial?.peptideId ?? peptides[0]?.id ?? "");
   const [name, setName] = useState(initial?.name ?? "");
+  const [protocolNotes, setProtocolNotes] = useState(initial?.notes ?? "");
   const [doseMcg, setDoseMcg] = useState(initial?.doseMcg ?? 500);
+  const [mainDoseUnit, setMainDoseUnit] = useState<DoseUnit>(initial?.doseUnit ?? "mcg");
+  const [noInventory, setNoInventory] = useState(initial?.noInventory ?? false);
   const [kind, setKind] = useState<ScheduleKind>(initial?.schedule.kind ?? "interval-days");
   const [intervalDays, setIntervalDays] = useState(initial?.schedule.intervalDays ?? 7);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initial?.schedule.daysOfWeek ?? [1]);
@@ -592,6 +596,8 @@ function ProtocolForm({
       titration: titrationSteps,
       titrationAutoAdvance,
       phases: usingPhases ? phases : undefined,
+      doseUnit: mainDoseUnit !== "mcg" ? mainDoseUnit : undefined,
+      noInventory: noInventory || undefined,
     }),
     [
       initial,
@@ -606,6 +612,8 @@ function ProtocolForm({
       phases,
       titrationSteps,
       titrationAutoAdvance,
+      mainDoseUnit,
+      noInventory,
     ]);
 
   function pick(id: string) {
@@ -737,13 +745,42 @@ function ProtocolForm({
             }
           >
             <NumberInput
-              value={lockedDose ?? doseMcg}
+              value={
+                lockedDose != null
+                  ? lockedDose
+                  : mainDoseUnit === "mg"
+                    ? doseMcg / 1000
+                    : doseMcg
+              }
               min={0}
-              step={25}
-              suffix="mcg"
+              step={mainDoseUnit === "mg" ? 0.1 : mainDoseUnit === "IU" ? 50 : 25}
+              suffix={mainDoseUnit}
               disabled={lockedDose !== undefined}
-              onChange={(e) => setDoseMcg(Number(e.target.value))}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setDoseMcg(mainDoseUnit === "mg" ? v * 1000 : v);
+              }}
             />
+            {lockedDose == null && (
+              <div className="mt-2 flex gap-1.5">
+                {(["mcg", "mg", "IU"] as const).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => {
+                      if (u !== mainDoseUnit) setMainDoseUnit(u);
+                    }}
+                    className={`rounded px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                      mainDoseUnit === u
+                        ? "bg-[var(--tangerine)] text-[#12181a]"
+                        : "border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
         )}
 
@@ -914,6 +951,28 @@ function ProtocolForm({
         />
       </Field>
 
+      <Field label={t("plan_dose_note")} hint={t("plan_dose_note_hint")}>
+        <Textarea
+          value={protocolNotes}
+          onChange={(e) => setProtocolNotes(e.target.value)}
+          placeholder={t("plan_dose_note_placeholder")}
+          rows={2}
+        />
+      </Field>
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-[var(--r-inner)] border border-[var(--line)] px-3 py-2.5">
+        <input
+          type="checkbox"
+          checked={noInventory}
+          onChange={(e) => setNoInventory(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded accent-[var(--tangerine)]"
+        />
+        <span className="space-y-0.5">
+          <span className="block text-[13.5px] font-medium text-[var(--ink)]">{t("plan_no_inventory")}</span>
+          <span className="block text-[12px] text-[var(--muted)]">{t("plan_no_inventory_hint")}</span>
+        </span>
+      </label>
+
       <ProjectionPreview protocol={draft} peptide={peptide} />
 
       {missingTime && (
@@ -957,7 +1016,9 @@ function ProtocolForm({
               titrationAutoAdvance,
               phases: usingPhases ? renumberPhases(phases) : undefined,
               sites: sites.length ? sites : undefined,
-              notes: initial?.notes,
+              notes: protocolNotes.trim() || undefined,
+              doseUnit: mainDoseUnit !== "mcg" ? mainDoseUnit : undefined,
+              noInventory: noInventory || undefined,
             })
           }
         >
