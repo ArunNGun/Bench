@@ -24,6 +24,22 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.6.0",
+    date: "2026-11-18",
+    summary: "PDF attachments in the AI assistant, IU as a dose unit, inventory-free protocols, dose reminder notes, editable AI persona, and markdown table rendering.",
+    changes: [
+      "PDF attachments in the AI assistant. Attach PDFs alongside images, text files and CSVs. The text is extracted on your device and sent to the LLM. PDF chips show with a red file icon.",
+      "Chat persistence on tab switch. Messages sent while waiting for a reply no longer disappear if you switch to another tab and come back.",
+      "Export and import AI context. Download your custom system prompt as a .txt file and import one back. A badge in the header shows when a custom context is active, with a one-tap option to clear it.",
+      "Editable AI role. Rewrite the default assistant persona in settings. Changes are saved per-profile. A reset button restores the original text.",
+      "Improved markdown rendering in AI responses: tables, horizontal rules, italic, inline code, and H1/H2/H3 headings.",
+      "IU as a dose unit. International Units can now be selected alongside mcg and mg when setting up a protocol.",
+      "No inventory tracking option. A new checkbox in the protocol form lets you create a protocol that does not require a vial in inventory. Useful for pre-dosed compounds or compounds tracked externally.",
+      "Dose reminder note. Each protocol has a new optional text field that appears in blue on the Now page whenever that dose is due, on both the overdue and upcoming rows.",
+      "Keep using a past-date vial. Expired vials now show a checkbox to treat them as active. When checked, the vial stays available in the log form and counts toward stock.",
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-11-11",
     summary: "Built-in AI assistant, sync fixes for large histories and erased devices.",
