@@ -59,6 +59,7 @@ import {
   formatDate,
   formatDose,
   formatDosePerDay,
+  formatDoseWithUnit,
   formatDuration,
   formatHalfLife,
   formatTime,
@@ -464,7 +465,7 @@ export default function NowPage() {
       .sort((a, b) => a.at - b.at);
   }, [tracks, logs, now]);
   const lowStock = tracks.filter(
-    (track) => track.stock.dosesRemaining <= settings.lowStockDoses && track.targetMcg > 0);
+    (track) => !track.protocol.noInventory && track.stock.dosesRemaining <= settings.lowStockDoses && track.targetMcg > 0);
   const expiringVials = vials.filter(
     (v) =>
       v.state === "reconstituted" &&
@@ -576,7 +577,7 @@ export default function NowPage() {
                       {name}
                     </span>
                     <span className="tnum font-mono text-[13px] text-[var(--ink)]">
-                      {formatDose(track.targetMcg)}
+                      {formatDoseWithUnit(track.targetMcg, track.protocol.doseUnit)}
                     </span>
                     <DoseMarks
                       peptideId={track.protocol.peptideId}
@@ -603,12 +604,17 @@ export default function NowPage() {
                       </span>
                     )}
                   </div>
+                  {track.protocol.notes && (
+                    <p className="mt-1 text-[12px] leading-snug text-[var(--sky)]">
+                      {track.protocol.notes}
+                    </p>
+                  )}
                 </div>
                 <div className="ml-auto flex shrink-0 gap-1.5">
                   <LogDoseButton
                     label={t("now_logged")}
-                    title={t("now_log_with_site", { dose: formatDose(track.targetMcg) })}
-                    dose={formatDose(track.targetMcg)}
+                    title={t("now_log_with_site", { dose: formatDoseWithUnit(track.targetMcg, track.protocol.doseUnit) })}
+                    dose={formatDoseWithUnit(track.targetMcg, track.protocol.doseUnit)}
                     choices={choices}
                     nowMs={now}
                     open={siteMenu === track.protocol.id}
@@ -669,7 +675,7 @@ export default function NowPage() {
                         {track.peptide?.name ?? track.protocol.peptideId}
                       </span>
                       <span className="tnum font-mono text-[12.5px] text-[var(--ink)]">
-                        {formatDose(track.targetMcg)}
+                        {formatDoseWithUnit(track.targetMcg, track.protocol.doseUnit)}
                       </span>
                       <DoseMarks
                         peptideId={track.protocol.peptideId}
@@ -689,6 +695,11 @@ export default function NowPage() {
                     {asking && (
                       <p className="mt-0.5 text-[12px] text-[var(--muted)]">
                         {t("now_not_due_until", { time: formatTime(at), when: relativeTime(at, now) })}
+                      </p>
+                    )}
+                    {track.protocol.notes && (
+                      <p className="mt-0.5 text-[12px] leading-snug text-[var(--sky)]">
+                        {track.protocol.notes}
                       </p>
                     )}
                   </div>
@@ -895,7 +906,9 @@ export default function NowPage() {
                     above, which are each about one dose, stay plain.
                   */}
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-[var(--muted)]">
-                    <span>{formatDosePerDay(track.targetMcg, track.perDay)}</span>
+                    <span>{track.protocol.doseUnit === "IU"
+                      ? (track.perDay > 1 ? `${formatDoseWithUnit(track.targetMcg, "IU")} × ${track.perDay}` : formatDoseWithUnit(track.targetMcg, "IU"))
+                      : formatDosePerDay(track.targetMcg, track.perDay)}</span>
                     <DoseMarks
                       peptideId={track.protocol.peptideId}
                       doseMcg={track.targetMcg}
@@ -939,7 +952,7 @@ export default function NowPage() {
               {track.blendParts.length > 0 && (
                 <div className="mt-3">
                   <p className="mb-2 text-[12px] text-[var(--muted)]">
-                    {t("now_one_dose_delivers", { dose: formatDose(track.targetMcg) })}
+                    {t("now_one_dose_delivers", { dose: formatDoseWithUnit(track.targetMcg, track.protocol.doseUnit) })}
                   </p>
                   <BlendBreakdown
                     blend={track.peptide!}

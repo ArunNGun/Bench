@@ -55,6 +55,7 @@ const UNAVAILABLE_STATES: VialState[] = [...DEAD_STATES, "on-order"];
 
 /** Past its beyond-use date, or past the manufacturer's date while sealed. */
 export function vialExpired(v: Vial, nowMs: number) {
+  if (v.ignoreExpiry) return false;
   if (v.budAt != null && v.budAt < nowMs) return true;
   if (v.state === "sealed" && v.expiresAt != null && v.expiresAt < nowMs) return true;
   return false;
