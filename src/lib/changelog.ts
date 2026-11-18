@@ -24,6 +24,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.6.1",
+    date: "2026-11-18",
+    summary: "AI configuration options for custom endpoint path and request headers.",
+    changes: [
+      "Added endpoint path field in AI settings to override the default API path.",
+      "Added custom headers editor in AI settings for extra request headers.",
+    ],
+    contributors: ["ArunNGun"],
+  },
+  {
     version: "2.6.0",
     date: "2026-11-18",
     summary: "PDF attachments in the AI assistant, IU as a dose unit, inventory-free protocols, dose reminder notes, editable AI persona, and markdown table rendering.",
