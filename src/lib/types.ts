@@ -387,6 +387,19 @@ export interface Protocol {
    */
   sites?: InjectionSite[];
   notes?: string;
+  /**
+   * The unit the dose was entered in. "mcg" and "mg" are stored as mcg in
+   * `doseMcg` (mg × 1000). "IU" stores the raw IU value directly in `doseMcg`
+   * since IU cannot be converted to mcg without knowing the substance. Absent
+   * means mcg.
+   */
+  doseUnit?: "mcg" | "mg" | "IU";
+  /**
+   * When set, this protocol does not require a vial in inventory. Doses are
+   * logged at the protocol's fixed dose without depleting any stock. Useful for
+   * compounds measured in IU or anything the user does not want to track.
+   */
+  noInventory?: boolean;
 }
 
 export interface DoseLog {
@@ -688,6 +701,13 @@ export interface Vial {
   drawnMcg?: number;
   /** Beyond-use date, from first puncture. */
   budAt?: number;
+  /**
+   * When set, the BUD and manufacturer expiry are ignored for inventory and
+   * dose-logging purposes. The vial is treated as still usable until it is
+   * empty, discarded or marked finished. The dates are still displayed so the
+   * user knows how far past them they are.
+   */
+  ignoreExpiry?: boolean;
 
   /**
    * What the solution is in. Absent means a vial, which is every row made

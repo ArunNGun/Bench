@@ -147,6 +147,18 @@ export function CheckInCard({ nowMs = Date.now() }: { nowMs?: number }) {
             vitals={vitals}
             notePlaceholder={t("checkin_note_placeholder")}
           />
+          {/*
+            Where it goes afterwards, said here rather than left to be
+            discovered. Somebody wrote a note about a bad night, went looking
+            for it the next week, and found no screen that showed it.
+          */}
+          <p className="text-[11.5px] text-[var(--faint)]">
+            Saved days show up in the{" "}
+            <Link href="/log" className="underline hover:text-[var(--ink)]">
+              Log
+            </Link>
+            , beside the doses from that day.
+          </p>
 
           {/*
             Where it goes afterwards, said here rather than left to be

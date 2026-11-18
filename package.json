@@ -29,6 +29,7 @@
     "lucide-react": "^1.27.0",
     "nanoid": "^5.1.16",
     "next": "15.5.22",
+    "pdfjs-dist": "^6.5.438",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "tailwind-merge": "^3.6.0",

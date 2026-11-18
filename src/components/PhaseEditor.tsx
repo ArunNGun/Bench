@@ -13,7 +13,7 @@ import { Button, NumberInput, Segmented, Select } from "@/components/ui";
 import { TimesOfDay, describeSplit } from "@/components/TimesOfDay";
 import { bandSchedule, scheduleTimes } from "@/lib/calc/schedule";
 import { useLang } from "@/lib/i18n";
-import { formatDose } from "@/lib/format";
+import { formatDose, formatDoseWithUnit } from "@/lib/format";
 import type { ProtocolPhase, Schedule, ScheduleKind } from "@/lib/types";
 
 /** Indexed by `Date.getDay()`, so Sunday is first. Shared with the Plan page. */
@@ -32,7 +32,7 @@ type Translate = ReturnType<typeof useLang>["t"];
 /** Sentinel for "this band keeps the protocol's own frequency". */
 const INHERIT = "inherit";
 
-export type DoseUnit = "mcg" | "mg";
+export type DoseUnit = "mcg" | "mg" | "IU";
 
 /**
  * The week each band starts and ends, 1-based and inclusive, for labels like
@@ -129,6 +129,7 @@ export function PhaseEditor({
           options={[
             { value: "mcg", label: "mcg" },
             { value: "mg", label: "mg" },
+            { value: "IU", label: "IU" },
           ]}
           value={unit}
           onChange={onUnitChange}
@@ -173,7 +174,7 @@ export function PhaseEditor({
                 <NumberInput
                   value={unit === "mg" ? phase.doseMcg / 1000 : phase.doseMcg}
                   min={0}
-                  step={unit === "mg" ? 0.25 : 25}
+                  step={unit === "mg" ? 0.25 : unit === "IU" ? 50 : 25}
                   suffix={unit}
                   onChange={(e) => {
                     const n = Number(e.target.value);
@@ -307,7 +308,7 @@ export function PhaseEditor({
         <span className="text-[12px] text-[var(--faint)]">
           {t("phase_bands_ending", {
             n: phases.length,
-            dose: formatDose(phases[phases.length - 1]?.doseMcg ?? 0),
+            dose: formatDoseWithUnit(phases[phases.length - 1]?.doseMcg ?? 0, unit),
           })}
         </span>
       </div>

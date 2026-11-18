@@ -35,6 +35,15 @@ export function formatDose(mcg: number, force?: "mcg" | "mg") {
   return unit === "mg" ? `${trim(mcg / 1000, 3)} mg` : `${trim(mcg, 2)} mcg`;
 }
 
+/**
+ * Like formatDose but respects an explicitly stored unit.
+ * For IU protocols the value in `doseMcg` is a raw IU count, not micrograms.
+ */
+export function formatDoseWithUnit(value: number, unit?: string | null): string {
+  if (unit === "IU") return `${trim(value, 2)} IU`;
+  return formatDose(value);
+}
+
 export function formatDoseParts(mcg: number, force?: "mcg" | "mg") {
   if (!Number.isFinite(mcg)) return { value: "n/a", unit: "" };
   const unit = force ?? (Math.abs(mcg) >= 1000 ? "mg" : "mcg");

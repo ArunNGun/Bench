@@ -34,6 +34,7 @@ export interface ChatRequest {
   history: AiMessage[];
   userMessage: string;
   attachments?: Attachment[];
+  signal?: AbortSignal;
 }
 
 export interface ChatResult {
@@ -72,7 +73,7 @@ function buildUserContent(text: string, attachments: Attachment[]): string | Con
 }
 
 export async function sendChat(req: ChatRequest): Promise<ChatResult | ChatError> {
-  const { config, systemPrompt, history, userMessage, attachments = [] } = req;
+  const { config, systemPrompt, history, userMessage, attachments = [], signal } = req;
 
   if (!config.url || !config.secret || !config.model) {
     return { ok: false, error: "AI assistant is not fully configured. Set the URL, key and model in Settings." };
@@ -99,6 +100,7 @@ export async function sendChat(req: ChatRequest): Promise<ChatResult | ChatError
         messages,
         stream: false,
       }),
+      signal,
     });
 
     if (!res.ok) {
@@ -123,6 +125,9 @@ export async function sendChat(req: ChatRequest): Promise<ChatResult | ChatError
 
     return { ok: true, content };
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { ok: false, error: "cancelled" };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `Network error: ${msg}` };
   }
