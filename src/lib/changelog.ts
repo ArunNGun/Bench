@@ -24,6 +24,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "2.7",
+    date: "2026-11-18",
+    summary: "Weight history now shows all logged entries with inline edit and delete.",
+    changes: [
+      "Weight card: tap 'All entries' to expand a scrollable list of every logged weight.",
+      "Inline edit: tap the pencil icon to change the value or timestamp of any entry.",
+      "Inline delete: tap the bin icon and confirm to remove an entry permanently.",
+    ],
+    contributors: ["ArunNGun"],
+  },
+  {
     version: "2.6.1",
     date: "2026-11-18",
     summary: "AI configuration options for custom endpoint path and request headers.",
