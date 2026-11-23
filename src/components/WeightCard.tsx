@@ -3,9 +3,10 @@ import { useLang } from "@/lib/i18n";
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Activity, LineChart, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, ChevronDown, ChevronUp, LineChart, Pencil, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { Button, Card, Field, NumberInput, SectionLabel, Stat } from "./ui";
 import { useProfileData, useStore } from "@/lib/store";
+import type { Measurement } from "@/lib/types";
 import {
   fromDisplayWeight,
   toDisplayWeight,
@@ -42,9 +43,17 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
   const unit = settings.weightUnit ?? "kg";
   const toDisplay = (kg: number) => toDisplayWeight(kg, unit);
 
+  const updateMeasurement = useStore((s) => s.updateMeasurement);
+  const removeMeasurement = useStore((s) => s.removeMeasurement);
+
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState<number | "">("");
   const [at, setAt] = useState(() => Date.now());
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number | "">("");
+  const [editAt, setEditAt] = useState(Date.now());
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   /**
    * The Health Connect reading the form was filled from, while it is still
@@ -255,9 +264,151 @@ export function WeightCard({ nowMs }: { nowMs: number }) {
             toDisplay={toDisplay}
             nowMs={nowMs}
           />
+
+          {/* History list */}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((v) => !v)}
+              className="press flex w-full items-center gap-1.5 py-1 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+            >
+              {historyOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {t("weight_history")} ({measurements.filter((m) => m.weightKg != null).length})
+            </button>
+
+            {historyOpen && (
+              <div className="mt-2 space-y-1 overflow-y-auto" style={{ maxHeight: 100 }}>
+                {[...measurements]
+                  .filter((m) => m.weightKg != null)
+                  .sort((a, b) => b.at - a.at)
+                  .map((m) => (
+                    <WeightRow
+                      key={m.id}
+                      m={m}
+                      unit={unit}
+                      toDisplay={toDisplay}
+                      editingId={editingId}
+                      editValue={editValue}
+                      editAt={editAt}
+                      confirmDelete={confirmDelete}
+                      onEdit={() => {
+                        setEditingId(m.id);
+                        setEditValue(Math.round(toDisplay(m.weightKg!) * 10) / 10);
+                        setEditAt(m.at);
+                        setConfirmDelete(null);
+                      }}
+                      onEditChange={(v, a) => { setEditValue(v); setEditAt(a); }}
+                      onSaveEdit={() => {
+                        if (editValue === "" || !(Number(editValue) > 0)) return;
+                        updateMeasurement(m.id, {
+                          at: editAt,
+                          weightKg: fromDisplayWeight(Number(editValue), unit),
+                        });
+                        setEditingId(null);
+                      }}
+                      onCancelEdit={() => setEditingId(null)}
+                      onConfirmDelete={() => setConfirmDelete(m.id)}
+                      onDelete={() => { removeMeasurement(m.id); setConfirmDelete(null); }}
+                      onCancelDelete={() => setConfirmDelete(null)}
+                    />
+                  ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </Card>
+  );
+}
+
+function WeightRow({
+  m, unit, toDisplay,
+  editingId, editValue, editAt, confirmDelete,
+  onEdit, onEditChange, onSaveEdit, onCancelEdit,
+  onConfirmDelete, onDelete, onCancelDelete,
+}: {
+  m: Measurement;
+  unit: string;
+  toDisplay: (kg: number) => number;
+  editingId: string | null;
+  editValue: number | "";
+  editAt: number;
+  confirmDelete: string | null;
+  onEdit: () => void;
+  onEditChange: (v: number | "", at: number) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onConfirmDelete: () => void;
+  onDelete: () => void;
+  onCancelDelete: () => void;
+}) {
+  const { t } = useLang();
+  const isEditing = editingId === m.id;
+  const isConfirming = confirmDelete === m.id;
+
+  if (isEditing) {
+    return (
+      <div className="rounded-[var(--r-inner)] border border-[var(--tangerine)]/40 bg-[var(--sunken)] p-2.5">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label={t("weight_title")} className="w-28">
+            <NumberInput
+              autoFocus
+              value={editValue}
+              min={0}
+              step={0.1}
+              suffix={unit}
+              onChange={(e) => onEditChange(e.target.value === "" ? "" : Number(e.target.value), editAt)}
+              onKeyDown={(e) => e.key === "Enter" && onSaveEdit()}
+            />
+          </Field>
+          <Field label={t("weight_when")} className="min-w-40 flex-1">
+            <input
+              type="datetime-local"
+              value={toDateTimeLocal(editAt)}
+              onChange={(e) => onEditChange(editValue, fromDateTimeLocal(e.target.value))}
+              className="w-full rounded-[var(--r-btn)] border border-[var(--line)] bg-[var(--card)] px-3 py-2.5 text-[14px] text-[var(--ink)] focus:border-[var(--tangerine)] focus:outline-none"
+            />
+          </Field>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onCancelEdit}>{t("cancel")}</Button>
+            <Button variant="primary" onClick={onSaveEdit} disabled={editValue === ""}>{t("save")}</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-[var(--r-inner)] px-2.5 py-1.5 hover:bg-[var(--sunken)]">
+      <span className="tnum font-mono text-[13px] font-semibold text-[var(--ink)]">
+        {trim(toDisplay(m.weightKg!), 1)} {unit}
+      </span>
+      <span className="flex-1 text-[12px] text-[var(--muted)]">{formatDate(m.at)}</span>
+      {isConfirming ? (
+        <>
+          <span className="text-[12px] text-[var(--rose-ink)]">{t("weight_confirm_delete")}</span>
+          <button type="button" onClick={onDelete}
+            className="press rounded px-2 py-0.5 text-[12px] font-semibold text-[var(--rose-ink)] hover:bg-[var(--rose)]/10">
+            {t("yes")}
+          </button>
+          <button type="button" onClick={onCancelDelete}
+            className="press text-[12px] text-[var(--muted)] hover:text-[var(--ink)]">
+            {t("cancel")}
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={onEdit} aria-label={t("weight_edit")}
+            className="press text-[var(--faint)] hover:text-[var(--ink)] transition-colors">
+            <Pencil size={13} />
+          </button>
+          <button type="button" onClick={onConfirmDelete} aria-label={t("weight_delete")}
+            className="press text-[var(--faint)] hover:text-[var(--rose)] transition-colors">
+            <Trash2 size={13} />
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
